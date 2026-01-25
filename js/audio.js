@@ -9,6 +9,9 @@ export class Audio {
 
         // Precomputed noise buffer for performance
         this.noiseBuffer = null;
+
+        // Loaded sound buffers
+        this.ballHitBuffer = null;
     }
 
     // Initialize audio context (must be called after user interaction)
@@ -24,9 +27,23 @@ export class Audio {
 
             // Pre-generate noise buffer
             this.noiseBuffer = this.createNoiseBuffer(0.5);
+
+            // Load sound effects
+            this.loadSound('assets/sounds/ballhit.mp3', 'ballHitBuffer');
         } catch (e) {
             console.warn('Web Audio API not supported:', e);
             this.enabled = false;
+        }
+    }
+
+    // Load a sound file into a buffer
+    async loadSound(url, bufferName) {
+        try {
+            const response = await fetch(url);
+            const arrayBuffer = await response.arrayBuffer();
+            this[bufferName] = await this.context.decodeAudioData(arrayBuffer);
+        } catch (e) {
+            console.warn(`Failed to load sound ${url}:`, e);
         }
     }
 
@@ -65,66 +82,25 @@ export class Audio {
         return filter;
     }
 
-    // Ball-to-ball collision - hard phenolic "clack"
+    // Ball-to-ball collision - plays loaded sound sample
     playBallCollision(intensity = 0.5) {
         if (!this.enabled || !this.initialized) return;
+        if (!this.ballHitBuffer) return;
         this.resume();
 
-        const now = this.context.currentTime;
         const clampedIntensity = Math.min(1, Math.max(0.1, intensity));
-        const volume = 0.25 + clampedIntensity * 0.25;
+        const volume = 0.25 + clampedIntensity * 0.75;
 
-        // Layer 1: Sharp tonal "clack" - the main sound
-        // Pool balls ring at around 4-5kHz but we want the "body" lower
-        const clackOsc = this.context.createOscillator();
-        const clackGain = this.context.createGain();
+        const source = this.context.createBufferSource();
+        source.buffer = this.ballHitBuffer;
 
-        clackOsc.type = 'triangle';
-        clackOsc.frequency.setValueAtTime(1400 + clampedIntensity * 200, now);
-        clackOsc.frequency.exponentialRampToValueAtTime(800, now + 0.06);
+        const gainNode = this.context.createGain();
+        gainNode.gain.value = volume;
 
-        clackGain.gain.setValueAtTime(volume, now);
-        clackGain.gain.exponentialRampToValueAtTime(0.001, now + 0.07);
+        source.connect(gainNode);
+        gainNode.connect(this.masterGain);
 
-        clackOsc.connect(clackGain);
-        clackGain.connect(this.masterGain);
-
-        clackOsc.start(now);
-        clackOsc.stop(now + 0.08);
-
-        // Layer 2: Higher harmonic for the "click" attack
-        const clickOsc = this.context.createOscillator();
-        const clickGain = this.context.createGain();
-
-        clickOsc.type = 'sine';
-        clickOsc.frequency.setValueAtTime(3000, now);
-        clickOsc.frequency.exponentialRampToValueAtTime(1500, now + 0.02);
-
-        clickGain.gain.setValueAtTime(volume * 0.4, now);
-        clickGain.gain.exponentialRampToValueAtTime(0.001, now + 0.025);
-
-        clickOsc.connect(clickGain);
-        clickGain.connect(this.masterGain);
-
-        clickOsc.start(now);
-        clickOsc.stop(now + 0.03);
-
-        // Layer 3: Low frequency punch for weight
-        const punchOsc = this.context.createOscillator();
-        const punchGain = this.context.createGain();
-
-        punchOsc.type = 'sine';
-        punchOsc.frequency.setValueAtTime(250 + clampedIntensity * 100, now);
-        punchOsc.frequency.exponentialRampToValueAtTime(120, now + 0.05);
-
-        punchGain.gain.setValueAtTime(volume * 0.6 * clampedIntensity, now);
-        punchGain.gain.exponentialRampToValueAtTime(0.001, now + 0.06);
-
-        punchOsc.connect(punchGain);
-        punchGain.connect(this.masterGain);
-
-        punchOsc.start(now);
-        punchOsc.stop(now + 0.07);
+        source.start();
     }
 
     // Realistic rail collision - softer thump with rubber cushion character

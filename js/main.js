@@ -201,7 +201,11 @@ class PoolGame {
     gameLoop(currentTime) {
         if (!this.running) return;
 
-        const deltaTime = currentTime - this.lastTime;
+        // Calculate delta time, capping to avoid large jumps on first frame or after pause
+        let deltaTime = currentTime - this.lastTime;
+        if (this.lastTime === 0 || deltaTime > 100) {
+            deltaTime = 16.67; // Default to 60fps
+        }
         this.lastTime = currentTime;
 
         this.update(deltaTime);
@@ -214,8 +218,8 @@ class PoolGame {
         this.cue.update();
 
         if (this.game.state === GameState.BALLS_MOVING) {
-            // Physics simulation - spin is now tracked on each ball's angularVel
-            const events = this.physics.update(this.game.balls);
+            // Physics simulation - pass deltaTime for frame-rate independence
+            const events = this.physics.update(this.game.balls, deltaTime);
 
             this.audio.handleCollisionEvents(events);
 

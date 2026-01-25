@@ -320,7 +320,7 @@ export class PlanckPhysics {
         }
     }
 
-    update(balls) {
+    update(balls, deltaTime = 16.67) {
         this.collisionEvents = [];
         this.processedCollisions.clear(); // Reset spin collision tracking each frame
         this.pendingSpinEffects = []; // Clear pending effects
@@ -338,16 +338,26 @@ export class PlanckPhysics {
         // Ensure all active balls have bodies and are synced
         this.syncBallsToPlanck(balls);
 
-        // Use substeps for collision detection accuracy
-        const substeps = 8;
-        const planckDt = (1.0 / 60.0 / substeps) * this.speedMultiplier;
+        // Fixed timestep physics with accumulator for frame-rate independence
+        // Target 60fps physics (16.67ms per frame), but handle slower devices
+        const fixedDt = (1.0 / 60.0) * this.speedMultiplier;
+        const substepsPerFrame = 8;
+        const substepDt = fixedDt / substepsPerFrame;
 
-        for (let step = 0; step < substeps; step++) {
-            // Step Planck world - handles all physics including friction
-            this.world.step(planckDt, 6, 2);
+        // Calculate how many frames worth of physics to run based on actual delta time
+        // Cap at 3 frames to prevent spiral of death on very slow devices
+        const deltaSeconds = Math.min(deltaTime, 50) / 1000; // Cap at 50ms (20fps min)
+        const framesToRun = Math.round(deltaSeconds / (1.0 / 60.0));
+        const actualFrames = Math.max(1, Math.min(framesToRun, 3));
 
-            // Check pockets (not a Planck collision)
-            this.handlePockets(balls);
+        for (let frame = 0; frame < actualFrames; frame++) {
+            for (let step = 0; step < substepsPerFrame; step++) {
+                // Step Planck world - handles all physics including friction
+                this.world.step(substepDt, 6, 2);
+
+                // Check pockets (not a Planck collision)
+                this.handlePockets(balls);
+            }
         }
 
         // Apply spin effects AFTER physics has resolved collisions

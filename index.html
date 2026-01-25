@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2D Pool Game</title>
+    <link rel="stylesheet" href="css/style.css">
+    <script type="importmap">
+    {
+        "imports": {
+            "planck": "https://esm.sh/planck-js@1.0.6"
+        }
+    }
+    </script>
+</head>
+<body>
+    <div id="game-container">
+        <canvas id="game-canvas"></canvas>
+        <div id="ui-overlay">
+            <div id="main-menu" class="menu">
+                <h1>2D Pool</h1>
+                <div class="menu-buttons">
+                    <button id="btn-8ball" class="menu-btn">8-Ball</button>
+                    <button id="btn-9ball" class="menu-btn">9-Ball</button>
+                    <button id="btn-freeplay" class="menu-btn">Free Play</button>
+                </div>
+                <div class="settings">
+                    <label>
+                        <input type="checkbox" id="sound-toggle" checked>
+                        Sound Effects
+                    </label>
+                    <div class="slider-setting">
+                        <label for="speed-slider">Simulation Speed</label>
+                        <input type="range" id="speed-slider" min="0.2" max="2" step="0.1" value="0.5">
+                        <span id="speed-value">1.0x</span>
+                    </div>
+                </div>
+            </div>
+            <div id="game-hud" class="hidden">
+                <div id="player-indicator"></div>
+                <div id="ball-groups"></div>
+                <div id="foul-indicator" class="hidden">FOUL</div>
+                <div id="game-message"></div>
+            </div>
+            <div id="game-over" class="menu hidden">
+                <h2 id="winner-text"></h2>
+                <div class="menu-buttons">
+                    <button id="btn-play-again" class="menu-btn">Play Again</button>
+                    <button id="btn-main-menu" class="menu-btn">Main Menu</button>
+                </div>
+            </div>
+            <div id="freeplay-controls" class="hidden">
+                <button id="btn-rerack" class="menu-btn small">Re-rack</button>
+                <button id="btn-exit-freeplay" class="menu-btn small">Exit</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="js/main.js"></script>
+</body>
+</html>

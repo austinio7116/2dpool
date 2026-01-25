@@ -1,0 +1,744 @@
+// Renderer - handles all canvas drawing and visual effects
+
+import { Vec2, Constants, lerp } from './utils.js';
+
+// Polyfill for roundRect if not supported
+if (typeof CanvasRenderingContext2D !== 'undefined' && !CanvasRenderingContext2D.prototype.roundRect) {
+    CanvasRenderingContext2D.prototype.roundRect = function(x, y, width, height, radius) {
+        if (typeof radius === 'number') {
+            radius = { tl: radius, tr: radius, br: radius, bl: radius };
+        }
+        this.beginPath();
+        this.moveTo(x + radius.tl, y);
+        this.lineTo(x + width - radius.tr, y);
+        this.quadraticCurveTo(x + width, y, x + width, y + radius.tr);
+        this.lineTo(x + width, y + height - radius.br);
+        this.quadraticCurveTo(x + width, y + height, x + width - radius.br, y + height);
+        this.lineTo(x + radius.bl, y + height);
+        this.quadraticCurveTo(x, y + height, x, y + height - radius.bl);
+        this.lineTo(x, y + radius.tl);
+        this.quadraticCurveTo(x, y, x + radius.tl, y);
+        this.closePath();
+    };
+}
+
+export class Renderer {
+    constructor(canvas, table) {
+        this.canvas = canvas;
+        this.ctx = canvas.getContext('2d');
+        this.table = table;
+
+        this.canvas.width = table.canvasWidth;
+        this.canvas.height = table.canvasHeight;
+    }
+
+    render(state) {
+        this.clear();
+        this.drawTable();
+        this.drawBalls(state.balls);
+
+        if (state.showSpinIndicator) {
+            this.drawSpinIndicator(state.spinIndicator, state.spin);
+        }
+
+        if (state.aiming && state.cueBall && !state.cueBall.pocketed) {
+            this.drawAimLine(state.cueBall, state.aimDirection, state.power, state.trajectory);
+            this.drawCueStick(state.cueBall, state.aimDirection, state.power, state.pullBack);
+            this.drawPowerMeter(state.power);
+        }
+    }
+
+    clear() {
+        this.ctx.fillStyle = '#1a1a2e';
+        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+    }
+
+    drawTable() {
+        const ctx = this.ctx;
+        const t = this.table;
+        const b = t.bounds;
+
+        // Outer wood frame
+        ctx.fillStyle = this.createWoodGradient(0, 0, t.canvasWidth, t.canvasHeight);
+        ctx.fillRect(0, 0, t.canvasWidth, t.canvasHeight);
+
+        // Inner wood border
+        const railOuter = 25;
+        ctx.fillStyle = '#5D2E0C';
+        ctx.fillRect(
+            b.left - railOuter,
+            b.top - railOuter,
+            t.width + railOuter * 2,
+            t.height + railOuter * 2
+        );
+
+        // Green felt playing surface
+        ctx.fillStyle = this.createFeltGradient();
+        ctx.fillRect(b.left, b.top, t.width, t.height);
+        this.drawFeltTexture();
+
+        // Draw cushions with pocket cutouts
+        this.drawCushions();
+
+        // Draw pockets
+        for (const pocket of t.pockets) {
+            this.drawPocket(pocket);
+        }
+
+        // Draw diamond sights
+        for (const diamond of t.diamonds) {
+            this.drawDiamond(diamond);
+        }
+
+        // Kitchen line
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([5, 5]);
+        ctx.beginPath();
+        ctx.moveTo(t.kitchenLine, b.top);
+        ctx.lineTo(t.kitchenLine, b.bottom);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Foot spot
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+        ctx.beginPath();
+        ctx.arc(t.footSpot.x, t.footSpot.y, 3, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    drawCushions() {
+        const ctx = this.ctx;
+        const t = this.table;
+        const b = t.bounds;
+        const cushionWidth = 18;
+        const pocketRadius = Constants.POCKET_RADIUS;
+
+        // Cushion color with gradient for 3D effect
+        const cushionColor = '#1a8a4a';
+        const cushionDark = '#0f5c2e';
+        const cushionLight = '#2aaa6a';
+
+        // Corner pocket mouth size
+        const cornerMouth = pocketRadius * 1.4;
+        // Side pocket mouth size
+        const sideMouth = pocketRadius * 1.1;
+
+        // Draw each cushion segment with angled pocket entries
+
+        // Top-left cushion (from left pocket to center pocket)
+        this.drawCushionSegment(
+            b.left + cornerMouth, b.top,
+            t.center.x - sideMouth, b.top,
+            cushionWidth, 'top'
+        );
+
+        // Top-right cushion (from center pocket to right pocket)
+        this.drawCushionSegment(
+            t.center.x + sideMouth, b.top,
+            b.right - cornerMouth, b.top,
+            cushionWidth, 'top'
+        );
+
+        // Bottom-left cushion
+        this.drawCushionSegment(
+            b.left + cornerMouth, b.bottom,
+            t.center.x - sideMouth, b.bottom,
+            cushionWidth, 'bottom'
+        );
+
+        // Bottom-right cushion
+        this.drawCushionSegment(
+            t.center.x + sideMouth, b.bottom,
+            b.right - cornerMouth, b.bottom,
+            cushionWidth, 'bottom'
+        );
+
+        // Left cushion
+        this.drawCushionSegment(
+            b.left, b.top + cornerMouth,
+            b.left, b.bottom - cornerMouth,
+            cushionWidth, 'left'
+        );
+
+        // Right cushion
+        this.drawCushionSegment(
+            b.right, b.top + cornerMouth,
+            b.right, b.bottom - cornerMouth,
+            cushionWidth, 'right'
+        );
+
+        // Draw pocket jaws (angled cushion entries)
+        this.drawPocketJaws();
+    }
+
+    drawCushionSegment(x1, y1, x2, y2, width, side) {
+        const ctx = this.ctx;
+
+        ctx.save();
+
+        // Create gradient for 3D effect
+        let gradient;
+        if (side === 'top') {
+            gradient = ctx.createLinearGradient(0, y1 - width, 0, y1);
+            gradient.addColorStop(0, '#0f5c2e');
+            gradient.addColorStop(0.5, '#1a8a4a');
+            gradient.addColorStop(1, '#2aaa6a');
+        } else if (side === 'bottom') {
+            gradient = ctx.createLinearGradient(0, y1, 0, y1 + width);
+            gradient.addColorStop(0, '#2aaa6a');
+            gradient.addColorStop(0.5, '#1a8a4a');
+            gradient.addColorStop(1, '#0f5c2e');
+        } else if (side === 'left') {
+            gradient = ctx.createLinearGradient(x1 - width, 0, x1, 0);
+            gradient.addColorStop(0, '#0f5c2e');
+            gradient.addColorStop(0.5, '#1a8a4a');
+            gradient.addColorStop(1, '#2aaa6a');
+        } else {
+            gradient = ctx.createLinearGradient(x1, 0, x1 + width, 0);
+            gradient.addColorStop(0, '#2aaa6a');
+            gradient.addColorStop(0.5, '#1a8a4a');
+            gradient.addColorStop(1, '#0f5c2e');
+        }
+
+        ctx.fillStyle = gradient;
+
+        // Draw cushion shape
+        ctx.beginPath();
+        if (side === 'top') {
+            ctx.moveTo(x1, y1);
+            ctx.lineTo(x2, y1);
+            ctx.lineTo(x2 - 5, y1 - width);
+            ctx.lineTo(x1 + 5, y1 - width);
+        } else if (side === 'bottom') {
+            ctx.moveTo(x1, y1);
+            ctx.lineTo(x2, y1);
+            ctx.lineTo(x2 - 5, y1 + width);
+            ctx.lineTo(x1 + 5, y1 + width);
+        } else if (side === 'left') {
+            ctx.moveTo(x1, y1);
+            ctx.lineTo(x1, y2);
+            ctx.lineTo(x1 - width, y2 - 5);
+            ctx.lineTo(x1 - width, y1 + 5);
+        } else {
+            ctx.moveTo(x1, y1);
+            ctx.lineTo(x1, y2);
+            ctx.lineTo(x1 + width, y2 - 5);
+            ctx.lineTo(x1 + width, y1 + 5);
+        }
+        ctx.closePath();
+        ctx.fill();
+
+        // Add highlight edge
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+
+        ctx.restore();
+    }
+
+    drawPocketJaws() {
+        const ctx = this.ctx;
+        const t = this.table;
+        const b = t.bounds;
+        const pocketRadius = Constants.POCKET_RADIUS;
+        const jawLength = pocketRadius * 1.2;
+        const jawWidth = 12;
+
+        ctx.fillStyle = '#1a8a4a';
+
+        // Corner pockets - draw angled jaws
+        const corners = [
+            { x: b.left, y: b.top, ax: 1, ay: 1 },
+            { x: b.right, y: b.top, ax: -1, ay: 1 },
+            { x: b.left, y: b.bottom, ax: 1, ay: -1 },
+            { x: b.right, y: b.bottom, ax: -1, ay: -1 }
+        ];
+
+        for (const corner of corners) {
+            // Horizontal jaw
+            const gradient1 = ctx.createLinearGradient(
+                corner.x, corner.y,
+                corner.x + corner.ax * jawLength, corner.y
+            );
+            gradient1.addColorStop(0, 'rgba(26, 138, 74, 0)');
+            gradient1.addColorStop(1, '#1a8a4a');
+
+            ctx.fillStyle = gradient1;
+            ctx.beginPath();
+            ctx.moveTo(corner.x, corner.y + corner.ay * pocketRadius * 0.8);
+            ctx.lineTo(corner.x + corner.ax * jawLength, corner.y + corner.ay * jawWidth);
+            ctx.lineTo(corner.x + corner.ax * jawLength, corner.y + corner.ay * (jawWidth + 8));
+            ctx.lineTo(corner.x, corner.y + corner.ay * (pocketRadius * 0.8 + 8));
+            ctx.fill();
+
+            // Vertical jaw
+            const gradient2 = ctx.createLinearGradient(
+                corner.x, corner.y,
+                corner.x, corner.y + corner.ay * jawLength
+            );
+            gradient2.addColorStop(0, 'rgba(26, 138, 74, 0)');
+            gradient2.addColorStop(1, '#1a8a4a');
+
+            ctx.fillStyle = gradient2;
+            ctx.beginPath();
+            ctx.moveTo(corner.x + corner.ax * pocketRadius * 0.8, corner.y);
+            ctx.lineTo(corner.x + corner.ax * jawWidth, corner.y + corner.ay * jawLength);
+            ctx.lineTo(corner.x + corner.ax * (jawWidth + 8), corner.y + corner.ay * jawLength);
+            ctx.lineTo(corner.x + corner.ax * (pocketRadius * 0.8 + 8), corner.y);
+            ctx.fill();
+        }
+
+        // Side pockets - draw curved jaws
+        const sidePockets = [
+            { x: t.center.x, y: b.top, ay: 1 },
+            { x: t.center.x, y: b.bottom, ay: -1 }
+        ];
+
+        for (const side of sidePockets) {
+            const sideRadius = pocketRadius * 0.9;
+
+            // Left jaw
+            ctx.fillStyle = '#1a8a4a';
+            ctx.beginPath();
+            ctx.moveTo(side.x - sideRadius, side.y);
+            ctx.quadraticCurveTo(
+                side.x - sideRadius - 10, side.y + side.ay * 15,
+                side.x - sideRadius - 5, side.y + side.ay * jawWidth
+            );
+            ctx.lineTo(side.x - sideRadius + 5, side.y + side.ay * jawWidth);
+            ctx.quadraticCurveTo(
+                side.x - sideRadius + 5, side.y + side.ay * 5,
+                side.x - sideRadius + 10, side.y
+            );
+            ctx.fill();
+
+            // Right jaw
+            ctx.beginPath();
+            ctx.moveTo(side.x + sideRadius, side.y);
+            ctx.quadraticCurveTo(
+                side.x + sideRadius + 10, side.y + side.ay * 15,
+                side.x + sideRadius + 5, side.y + side.ay * jawWidth
+            );
+            ctx.lineTo(side.x + sideRadius - 5, side.y + side.ay * jawWidth);
+            ctx.quadraticCurveTo(
+                side.x + sideRadius - 5, side.y + side.ay * 5,
+                side.x + sideRadius - 10, side.y
+            );
+            ctx.fill();
+        }
+    }
+
+    drawPocket(pocket) {
+        const ctx = this.ctx;
+        const x = pocket.position.x;
+        const y = pocket.position.y;
+        const r = pocket.radius;
+
+        // Outer shadow
+        const shadowGradient = ctx.createRadialGradient(x, y, r * 0.3, x, y, r * 1.3);
+        shadowGradient.addColorStop(0, '#000000');
+        shadowGradient.addColorStop(0.6, '#1a1a1a');
+        shadowGradient.addColorStop(1, 'rgba(26, 26, 26, 0)');
+
+        ctx.fillStyle = shadowGradient;
+        ctx.beginPath();
+        ctx.arc(x, y, r * 1.3, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Pocket hole with depth effect
+        const holeGradient = ctx.createRadialGradient(x - r * 0.2, y - r * 0.2, 0, x, y, r);
+        holeGradient.addColorStop(0, '#0a0a0a');
+        holeGradient.addColorStop(0.7, '#000000');
+        holeGradient.addColorStop(1, '#1a1a1a');
+
+        ctx.fillStyle = holeGradient;
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Inner rim highlight
+        ctx.strokeStyle = 'rgba(60, 60, 60, 0.5)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(x, y, r * 0.85, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Pocket net/depth illusion
+        ctx.fillStyle = '#050505';
+        ctx.beginPath();
+        ctx.arc(x, y, r * 0.7, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    createWoodGradient(x, y, w, h) {
+        const gradient = this.ctx.createLinearGradient(x, y, x, y + h);
+        gradient.addColorStop(0, '#8B5A2B');
+        gradient.addColorStop(0.3, '#A0522D');
+        gradient.addColorStop(0.7, '#8B4513');
+        gradient.addColorStop(1, '#654321');
+        return gradient;
+    }
+
+    createFeltGradient() {
+        const b = this.table.bounds;
+        const gradient = this.ctx.createRadialGradient(
+            this.table.center.x, this.table.center.y, 0,
+            this.table.center.x, this.table.center.y, this.table.width / 2
+        );
+        gradient.addColorStop(0, '#0f6b35');
+        gradient.addColorStop(1, Constants.FELT_COLOR);
+        return gradient;
+    }
+
+    drawFeltTexture() {
+        const ctx = this.ctx;
+        const b = this.table.bounds;
+
+        ctx.globalAlpha = 0.02;
+        for (let i = 0; i < 300; i++) {
+            const x = b.left + Math.random() * this.table.width;
+            const y = b.top + Math.random() * this.table.height;
+            ctx.fillStyle = Math.random() > 0.5 ? '#000' : '#0a0';
+            ctx.fillRect(x, y, 2, 2);
+        }
+        ctx.globalAlpha = 1;
+    }
+
+    drawDiamond(pos) {
+        const ctx = this.ctx;
+        const size = 5;
+
+        ctx.fillStyle = '#f5f5dc';
+        ctx.beginPath();
+        ctx.moveTo(pos.x, pos.y - size);
+        ctx.lineTo(pos.x + size / 2, pos.y);
+        ctx.lineTo(pos.x, pos.y + size);
+        ctx.lineTo(pos.x - size / 2, pos.y);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.strokeStyle = '#c0a000';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+    }
+
+    drawBalls(balls) {
+        const sortedBalls = [...balls].sort((a, b) => a.position.y - b.position.y);
+
+        for (const ball of sortedBalls) {
+            if (!ball.pocketed) {
+                this.drawBall(ball);
+            }
+        }
+    }
+
+    drawBall(ball) {
+        const ctx = this.ctx;
+        let x = ball.position.x;
+        let y = ball.position.y;
+        let radius = ball.radius;
+        let alpha = 1;
+
+        if (ball.sinking) {
+            const progress = ball.sinkProgress;
+            const pocket = ball.sinkPocket;
+            x = lerp(ball.position.x, pocket.position.x, progress);
+            y = lerp(ball.position.y, pocket.position.y, progress);
+            radius = ball.radius * (1 - progress * 0.5);
+            alpha = 1 - progress;
+        }
+
+        ctx.globalAlpha = alpha;
+
+        this.drawBallShadow(x, y, radius);
+
+        if (ball.isStripe) {
+            this.drawStripeBall(x, y, radius, ball);
+        } else {
+            this.drawSolidBall(x, y, radius, ball);
+        }
+
+        if (!ball.isCueBall) {
+            this.drawBallNumber(x, y, radius, ball.number);
+        }
+
+        this.drawBallHighlight(x, y, radius);
+
+        ctx.globalAlpha = 1;
+    }
+
+    drawBallShadow(x, y, radius) {
+        const ctx = this.ctx;
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
+        ctx.beginPath();
+        ctx.ellipse(x + radius * 0.3, y + radius * 0.3, radius * 0.9, radius * 0.5, 0.3, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    drawSolidBall(x, y, radius, ball) {
+        const ctx = this.ctx;
+        const gradient = ctx.createRadialGradient(x - radius * 0.3, y - radius * 0.3, 0, x, y, radius);
+        const baseColor = ball.color;
+        gradient.addColorStop(0, this.lightenColor(baseColor, 40));
+        gradient.addColorStop(0.5, baseColor);
+        gradient.addColorStop(1, this.darkenColor(baseColor, 30));
+
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.arc(x, y, radius, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    drawStripeBall(x, y, radius, ball) {
+        const ctx = this.ctx;
+
+        const whiteGradient = ctx.createRadialGradient(x - radius * 0.3, y - radius * 0.3, 0, x, y, radius);
+        whiteGradient.addColorStop(0, '#FFFFFF');
+        whiteGradient.addColorStop(0.5, '#F5F5F0');
+        whiteGradient.addColorStop(1, '#D0D0D0');
+
+        ctx.fillStyle = whiteGradient;
+        ctx.beginPath();
+        ctx.arc(x, y, radius, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(x, y, radius, 0, Math.PI * 2);
+        ctx.clip();
+
+        const stripeWidth = radius * 1.2;
+        ctx.fillStyle = ball.color;
+        ctx.fillRect(x - radius, y - stripeWidth / 2, radius * 2, stripeWidth);
+
+        ctx.restore();
+    }
+
+    drawBallNumber(x, y, radius, number) {
+        const ctx = this.ctx;
+        const circleRadius = radius * 0.45;
+        ctx.fillStyle = '#FFFFFF';
+        ctx.beginPath();
+        ctx.arc(x, y, circleRadius, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = '#000000';
+        ctx.font = `bold ${radius * 0.6}px Arial`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(number.toString(), x, y + 1);
+    }
+
+    drawBallHighlight(x, y, radius) {
+        const ctx = this.ctx;
+
+        const highlightGradient = ctx.createRadialGradient(
+            x - radius * 0.4, y - radius * 0.4, 0,
+            x - radius * 0.4, y - radius * 0.4, radius * 0.5
+        );
+        highlightGradient.addColorStop(0, 'rgba(255, 255, 255, 0.7)');
+        highlightGradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+
+        ctx.fillStyle = highlightGradient;
+        ctx.beginPath();
+        ctx.arc(x - radius * 0.3, y - radius * 0.3, radius * 0.4, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    drawSpinIndicator(indicator, spin) {
+        const ctx = this.ctx;
+        const x = indicator.x;
+        const y = indicator.y;
+        const r = indicator.radius;
+
+        // Background circle
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        ctx.beginPath();
+        ctx.arc(x, y, r + 5, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Cue ball representation
+        const ballGradient = ctx.createRadialGradient(x - r * 0.2, y - r * 0.2, 0, x, y, r);
+        ballGradient.addColorStop(0, '#FFFFFF');
+        ballGradient.addColorStop(0.5, '#F0F0E8');
+        ballGradient.addColorStop(1, '#C0C0B0');
+
+        ctx.fillStyle = ballGradient;
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.strokeStyle = '#888';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // Crosshairs
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.2)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(x - r, y);
+        ctx.lineTo(x + r, y);
+        ctx.moveTo(x, y - r);
+        ctx.lineTo(x, y + r);
+        ctx.stroke();
+
+        // Spin position indicator (red dot)
+        const spinX = x + spin.x * r * 0.7;
+        const spinY = y + spin.y * r * 0.7;
+
+        ctx.fillStyle = '#ff3333';
+        ctx.beginPath();
+        ctx.arc(spinX, spinY, 6, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.strokeStyle = '#aa0000';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // Label
+        ctx.fillStyle = '#fff';
+        ctx.font = '10px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('SPIN', x, y + r + 18);
+    }
+
+    drawAimLine(cueBall, direction, power, trajectory) {
+        const ctx = this.ctx;
+
+        if (!direction || power === 0) return;
+
+        const lineLength = Constants.AIM_LINE_LENGTH * (power / Constants.MAX_POWER);
+        const endPoint = Vec2.add(cueBall.position, Vec2.multiply(direction, lineLength));
+
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([5, 5]);
+        ctx.beginPath();
+        ctx.moveTo(cueBall.position.x, cueBall.position.y);
+        ctx.lineTo(endPoint.x, endPoint.y);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        if (trajectory && trajectory.firstHit) {
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(trajectory.firstHit.position.x, trajectory.firstHit.position.y, cueBall.radius, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+
+            if (trajectory.targetPath.length > 0) {
+                ctx.strokeStyle = 'rgba(255, 200, 0, 0.3)';
+                ctx.lineWidth = 2;
+                ctx.setLineDash([3, 3]);
+                ctx.beginPath();
+                ctx.moveTo(trajectory.firstHit.position.x, trajectory.firstHit.position.y);
+
+                for (let i = 0; i < Math.min(trajectory.targetPath.length, 50); i++) {
+                    ctx.lineTo(trajectory.targetPath[i].x, trajectory.targetPath[i].y);
+                }
+                ctx.stroke();
+                ctx.setLineDash([]);
+            }
+        }
+    }
+
+    drawCueStick(cueBall, direction, power, pullBack) {
+        const ctx = this.ctx;
+
+        if (!direction) return;
+
+        const angle = Vec2.angle(direction);
+        const cueLength = 280;
+        const cueWidth = 8;
+        const backDistance = cueBall.radius + 8 + (pullBack || 0);
+
+        ctx.save();
+        ctx.translate(cueBall.position.x, cueBall.position.y);
+        ctx.rotate(angle + Math.PI);
+
+        const gradient = ctx.createLinearGradient(backDistance, 0, backDistance + cueLength, 0);
+        gradient.addColorStop(0, '#F5DEB3');
+        gradient.addColorStop(0.05, '#DEB887');
+        gradient.addColorStop(0.1, '#8B4513');
+        gradient.addColorStop(0.6, '#654321');
+        gradient.addColorStop(1, '#1a1a1a');
+
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.moveTo(backDistance, -cueWidth / 4);
+        ctx.lineTo(backDistance + cueLength, -cueWidth);
+        ctx.lineTo(backDistance + cueLength, cueWidth);
+        ctx.lineTo(backDistance, cueWidth / 4);
+        ctx.closePath();
+        ctx.fill();
+
+        // Ferrule
+        ctx.fillStyle = '#FFFFF0';
+        ctx.fillRect(backDistance, -cueWidth / 4, 10, cueWidth / 2);
+
+        // Tip with chalk
+        ctx.fillStyle = '#4169E1';
+        ctx.beginPath();
+        ctx.arc(backDistance, 0, cueWidth / 4, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.restore();
+    }
+
+    drawPowerMeter(power) {
+        const ctx = this.ctx;
+
+        // Position power meter to the right of the spin indicator
+        const meterX = 90;
+        const meterY = this.table.canvasHeight / 2 - 50;
+        const meterWidth = 18;
+        const meterHeight = 100;
+
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        ctx.strokeStyle = '#444';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.roundRect(meterX, meterY, meterWidth, meterHeight, 4);
+        ctx.fill();
+        ctx.stroke();
+
+        const fillPercent = power / Constants.MAX_POWER;
+        const fillHeight = meterHeight * fillPercent;
+
+        const gradient = ctx.createLinearGradient(0, meterY + meterHeight, 0, meterY);
+        gradient.addColorStop(0, '#00ff00');
+        gradient.addColorStop(0.5, '#ffff00');
+        gradient.addColorStop(1, '#ff0000');
+
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.roundRect(meterX + 2, meterY + meterHeight - fillHeight + 2, meterWidth - 4, Math.max(0, fillHeight - 4), 2);
+        ctx.fill();
+
+        ctx.fillStyle = '#fff';
+        ctx.font = '9px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('POWER', meterX + meterWidth / 2, meterY + meterHeight + 14);
+    }
+
+    lightenColor(color, percent) {
+        const num = parseInt(color.replace('#', ''), 16);
+        const amt = Math.round(2.55 * percent);
+        const R = Math.min(255, (num >> 16) + amt);
+        const G = Math.min(255, ((num >> 8) & 0x00FF) + amt);
+        const B = Math.min(255, (num & 0x0000FF) + amt);
+        return `rgb(${R},${G},${B})`;
+    }
+
+    darkenColor(color, percent) {
+        const num = parseInt(color.replace('#', ''), 16);
+        const amt = Math.round(2.55 * percent);
+        const R = Math.max(0, (num >> 16) - amt);
+        const G = Math.max(0, ((num >> 8) & 0x00FF) - amt);
+        const B = Math.max(0, (num & 0x0000FF) - amt);
+        return `rgb(${R},${G},${B})`;
+    }
+}

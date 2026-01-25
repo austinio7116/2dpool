@@ -1,0 +1,285 @@
+// UI system - handles menus, HUD, and game state display
+
+import { GameMode, GameState } from './game.js';
+
+export class UI {
+    constructor() {
+        // Get UI elements
+        this.mainMenu = document.getElementById('main-menu');
+        this.gameHud = document.getElementById('game-hud');
+        this.gameOverScreen = document.getElementById('game-over');
+        this.freeplayControls = document.getElementById('freeplay-controls');
+
+        // HUD elements
+        this.playerIndicator = document.getElementById('player-indicator');
+        this.ballGroups = document.getElementById('ball-groups');
+        this.foulIndicator = document.getElementById('foul-indicator');
+        this.gameMessage = document.getElementById('game-message');
+        this.winnerText = document.getElementById('winner-text');
+
+        // Buttons
+        this.btn8Ball = document.getElementById('btn-8ball');
+        this.btn9Ball = document.getElementById('btn-9ball');
+        this.btnFreePlay = document.getElementById('btn-freeplay');
+        this.btnPlayAgain = document.getElementById('btn-play-again');
+        this.btnMainMenu = document.getElementById('btn-main-menu');
+        this.btnRerack = document.getElementById('btn-rerack');
+        this.btnExitFreeplay = document.getElementById('btn-exit-freeplay');
+        this.soundToggle = document.getElementById('sound-toggle');
+        this.speedSlider = document.getElementById('speed-slider');
+        this.speedValue = document.getElementById('speed-value');
+
+        // Callbacks
+        this.onGameStart = null;
+        this.onPlayAgain = null;
+        this.onMainMenu = null;
+        this.onRerack = null;
+        this.onSoundToggle = null;
+        this.onSpeedChange = null;
+
+        // Current game mode
+        this.currentMode = null;
+
+        // Bind button events
+        this.bindEvents();
+    }
+
+    bindEvents() {
+        this.btn8Ball.addEventListener('click', () => {
+            if (this.onGameStart) {
+                this.onGameStart(GameMode.EIGHT_BALL);
+            }
+        });
+
+        this.btn9Ball.addEventListener('click', () => {
+            if (this.onGameStart) {
+                this.onGameStart(GameMode.NINE_BALL);
+            }
+        });
+
+        this.btnFreePlay.addEventListener('click', () => {
+            if (this.onGameStart) {
+                this.onGameStart(GameMode.FREE_PLAY);
+            }
+        });
+
+        this.btnPlayAgain.addEventListener('click', () => {
+            if (this.onPlayAgain) {
+                this.onPlayAgain();
+            }
+        });
+
+        this.btnMainMenu.addEventListener('click', () => {
+            if (this.onMainMenu) {
+                this.onMainMenu();
+            }
+        });
+
+        this.btnRerack.addEventListener('click', () => {
+            if (this.onRerack) {
+                this.onRerack();
+            }
+        });
+
+        this.btnExitFreeplay.addEventListener('click', () => {
+            if (this.onMainMenu) {
+                this.onMainMenu();
+            }
+        });
+
+        this.soundToggle.addEventListener('change', () => {
+            if (this.onSoundToggle) {
+                this.onSoundToggle(this.soundToggle.checked);
+            }
+        });
+
+        this.speedSlider.addEventListener('input', () => {
+            const speed = parseFloat(this.speedSlider.value);
+            this.speedValue.textContent = speed.toFixed(1) + 'x';
+            if (this.onSpeedChange) {
+                this.onSpeedChange(speed);
+            }
+        });
+
+        // Set initial display value
+        this.speedValue.textContent = this.speedSlider.value + 'x';
+    }
+
+    // Show main menu
+    showMainMenu() {
+        this.mainMenu.classList.remove('hidden');
+        this.gameHud.classList.add('hidden');
+        this.gameOverScreen.classList.add('hidden');
+        this.freeplayControls.classList.add('hidden');
+        this.currentMode = null;
+    }
+
+    // Show game HUD
+    showGameHUD(mode) {
+        this.mainMenu.classList.add('hidden');
+        this.gameHud.classList.remove('hidden');
+        this.gameOverScreen.classList.add('hidden');
+        this.currentMode = mode;
+
+        if (mode === GameMode.FREE_PLAY) {
+            this.freeplayControls.classList.remove('hidden');
+            this.playerIndicator.textContent = 'Free Play';
+            this.ballGroups.innerHTML = '';
+        } else {
+            this.freeplayControls.classList.add('hidden');
+            this.updatePlayerIndicator(1);
+        }
+
+        this.hideMessage();
+        this.hideFoul();
+    }
+
+    // Show game over screen
+    showGameOver(winner, reason) {
+        this.gameOverScreen.classList.remove('hidden');
+        this.freeplayControls.classList.add('hidden');
+
+        if (winner) {
+            this.winnerText.textContent = `Player ${winner} Wins!`;
+            this.winnerText.style.color = '#ffd700';
+        } else {
+            this.winnerText.textContent = reason || 'Game Over';
+            this.winnerText.style.color = '#fff';
+        }
+    }
+
+    // Update player indicator
+    updatePlayerIndicator(player, group = null) {
+        if (this.currentMode === GameMode.FREE_PLAY) return;
+
+        let text = `Player ${player}'s Turn`;
+
+        if (this.currentMode === GameMode.EIGHT_BALL && group) {
+            text += ` (${group === 'solid' ? 'Solids' : 'Stripes'})`;
+        } else if (this.currentMode === GameMode.NINE_BALL) {
+            // Will be updated with lowest ball info
+        }
+
+        this.playerIndicator.textContent = text;
+    }
+
+    // Update ball groups display (8-ball)
+    updateBallGroups(player1Group, player2Group, remaining) {
+        if (this.currentMode !== GameMode.EIGHT_BALL) {
+            this.ballGroups.innerHTML = '';
+            return;
+        }
+
+        this.ballGroups.innerHTML = '';
+
+        if (!player1Group) {
+            // Groups not yet assigned
+            return;
+        }
+
+        // Player 1 group
+        const p1Div = document.createElement('div');
+        p1Div.className = 'ball-group';
+        p1Div.innerHTML = `
+            <div class="mini-ball ${player1Group}"></div>
+            <span>P1: ${player1Group === 'solid' ? remaining.solids : remaining.stripes}</span>
+        `;
+
+        // Player 2 group
+        const p2Div = document.createElement('div');
+        p2Div.className = 'ball-group';
+        p2Div.innerHTML = `
+            <div class="mini-ball ${player2Group}"></div>
+            <span>P2: ${player2Group === 'solid' ? remaining.solids : remaining.stripes}</span>
+        `;
+
+        this.ballGroups.appendChild(p1Div);
+        this.ballGroups.appendChild(p2Div);
+    }
+
+    // Update 9-ball lowest ball indicator
+    updateLowestBall(lowestBall) {
+        if (this.currentMode !== GameMode.NINE_BALL) return;
+
+        this.ballGroups.innerHTML = `
+            <div class="ball-group">
+                <span>Target: ${lowestBall}-Ball</span>
+            </div>
+        `;
+    }
+
+    // Show foul indicator
+    showFoul(reason) {
+        this.foulIndicator.classList.remove('hidden');
+        this.foulIndicator.textContent = 'FOUL';
+
+        // Show reason as message
+        this.showMessage(reason, 3000);
+
+        // Auto-hide foul indicator after delay
+        setTimeout(() => {
+            this.hideFoul();
+        }, 2000);
+    }
+
+    // Hide foul indicator
+    hideFoul() {
+        this.foulIndicator.classList.add('hidden');
+    }
+
+    // Show a message
+    showMessage(text, duration = 0) {
+        this.gameMessage.textContent = text;
+        this.gameMessage.style.display = 'block';
+
+        if (duration > 0) {
+            setTimeout(() => {
+                this.hideMessage();
+            }, duration);
+        }
+    }
+
+    // Hide message
+    hideMessage() {
+        this.gameMessage.style.display = 'none';
+    }
+
+    // Update UI based on game state
+    updateFromGameInfo(info) {
+        if (info.state === GameState.MENU) {
+            this.showMainMenu();
+            return;
+        }
+
+        if (info.state === GameState.GAME_OVER) {
+            this.showGameOver(info.winner, info.gameOverReason);
+            return;
+        }
+
+        // Update player indicator
+        const currentGroup = info.currentPlayer === 1 ? info.player1Group : info.player2Group;
+        this.updatePlayerIndicator(info.currentPlayer, currentGroup);
+
+        // Update ball groups (8-ball)
+        if (info.mode === GameMode.EIGHT_BALL) {
+            this.updateBallGroups(info.player1Group, info.player2Group, info.remaining);
+        }
+
+        // Update lowest ball (9-ball)
+        if (info.mode === GameMode.NINE_BALL) {
+            this.updateLowestBall(info.lowestBall);
+        }
+
+        // Ball in hand message
+        if (info.state === GameState.BALL_IN_HAND) {
+            this.showMessage('Ball in hand - Click anywhere to place');
+        } else {
+            this.hideMessage();
+        }
+    }
+
+    // Get sound enabled state
+    isSoundEnabled() {
+        return this.soundToggle.checked;
+    }
+}

@@ -19,6 +19,7 @@ export class UI {
 
         // Buttons
         this.btn8Ball = document.getElementById('btn-8ball');
+        this.btnUK8Ball = document.getElementById('btn-uk8ball');
         this.btn9Ball = document.getElementById('btn-9ball');
         this.btnFreePlay = document.getElementById('btn-freeplay');
         this.btnPlayAgain = document.getElementById('btn-play-again');
@@ -30,6 +31,8 @@ export class UI {
         this.speedValue = document.getElementById('speed-value');
         this.tableSelect = document.getElementById('table-select');
         this.btnFullscreen = document.getElementById('btn-fullscreen');
+        this.ukColorSelect = document.getElementById('uk-color-select');
+        this.ukColorScheme = document.getElementById('uk-color-scheme');
 
         // Callbacks
         this.onGameStart = null;
@@ -57,6 +60,25 @@ export class UI {
         this.btn9Ball.addEventListener('click', () => {
             if (this.onGameStart) {
                 this.onGameStart(GameMode.NINE_BALL);
+            }
+        });
+
+        this.btnUK8Ball.addEventListener('click', () => {
+            if (this.onGameStart) {
+                const colorScheme = this.ukColorScheme.value;
+                this.onGameStart(GameMode.UK_EIGHT_BALL, { colorScheme });
+            }
+        });
+
+        // Show/hide UK color options when hovering over UK button
+        this.btnUK8Ball.addEventListener('mouseenter', () => {
+            this.ukColorSelect.classList.remove('hidden');
+        });
+
+        this.ukColorSelect.addEventListener('mouseleave', (e) => {
+            // Only hide if not hovering over button or select
+            if (!this.btnUK8Ball.matches(':hover') && !this.ukColorSelect.matches(':hover')) {
+                this.ukColorSelect.classList.add('hidden');
             }
         });
 

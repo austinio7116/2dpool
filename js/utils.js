@@ -211,5 +211,21 @@ export const Constants = {
         13: '#FF4500',  // Orange stripe
         14: '#006400',  // Green stripe
         15: '#800000',  // Maroon stripe
+    },
+
+    // UK 8-ball color schemes
+    UK_BALL_COLORS: {
+        'red-yellow': {
+            group1: '#CC0000',  // Red
+            group2: '#FFD700',  // Yellow
+            black: '#000000',
+            cue: '#FFFEF0'
+        },
+        'blue-yellow': {
+            group1: '#0000CC',  // Blue
+            group2: '#FFD700',  // Yellow
+            black: '#000000',
+            cue: '#FFFEF0'
+        }
     }
 };

@@ -485,8 +485,9 @@ export class Renderer {
             this.drawSolidBall(x, y, radius, ball);
         }
 
-        if (!ball.isCueBall) {
-            this.drawBallNumber(x, y, radius, ball.number);
+        // Draw number - skip for UK balls except 8-ball
+        if (!ball.isCueBall && !(ball.isUKBall && !ball.isEightBall)) {
+            this.drawBallNumber(x, y, radius, ball.number, ball);
         }
 
         this.drawBallHighlight(x, y, radius);
@@ -534,26 +535,67 @@ export class Renderer {
         ctx.arc(x, y, radius, 0, Math.PI * 2);
         ctx.clip();
 
-        const stripeWidth = radius * 1.2;
+        // Calculate stripe offset based on roll angle and travel direction
+        // The stripe moves parallel to travel direction (in the direction the ball is rolling)
+        const rollOffset = Math.sin(ball.displayRoll) * radius * 0.8;
+
+        // Offset in the direction of travel
+        const offsetX = Math.cos(ball.travelAngle) * rollOffset;
+        const offsetY = Math.sin(ball.travelAngle) * rollOffset;
+
+        // Stripe width varies based on roll - full width on top, narrow at edges
+        // cos(displayRoll) = 1 when on top, 0 at edges, -1 on back
+        const widthFactor = Math.abs(Math.cos(ball.displayRoll));
+        const baseStripeWidth = radius * 1.2;
+        const stripeWidth = baseStripeWidth * (0.3 + widthFactor * 0.7);  // Min 30% width
+
+        // Rotate stripe band to be perpendicular to travel direction
+        ctx.save();
+        ctx.translate(x + offsetX, y + offsetY);
+        ctx.rotate(ball.travelAngle + Math.PI / 2);  // Perpendicular to travel
         ctx.fillStyle = ball.color;
-        ctx.fillRect(x - radius, y - stripeWidth / 2, radius * 2, stripeWidth);
+        ctx.fillRect(-radius * 1.5, -stripeWidth / 2, radius * 3, stripeWidth);
+        ctx.restore();
 
         ctx.restore();
     }
 
-    drawBallNumber(x, y, radius, number) {
+    drawBallNumber(x, y, radius, number, ball) {
         const ctx = this.ctx;
         const circleRadius = radius * 0.45;
-        ctx.fillStyle = '#FFFFFF';
-        ctx.beginPath();
-        ctx.arc(x, y, circleRadius, 0, Math.PI * 2);
-        ctx.fill();
 
-        ctx.fillStyle = '#000000';
-        ctx.font = `bold ${radius * 0.6}px Arial`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(number.toString(), x, y + 1);
+        // Calculate number position offset based on roll
+        // Number moves in the direction of travel (parallel)
+        const rollOffset = Math.sin(ball.displayRoll) * radius * 0.6;
+        const offsetX = Math.cos(ball.travelAngle) * rollOffset;
+        const offsetY = Math.sin(ball.travelAngle) * rollOffset;
+
+        // Calculate visibility - number fades when "on the back" of the ball
+        // cos(displayRoll) gives us how much the number faces the camera
+        const visibility = Math.cos(ball.displayRoll);
+
+        // Only draw if number is facing forward (visibility > 0)
+        if (visibility > 0.1) {
+            // Scale circle based on 3D perspective (smaller when tilted)
+            const scale = 0.5 + visibility * 0.5;
+            const scaledRadius = circleRadius * scale;
+
+            ctx.save();
+            ctx.globalAlpha = ctx.globalAlpha * visibility;
+
+            ctx.fillStyle = '#FFFFFF';
+            ctx.beginPath();
+            ctx.arc(x + offsetX, y + offsetY, scaledRadius, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.fillStyle = '#000000';
+            ctx.font = `bold ${radius * 0.6 * scale}px Arial`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(number.toString(), x + offsetX, y + offsetY + 1);
+
+            ctx.restore();
+        }
     }
 
     drawBallHighlight(x, y, radius) {

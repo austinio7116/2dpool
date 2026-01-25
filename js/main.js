@@ -242,6 +242,13 @@ class PoolGame {
         if (this.game.state !== GameState.MENU && this.game.state !== GameState.GAME_OVER) {
             this.ui.updateFromGameInfo(this.game.getGameInfo());
         }
+
+        // Update visual rotation for all balls (rolling animation + return to upright)
+        for (const ball of this.game.balls) {
+            if (!ball.pocketed) {
+                ball.updateVisualRotation();
+            }
+        }
     }
 
     render() {

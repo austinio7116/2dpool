@@ -1,11 +1,12 @@
 // Game logic - manages game state, rules, turns, and win conditions
 
 import { Vec2, Constants } from './utils.js';
-import { Ball, createBallSet, rackBalls, RackPatterns } from './ball.js';
+import { Ball, createBallSet, createUKBallSet, rackBalls, RackPatterns } from './ball.js';
 
 export const GameMode = {
     EIGHT_BALL: '8ball',
     NINE_BALL: '9ball',
+    UK_EIGHT_BALL: 'uk8ball',
     FREE_PLAY: 'freeplay'
 };
 
@@ -46,6 +47,12 @@ export class Game {
         this.lowestBall = 1;
         this.pushOutAvailable = false;
 
+        // UK 8-ball specific
+        this.ukColorScheme = 'red-yellow';  // 'red-yellow' or 'blue-yellow'
+        this.twoShotRule = false;           // Whether opponent gets two shots
+        this.shotsRemaining = 1;            // Shots remaining in current turn
+        this.isFreeShot = false;            // First shot after foul is "free"
+
         // Game over
         this.winner = null;
         this.gameOverReason = '';
@@ -59,7 +66,7 @@ export class Game {
     }
 
     // Start a new game
-    startGame(mode) {
+    startGame(mode, options = {}) {
         this.mode = mode;
         this.state = GameState.PLAYING;
         this.currentPlayer = 1;
@@ -71,8 +78,18 @@ export class Game {
         this.lowestBall = 1;
         this.pushOutAvailable = false;
 
-        // Create balls
-        this.balls = createBallSet();
+        // UK 8-ball options
+        this.ukColorScheme = options.colorScheme || 'red-yellow';
+        this.twoShotRule = false;
+        this.shotsRemaining = 1;
+        this.isFreeShot = false;
+
+        // Create balls based on game mode
+        if (mode === GameMode.UK_EIGHT_BALL) {
+            this.balls = createUKBallSet(this.ukColorScheme);
+        } else {
+            this.balls = createBallSet();
+        }
         this.cueBall = this.balls.find(b => b.number === 0);
 
         // Rack balls based on game mode
@@ -94,6 +111,8 @@ export class Game {
             this.balls = this.balls.filter(b => b.number <= 9);
             this.cueBall = this.balls.find(b => b.number === 0);
             rackBalls(this.balls, RackPatterns.nineBall, center, ballRadius);
+        } else if (this.mode === GameMode.UK_EIGHT_BALL) {
+            rackBalls(this.balls, RackPatterns.ukEightBall, center, ballRadius);
         } else {
             // Free play - standard 8-ball rack
             rackBalls(this.balls, RackPatterns.eightBall, center, ballRadius);
@@ -165,19 +184,45 @@ export class Game {
             this.evaluateEightBallShot();
         } else if (this.mode === GameMode.NINE_BALL) {
             this.evaluateNineBallShot();
+        } else if (this.mode === GameMode.UK_EIGHT_BALL) {
+            this.evaluateUKEightBallShot();
         }
 
-        // Handle foul
+        // Handle foul - UK 8-ball uses two-shot rule
         if (this.foul) {
-            this.switchPlayer();  // Opponent gets ball in hand
+            if (this.mode === GameMode.UK_EIGHT_BALL) {
+                this.switchPlayer();
+                this.twoShotRule = true;
+                this.shotsRemaining = 2;
+                this.isFreeShot = true;  // First shot is free (can't lose turn)
+            } else {
+                this.switchPlayer();  // Opponent gets ball in hand
+            }
             this.state = GameState.BALL_IN_HAND;
             if (this.onFoul) {
-                this.onFoul(this.foulReason);
+                this.onFoul(this.foulReason + (this.mode === GameMode.UK_EIGHT_BALL ? ' - 2 shots' : ''));
             }
         } else if (!this.turnContinues) {
-            this.switchPlayer();
-            this.state = GameState.PLAYING;
+            // UK 8-ball: check if we have shots remaining from two-shot rule
+            if (this.mode === GameMode.UK_EIGHT_BALL && this.shotsRemaining > 1) {
+                this.shotsRemaining--;
+                this.isFreeShot = false;
+                this.state = GameState.PLAYING;
+            } else {
+                this.switchPlayer();
+                this.twoShotRule = false;
+                this.shotsRemaining = 1;
+                this.isFreeShot = false;
+                this.state = GameState.PLAYING;
+            }
         } else {
+            // Turn continues - player potted their ball
+            // In UK 8-ball, potting resets the two-shot advantage
+            if (this.mode === GameMode.UK_EIGHT_BALL) {
+                this.twoShotRule = false;
+                this.shotsRemaining = 1;
+                this.isFreeShot = false;
+            }
             this.state = GameState.PLAYING;
         }
 
@@ -317,6 +362,112 @@ export class Game {
         if (this.isBreakShot) {
             this.pushOutAvailable = true;
         }
+    }
+
+    // UK 8-Ball shot evaluation
+    evaluateUKEightBallShot() {
+        const cueBallPocketed = this.ballsPocketed.includes(this.cueBall);
+
+        // Filter pocketed balls by group
+        const group1Pocketed = this.ballsPocketed.filter(b => b.isGroup1);
+        const group2Pocketed = this.ballsPocketed.filter(b => b.isGroup2);
+        const blackBallPocketed = this.ballsPocketed.some(b => b.isEightBall);
+
+        // Check for first ball hit foul
+        if (!this.firstBallHit && !cueBallPocketed) {
+            this.foul = true;
+            this.foulReason = 'No ball hit';
+        } else if (this.firstBallHit && this.player1Group) {
+            // Groups assigned - check if correct ball was hit first
+            const currentGroup = this.currentPlayer === 1 ? this.player1Group : this.player2Group;
+            const needsBlackBall = this.isUKGroupCleared(currentGroup);
+
+            if (needsBlackBall) {
+                // Must hit black ball first
+                if (!this.firstBallHit.isEightBall) {
+                    this.foul = true;
+                    this.foulReason = 'Must hit black ball first';
+                }
+            } else {
+                // Must hit own group first
+                const hitOwnGroup = (currentGroup === 'group1' && this.firstBallHit.isGroup1) ||
+                                   (currentGroup === 'group2' && this.firstBallHit.isGroup2);
+                if (!hitOwnGroup && !this.firstBallHit.isEightBall) {
+                    this.foul = true;
+                    this.foulReason = 'Hit opponent\'s ball first';
+                }
+            }
+        }
+
+        // Handle black ball pocketed
+        if (blackBallPocketed) {
+            const blackBall = this.balls.find(b => b.isEightBall);
+            const currentGroup = this.currentPlayer === 1 ? this.player1Group : this.player2Group;
+            const groupCleared = currentGroup ? this.isUKGroupCleared(currentGroup) : false;
+
+            if (this.isBreakShot) {
+                // Black on break - re-spot
+                blackBall.pocketed = false;
+                blackBall.setPosition(this.table.footSpot.x, this.table.footSpot.y);
+            } else if (this.foul || cueBallPocketed || !groupCleared) {
+                // Lose: pocketed black illegally
+                this.winner = this.currentPlayer === 1 ? 2 : 1;
+                this.gameOverReason = 'Pocketed black ball illegally';
+                this.endGame();
+                return;
+            } else {
+                // Win: pocketed black legally
+                this.winner = this.currentPlayer;
+                this.gameOverReason = 'Pocketed the black!';
+                this.endGame();
+                return;
+            }
+        }
+
+        // Assign groups if not yet assigned
+        if (!this.player1Group && !this.isBreakShot) {
+            if (group1Pocketed.length > 0 && group2Pocketed.length === 0) {
+                this.assignUKGroups('group1');
+                this.turnContinues = true;
+            } else if (group2Pocketed.length > 0 && group1Pocketed.length === 0) {
+                this.assignUKGroups('group2');
+                this.turnContinues = true;
+            }
+        } else if (this.player1Group) {
+            // Check if player pocketed their own ball
+            const currentGroup = this.currentPlayer === 1 ? this.player1Group : this.player2Group;
+            const pocketedOwn = (currentGroup === 'group1' && group1Pocketed.length > 0) ||
+                               (currentGroup === 'group2' && group2Pocketed.length > 0);
+
+            if (pocketedOwn && !this.foul) {
+                this.turnContinues = true;
+            }
+        }
+
+        // On break, continue if any ball pocketed (except cue ball)
+        if (this.isBreakShot && this.ballsPocketed.length > 0 && !cueBallPocketed) {
+            this.turnContinues = true;
+        }
+    }
+
+    // Assign groups for UK 8-ball
+    assignUKGroups(player1Group) {
+        this.player1Group = player1Group;
+        this.player2Group = player1Group === 'group1' ? 'group2' : 'group1';
+
+        if (this.onStateChange) {
+            this.onStateChange(this.state);
+        }
+    }
+
+    // Check if a UK group is cleared
+    isUKGroupCleared(group) {
+        for (const ball of this.balls) {
+            if (ball.pocketed) continue;
+            if (group === 'group1' && ball.isGroup1) return false;
+            if (group === 'group2' && ball.isGroup2) return false;
+        }
+        return true;
     }
 
     // Update the lowest remaining ball (9-ball)
@@ -461,7 +612,26 @@ export class Game {
             winner: this.winner,
             gameOverReason: this.gameOverReason,
             lowestBall: this.lowestBall,
-            remaining: this.getRemainingBalls()
+            remaining: this.getRemainingBalls(),
+            // UK 8-ball specific
+            ukColorScheme: this.ukColorScheme,
+            shotsRemaining: this.shotsRemaining,
+            twoShotRule: this.twoShotRule,
+            remainingUK: this.getRemainingUKBalls()
         };
+    }
+
+    // Get remaining balls count for UK 8-ball
+    getRemainingUKBalls() {
+        let group1 = 0;
+        let group2 = 0;
+
+        for (const ball of this.balls) {
+            if (ball.pocketed) continue;
+            if (ball.isGroup1) group1++;
+            if (ball.isGroup2) group2++;
+        }
+
+        return { group1, group2 };
     }
 }

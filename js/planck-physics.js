@@ -14,6 +14,8 @@ export class PlanckPhysics {
     constructor(table) {
         this.table = table;
         this.collisionEvents = [];
+        this.processedCollisions = new Set(); // Track spin effects applied this frame
+        this.pendingSpinEffects = []; // Queue spin effects to apply after collision resolution
         this.speedMultiplier = 0.5; // Adjustable simulation speed (default 0.5)
 
         // Create Planck world with zero gravity (horizontal table)
@@ -105,12 +107,24 @@ export class PlanckPhysics {
                     ballB: ballB,
                     speed: speed
                 });
+
+                // Queue spin effect to apply after collision resolves
+                if (ballA.number === 0 || ballB.number === 0) {
+                    const cueBall = ballA.number === 0 ? ballA : ballB;
+                    this.pendingSpinEffects.push({
+                        type: 'ball',
+                        ball: cueBall,
+                        spinY: cueBall.angularVel.y,
+                        spinX: cueBall.angularVel.x
+                    });
+                }
             }
 
             // Ball-Rail collision
             if ((dataA.type === 'ball' && dataB.type === 'rail') ||
                 (dataA.type === 'rail' && dataB.type === 'ball')) {
                 const ballData = dataA.type === 'ball' ? dataA : dataB;
+                const railData = dataA.type === 'rail' ? dataA : dataB;
                 const body = dataA.type === 'ball' ? bodyA : bodyB;
 
                 const vel = body.getLinearVelocity();
@@ -121,8 +135,91 @@ export class PlanckPhysics {
                     ball: ballData.ball,
                     speed: speed
                 });
+
+                // Queue english effect to apply after collision resolves
+                if (Math.abs(ballData.ball.angularVel.x) > 0.5) {
+                    this.pendingSpinEffects.push({
+                        type: 'rail',
+                        ball: ballData.ball,
+                        railType: railData.railType,
+                        spinX: ballData.ball.angularVel.x
+                    });
+                }
             }
         });
+    }
+
+    // Apply queued spin effects after physics step
+    applyPendingSpinEffects() {
+        for (const effect of this.pendingSpinEffects) {
+            // Check if already processed this frame
+            const key = `${effect.type}-${effect.ball.number}`;
+            if (this.processedCollisions.has(key)) continue;
+            this.processedCollisions.add(key);
+
+            const body = this.ballToBody.get(effect.ball);
+            if (!body) continue;
+
+            const vel = body.getLinearVelocity();
+            const speed = Math.sqrt(vel.x * vel.x + vel.y * vel.y);
+            if (speed < 0.5) continue;
+
+            if (effect.type === 'ball') {
+                this.applyDrawFollow(effect.ball, body, vel, speed, effect.spinY);
+            } else if (effect.type === 'rail') {
+                this.applyEnglish(effect.ball, body, vel, effect.railType, effect.spinX);
+            }
+        }
+        this.pendingSpinEffects = [];
+    }
+
+    // Apply draw/follow: adjusts cue ball velocity after hitting object ball
+    applyDrawFollow(ball, body, vel, speed, spinY) {
+        // spinY is the angular velocity at time of collision
+        // Negative = backspin (draw), High positive = topspin (follow)
+        // Natural roll is somewhere in between (roughly 5-15 for typical shots)
+
+        // Clamp to reasonable range
+        const clampedSpin = Math.max(-50, Math.min(80, spinY));
+
+        // Scale: with natural roll ~10, backspin gives -20 to -40, topspin gives +30 to +60
+        // We want backspin to noticeably slow/reverse, topspin to push through
+        const normalizedSpin = clampedSpin / 40; // Range roughly -1.25 to 2
+
+        // Apply velocity adjustment (backspin reduces, topspin increases)
+        // Clamp factor to avoid extreme values
+        const factor = Math.max(0.5, Math.min(1.8, 1 + (normalizedSpin * 0.35)));
+
+        body.setLinearVelocity(planck.Vec2(vel.x * factor, vel.y * factor));
+
+        // Consume the spin
+        ball.angularVel.y *= 0.3;
+        ball.angularVel.x *= 0.5;
+    }
+
+    // Apply english: adjusts ball angle off the rail
+    applyEnglish(ball, body, vel, railType, spinX) {
+        // Clamp the sidespin
+        const clampedSpin = Math.max(-50, Math.min(50, spinX));
+
+        // Scale influence - make it noticeable but not crazy
+        const spinInfluence = clampedSpin * 0.008;
+
+        let newVelX = vel.x;
+        let newVelY = vel.y;
+
+        if (railType === 'left' || railType === 'right') {
+            // Side rails: english affects vertical component
+            newVelY += spinInfluence * Math.abs(vel.x);
+        } else if (railType === 'top' || railType === 'bottom') {
+            // Top/bottom rails: english affects horizontal component
+            newVelX += spinInfluence * Math.abs(vel.y);
+        }
+
+        body.setLinearVelocity(planck.Vec2(newVelX, newVelY));
+
+        // Consume some sidespin
+        ball.angularVel.x *= 0.7;
     }
 
     createBallBody(ball) {
@@ -225,6 +322,8 @@ export class PlanckPhysics {
 
     update(balls) {
         this.collisionEvents = [];
+        this.processedCollisions.clear(); // Reset spin collision tracking each frame
+        this.pendingSpinEffects = []; // Clear pending effects
 
         // Remove pocketed balls from physics world
         for (const ball of balls) {
@@ -250,6 +349,9 @@ export class PlanckPhysics {
             // Check pockets (not a Planck collision)
             this.handlePockets(balls);
         }
+
+        // Apply spin effects AFTER physics has resolved collisions
+        this.applyPendingSpinEffects();
 
         // Sync final state back to Ball objects
         this.syncPlanckToBalls(balls);

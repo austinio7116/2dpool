@@ -36,8 +36,17 @@
                         Sound Effects
                     </label>
                     <div class="slider-setting">
+                        <label for="table-select">Table Style</label>
+                        <select id="table-select">
+                            <option value="1">Classic Green</option>
+                            <option value="2">Blue Felt</option>
+                            <option value="3">Red Felt</option>
+                            <option value="4">Tournament</option>
+                        </select>
+                    </div>
+                    <div class="slider-setting">
                         <label for="speed-slider">Simulation Speed</label>
-                        <input type="range" id="speed-slider" min="0.2" max="2" step="0.1" value="0.5">
+                        <input type="range" id="speed-slider" min="0.2" max="2" step="0.1" value="1">
                         <span id="speed-value">1.0x</span>
                     </div>
                     <button id="btn-fullscreen" class="menu-btn small mobile-only">Fullscreen</button>

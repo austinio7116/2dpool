@@ -31,13 +31,25 @@ export class Renderer {
         this.canvas.width = table.canvasWidth;
         this.canvas.height = table.canvasHeight;
 
-        // Load table image
-        this.tableImage = new Image();
-        this.tableImageLoaded = false;
-        this.tableImage.onload = () => {
-            this.tableImageLoaded = true;
-        };
-        this.tableImage.src = 'assets/pooltable.png';
+        // Load table images
+        this.tableImages = [];
+        this.tableImagesLoaded = [false, false, false, false];
+        this.currentTableIndex = 0;
+
+        for (let i = 0; i < 4; i++) {
+            const img = new Image();
+            const index = i;
+            img.onload = () => {
+                this.tableImagesLoaded[index] = true;
+            };
+            img.src = `assets/pooltable${i === 0 ? '' : i + 1}.png`;
+            this.tableImages.push(img);
+        }
+    }
+
+    setTableStyle(tableNum) {
+        // tableNum is 1-4, convert to 0-3 index
+        this.currentTableIndex = Math.max(0, Math.min(3, tableNum - 1));
     }
 
     render(state) {
@@ -45,8 +57,8 @@ export class Renderer {
         this.drawTable();
 
         // Draw table image overlay (if loaded)
-        if (this.tableImageLoaded) {
-            this.ctx.drawImage(this.tableImage, 0, 0, this.canvas.width, this.canvas.height);
+        if (this.tableImagesLoaded[this.currentTableIndex]) {
+            this.ctx.drawImage(this.tableImages[this.currentTableIndex], 0, 0, this.canvas.width, this.canvas.height);
         }
 
         this.drawBalls(state.balls);

@@ -50,6 +50,7 @@ class PoolGame {
         this.ui.onRerack = () => this.game.rerack();
         this.ui.onSoundToggle = (enabled) => this.audio.setEnabled(enabled);
         this.ui.onSpeedChange = (speed) => this.physics.setSpeedMultiplier(speed);
+        this.ui.onTableChange = (tableNum) => this.renderer.setTableStyle(tableNum);
 
         // Input callbacks - now includes spin
         this.input.onShot = (direction, power, spin) => this.executeShot(direction, power, spin);

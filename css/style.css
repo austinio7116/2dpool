@@ -153,6 +153,27 @@ body {
     border: none;
 }
 
+.slider-setting select {
+    width: 200px;
+    padding: 8px 12px;
+    font-size: 0.9rem;
+    border-radius: 4px;
+    background: #4a4a6a;
+    color: #fff;
+    border: 1px solid #6a6a8a;
+    cursor: pointer;
+    outline: none;
+}
+
+.slider-setting select:hover {
+    background: #5a5a7a;
+}
+
+.slider-setting select option {
+    background: #3a3a5a;
+    color: #fff;
+}
+
 #speed-value {
     font-size: 0.85rem;
     color: #ffd700;

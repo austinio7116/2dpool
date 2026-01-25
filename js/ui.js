@@ -28,6 +28,7 @@ export class UI {
         this.soundToggle = document.getElementById('sound-toggle');
         this.speedSlider = document.getElementById('speed-slider');
         this.speedValue = document.getElementById('speed-value');
+        this.tableSelect = document.getElementById('table-select');
         this.btnFullscreen = document.getElementById('btn-fullscreen');
 
         // Callbacks
@@ -37,6 +38,7 @@ export class UI {
         this.onRerack = null;
         this.onSoundToggle = null;
         this.onSpeedChange = null;
+        this.onTableChange = null;
 
         // Current game mode
         this.currentMode = null;
@@ -99,6 +101,13 @@ export class UI {
             this.speedValue.textContent = speed.toFixed(1) + 'x';
             if (this.onSpeedChange) {
                 this.onSpeedChange(speed);
+            }
+        });
+
+        this.tableSelect.addEventListener('change', () => {
+            const tableNum = parseInt(this.tableSelect.value);
+            if (this.onTableChange) {
+                this.onTableChange(tableNum);
             }
         });
 

@@ -470,6 +470,22 @@ export class PlanckPhysics {
         this.speedMultiplier = Math.max(0.1, Math.min(3.0, multiplier));
     }
 
+    // Reset physics state for new game - destroys all ball bodies
+    reset() {
+        // Destroy all ball bodies
+        for (const [ball, body] of this.ballToBody) {
+            this.world.destroyBody(body);
+        }
+        this.ballToBody.clear();
+        this.bodyToBall.clear();
+
+        // Clear pending state
+        this.collisionEvents = [];
+        this.processedCollisions.clear();
+        this.pendingSpinEffects = [];
+        this.accumulator = 0;
+    }
+
     predictTrajectory(cueBall, direction, power, balls, maxSteps = 200) {
         const trajectory = {
             cuePath: [{ x: cueBall.position.x, y: cueBall.position.y }],

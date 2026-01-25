@@ -66,6 +66,7 @@ class PoolGame {
 
     startGame(mode) {
         this.audio.init();
+        this.physics.reset();  // Clear old ball bodies before creating new game
         this.game.startGame(mode);
 
         this.input.setCueBall(this.game.cueBall);

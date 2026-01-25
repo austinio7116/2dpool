@@ -357,94 +357,143 @@ export class PlanckPhysics {
     }
 
     predictTrajectory(cueBall, direction, power, balls, maxSteps = 200) {
-        // Simplified prediction (same as original - just visual guide)
-        const simBalls = balls.map(b => ({
-            position: { x: b.position.x, y: b.position.y },
-            velocity: { x: b.velocity.x, y: b.velocity.y },
-            radius: b.radius,
-            number: b.number,
-            pocketed: b.pocketed
-        }));
-
-        const simCue = simBalls.find(b => b.number === 0);
-        simCue.velocity.x = direction.x * power;
-        simCue.velocity.y = direction.y * power;
-
         const trajectory = {
-            cuePath: [{ x: simCue.position.x, y: simCue.position.y }],
+            cuePath: [{ x: cueBall.position.x, y: cueBall.position.y }],
             firstHit: null,
             targetPath: []
         };
 
-        const b = this.table.bounds;
+        // Use geometric raycast for precise ghost ball positioning
+        const hitResult = this.findFirstBallHit(cueBall, direction, balls);
 
-        for (let step = 0; step < maxSteps; step++) {
-            simCue.position.x += simCue.velocity.x * 0.3;
-            simCue.position.y += simCue.velocity.y * 0.3;
+        if (hitResult) {
+            trajectory.firstHit = {
+                position: hitResult.contactPoint,
+                targetBallNumber: hitResult.ball.number
+            };
 
-            trajectory.cuePath.push({ x: simCue.position.x, y: simCue.position.y });
+            // Predict target ball path based on collision normal
+            const nx = hitResult.ball.position.x - hitResult.contactPoint.x;
+            const ny = hitResult.ball.position.y - hitResult.contactPoint.y;
+            const nLen = Math.sqrt(nx * nx + ny * ny);
+            const normalX = nx / nLen;
+            const normalY = ny / nLen;
 
-            // Check collision with other balls
-            if (!trajectory.firstHit) {
-                for (const ball of simBalls) {
-                    if (ball.number === 0 || ball.pocketed) continue;
+            let tx = hitResult.ball.position.x;
+            let ty = hitResult.ball.position.y;
+            let tvx = normalX * power * 0.7;
+            let tvy = normalY * power * 0.7;
 
-                    const dx = ball.position.x - simCue.position.x;
-                    const dy = ball.position.y - simCue.position.y;
-                    const distSq = dx * dx + dy * dy;
-                    const minDist = simCue.radius + ball.radius;
-
-                    if (distSq < minDist * minDist) {
-                        const dist = Math.sqrt(distSq);
-                        const nx = dx / dist;
-                        const ny = dy / dist;
-
-                        trajectory.firstHit = {
-                            position: { x: simCue.position.x, y: simCue.position.y },
-                            targetBallNumber: ball.number
-                        };
-
-                        // Predict target ball path
-                        const speed = Math.sqrt(simCue.velocity.x * simCue.velocity.x + simCue.velocity.y * simCue.velocity.y);
-                        let tx = ball.position.x;
-                        let ty = ball.position.y;
-                        let tvx = nx * speed * 0.7;
-                        let tvy = ny * speed * 0.7;
-
-                        for (let t = 0; t < 50; t++) {
-                            tx += tvx;
-                            ty += tvy;
-                            tvx *= 0.97;
-                            tvy *= 0.97;
-                            trajectory.targetPath.push({ x: tx, y: ty });
-                            if (tvx * tvx + tvy * tvy < 0.5) break;
-                        }
-                        break;
-                    }
-                }
+            for (let t = 0; t < 50; t++) {
+                tx += tvx;
+                ty += tvy;
+                tvx *= 0.97;
+                tvy *= 0.97;
+                trajectory.targetPath.push({ x: tx, y: ty });
+                if (tvx * tvx + tvy * tvy < 0.5) break;
             }
 
-            // Rail bounces
-            const r = simCue.radius;
-            if (simCue.position.x - r < b.left || simCue.position.x + r > b.right) {
-                simCue.velocity.x = -simCue.velocity.x * 0.8;
-                simCue.position.x = Math.max(b.left + r, Math.min(b.right - r, simCue.position.x));
+            // Build cue path up to contact point
+            const dist = Math.sqrt(
+                (hitResult.contactPoint.x - cueBall.position.x) ** 2 +
+                (hitResult.contactPoint.y - cueBall.position.y) ** 2
+            );
+            const steps = Math.min(Math.ceil(dist / 5), 100);
+            for (let i = 1; i <= steps; i++) {
+                const t = i / steps;
+                trajectory.cuePath.push({
+                    x: cueBall.position.x + direction.x * dist * t,
+                    y: cueBall.position.y + direction.y * dist * t
+                });
             }
-            if (simCue.position.y - r < b.top || simCue.position.y + r > b.bottom) {
-                simCue.velocity.y = -simCue.velocity.y * 0.8;
-                simCue.position.y = Math.max(b.top + r, Math.min(b.bottom - r, simCue.position.y));
-            }
-
-            // Friction
-            simCue.velocity.x *= 0.995;
-            simCue.velocity.y *= 0.995;
-
-            // Stop conditions
-            const speedSq = simCue.velocity.x * simCue.velocity.x + simCue.velocity.y * simCue.velocity.y;
-            if (speedSq < 0.1) break;
-            if (trajectory.firstHit && step > 20) break;
+        } else {
+            // No ball hit - trace path with rail bounces
+            this.tracePathWithRails(cueBall, direction, power, trajectory, maxSteps);
         }
 
         return trajectory;
+    }
+
+    // Geometric raycast to find exact contact point with first ball hit
+    findFirstBallHit(cueBall, direction, balls) {
+        let closest = null;
+        let closestDist = Infinity;
+        const combinedRadius = cueBall.radius * 2; // Both balls same size
+
+        for (const ball of balls) {
+            if (ball.number === 0 || ball.pocketed) continue;
+
+            // Vector from cue ball to target ball
+            const toTargetX = ball.position.x - cueBall.position.x;
+            const toTargetY = ball.position.y - cueBall.position.y;
+
+            // Project target onto aim direction
+            const projection = toTargetX * direction.x + toTargetY * direction.y;
+
+            // Ball is behind us
+            if (projection < 0) continue;
+
+            // Perpendicular distance from aim line to ball center
+            const perpX = toTargetX - projection * direction.x;
+            const perpY = toTargetY - projection * direction.y;
+            const perpDist = Math.sqrt(perpX * perpX + perpY * perpY);
+
+            // Check if aim line passes close enough to hit this ball
+            if (perpDist < combinedRadius) {
+                // Calculate exact contact point
+                // Distance along aim line to contact point
+                const offset = Math.sqrt(combinedRadius * combinedRadius - perpDist * perpDist);
+                const contactDist = projection - offset;
+
+                if (contactDist > 0 && contactDist < closestDist) {
+                    closestDist = contactDist;
+                    closest = {
+                        ball: ball,
+                        contactPoint: {
+                            x: cueBall.position.x + direction.x * contactDist,
+                            y: cueBall.position.y + direction.y * contactDist
+                        },
+                        distance: contactDist
+                    };
+                }
+            }
+        }
+
+        return closest;
+    }
+
+    // Trace cue ball path including rail bounces when no ball is hit directly
+    tracePathWithRails(cueBall, direction, power, trajectory, maxSteps) {
+        const b = this.table.bounds;
+        const r = cueBall.radius;
+
+        let px = cueBall.position.x;
+        let py = cueBall.position.y;
+        let vx = direction.x * power;
+        let vy = direction.y * power;
+
+        for (let step = 0; step < maxSteps; step++) {
+            px += vx * 0.3;
+            py += vy * 0.3;
+
+            trajectory.cuePath.push({ x: px, y: py });
+
+            // Rail bounces
+            if (px - r < b.left || px + r > b.right) {
+                vx = -vx * 0.8;
+                px = Math.max(b.left + r, Math.min(b.right - r, px));
+            }
+            if (py - r < b.top || py + r > b.bottom) {
+                vy = -vy * 0.8;
+                py = Math.max(b.top + r, Math.min(b.bottom - r, py));
+            }
+
+            // Friction
+            vx *= 0.995;
+            vy *= 0.995;
+
+            // Stop if slow enough
+            if (vx * vx + vy * vy < 0.1) break;
+        }
     }
 }

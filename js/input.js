@@ -223,13 +223,14 @@ export class Input {
             return;
         }
 
-        // Ball placement mode
-        if (this.ballInHandMode && this.placementBall && this.placementValid) {
-            this.ballInHandMode = false;
-            this.placementBall = null;
+        // Ball placement mode - on touch, start moving the ball (place on touch end)
+        if (this.ballInHandMode && this.placementBall) {
+            // Move ball to touch position immediately
+            this.placementBall.position.x = this.mousePos.x;
+            this.placementBall.position.y = this.mousePos.y;
 
-            if (this.onBallPlaced) {
-                this.onBallPlaced(this.mousePos);
+            if (this.onBallInHand) {
+                this.onBallInHand(this.mousePos);
             }
             return;
         }
@@ -278,6 +279,18 @@ export class Input {
 
         if (this.isSettingSpin) {
             this.isSettingSpin = false;
+            this.isMouseDown = false;
+            return;
+        }
+
+        // Ball placement mode - place ball on touch end
+        if (this.ballInHandMode && this.placementBall && this.placementValid) {
+            this.ballInHandMode = false;
+            this.placementBall = null;
+
+            if (this.onBallPlaced) {
+                this.onBallPlaced(this.mousePos);
+            }
             this.isMouseDown = false;
             return;
         }

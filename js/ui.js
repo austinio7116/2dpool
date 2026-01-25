@@ -102,9 +102,16 @@ export class UI {
             }
         });
 
-        // Fullscreen button for mobile
+        // Fullscreen buttons for mobile
         if (this.btnFullscreen) {
             this.btnFullscreen.addEventListener('click', () => {
+                this.toggleFullscreen();
+            });
+        }
+
+        const btnFullscreenFloat = document.getElementById('btn-fullscreen-float');
+        if (btnFullscreenFloat) {
+            btnFullscreenFloat.addEventListener('click', () => {
                 this.toggleFullscreen();
             });
         }

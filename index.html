@@ -7,8 +7,10 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="screen-orientation" content="landscape">
+    <meta name="theme-color" content="#1a1a2e">
     <title>2D Pool Game</title>
     <link rel="stylesheet" href="css/style.css">
+    <link rel="manifest" href="manifest.json">
     <script type="importmap">
     {
         "imports": {
@@ -39,6 +41,7 @@
                         <span id="speed-value">1.0x</span>
                     </div>
                     <button id="btn-fullscreen" class="menu-btn small mobile-only">Fullscreen</button>
+                    <p id="install-hint" class="mobile-only install-hint">For best experience: tap browser menu &rarr; "Add to Home Screen"</p>
                 </div>
             </div>
             <div id="game-hud" class="hidden">
@@ -60,6 +63,7 @@
                 <button id="btn-exit-freeplay" class="menu-btn small">Exit</button>
             </div>
         </div>
+        <button id="btn-fullscreen-float" class="fullscreen-float mobile-only" title="Fullscreen">&#x26F6;</button>
     </div>
 
     <script type="module" src="js/main.js"></script>

@@ -16,7 +16,8 @@ export class PlanckPhysics {
         this.collisionEvents = [];
         this.processedCollisions = new Set(); // Track spin effects applied this frame
         this.pendingSpinEffects = []; // Queue spin effects to apply after collision resolution
-        this.speedMultiplier = 0.5; // Adjustable simulation speed (default 0.5)
+        this.speedMultiplier = 1.0; // Adjustable simulation speed
+        this.accumulator = 0; // Time accumulator for fixed timestep
 
         // Create Planck world with zero gravity (horizontal table)
         this.world = planck.World({
@@ -232,8 +233,8 @@ export class PlanckPhysics {
             type: 'dynamic',
             position: pos,
             bullet: true, // CCD for fast balls
-            linearDamping: 0.8, // Rolling friction - slows balls over distance
-            angularDamping: 0.3 // Spin decay
+            linearDamping: 1.2, // Rolling friction - slows balls over distance
+            angularDamping: 0.5 // Spin decay
         });
 
         // Set initial velocity (convert from pixels/frame to pixels/second)
@@ -339,18 +340,17 @@ export class PlanckPhysics {
         this.syncBallsToPlanck(balls);
 
         // Fixed timestep physics with accumulator for frame-rate independence
-        // Target 60fps physics (16.67ms per frame), but handle slower devices
+        // Physics runs at 60Hz base rate, scaled by speedMultiplier
         const fixedDt = (1.0 / 60.0) * this.speedMultiplier;
         const substepsPerFrame = 8;
         const substepDt = fixedDt / substepsPerFrame;
 
-        // Calculate how many frames worth of physics to run based on actual delta time
-        // Cap at 3 frames to prevent spiral of death on very slow devices
-        const deltaSeconds = Math.min(deltaTime, 50) / 1000; // Cap at 50ms (20fps min)
-        const framesToRun = Math.round(deltaSeconds / (1.0 / 60.0));
-        const actualFrames = Math.max(1, Math.min(framesToRun, 3));
+        // Add frame time to accumulator (cap at 50ms to prevent spiral of death)
+        this.accumulator += Math.min(deltaTime, 50) / 1000;
 
-        for (let frame = 0; frame < actualFrames; frame++) {
+        // Run physics frames until we've caught up, max 3 to prevent freezing
+        let framesRun = 0;
+        while (this.accumulator >= fixedDt && framesRun < 3) {
             for (let step = 0; step < substepsPerFrame; step++) {
                 // Step Planck world - handles all physics including friction
                 this.world.step(substepDt, 6, 2);
@@ -358,6 +358,8 @@ export class PlanckPhysics {
                 // Check pockets (not a Planck collision)
                 this.handlePockets(balls);
             }
+            this.accumulator -= fixedDt;
+            framesRun++;
         }
 
         // Apply spin effects AFTER physics has resolved collisions
@@ -414,8 +416,8 @@ export class PlanckPhysics {
     }
 
     stopSlowBalls(balls) {
-        // Use a generous threshold - 5 pixels/second
-        const minSpeed = 5;
+        // Stop balls that are barely moving - 8 pixels/second threshold
+        const minSpeed = 8;
         const minSpeedSq = minSpeed * minSpeed;
 
         for (const ball of balls) {
@@ -437,7 +439,7 @@ export class PlanckPhysics {
 
     areBallsMoving(balls) {
         // Use same threshold as stopSlowBalls
-        const minSpeed = 5;
+        const minSpeed = 8;
         const minSpeedSq = minSpeed * minSpeed;
 
         for (const ball of balls) {

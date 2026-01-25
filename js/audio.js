@@ -94,8 +94,9 @@ export class Audio {
         if (!this.ballHitBuffer && !this.ballHitBuffer2) return;
         this.resume();
 
-        const clampedIntensity = Math.min(1, Math.max(0.1, intensity));
-        const volume = 0.25 + clampedIntensity * 0.75;
+        const clampedIntensity = Math.min(1, Math.max(0.02, intensity));
+        // Use sqrt for more natural volume scaling (quieter at low intensities)
+        const volume = Math.sqrt(clampedIntensity) * 0.9;
 
         // Randomly choose between the two ball hit sounds
         const buffers = [this.ballHitBuffer, this.ballHitBuffer2].filter(b => b);

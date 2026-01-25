@@ -2,7 +2,11 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="screen-orientation" content="landscape">
     <title>2D Pool Game</title>
     <link rel="stylesheet" href="css/style.css">
     <script type="importmap">
@@ -34,6 +38,7 @@
                         <input type="range" id="speed-slider" min="0.2" max="2" step="0.1" value="0.5">
                         <span id="speed-value">1.0x</span>
                     </div>
+                    <button id="btn-fullscreen" class="menu-btn small mobile-only">Fullscreen</button>
                 </div>
             </div>
             <div id="game-hud" class="hidden">
@@ -41,6 +46,7 @@
                 <div id="ball-groups"></div>
                 <div id="foul-indicator" class="hidden">FOUL</div>
                 <div id="game-message"></div>
+                <div id="touch-hint" class="mobile-only">Touch &amp; drag to aim, release to shoot</div>
             </div>
             <div id="game-over" class="menu hidden">
                 <h2 id="winner-text"></h2>

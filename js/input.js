@@ -39,28 +39,47 @@ export class Input {
         this.placementBall = null;
         this.placementValid = true;
 
-        // Bind event handlers
+        // Bind event handlers - mouse
         this.handleMouseMove = this.handleMouseMove.bind(this);
         this.handleMouseDown = this.handleMouseDown.bind(this);
         this.handleMouseUp = this.handleMouseUp.bind(this);
         this.handleMouseLeave = this.handleMouseLeave.bind(this);
 
+        // Bind event handlers - touch
+        this.handleTouchStart = this.handleTouchStart.bind(this);
+        this.handleTouchMove = this.handleTouchMove.bind(this);
+        this.handleTouchEnd = this.handleTouchEnd.bind(this);
+
         this.attachEvents();
     }
 
     attachEvents() {
+        // Mouse events
         this.canvas.addEventListener('mousemove', this.handleMouseMove);
         this.canvas.addEventListener('mousedown', this.handleMouseDown);
         this.canvas.addEventListener('mouseup', this.handleMouseUp);
         this.canvas.addEventListener('mouseleave', this.handleMouseLeave);
         this.canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+
+        // Touch events
+        this.canvas.addEventListener('touchstart', this.handleTouchStart, { passive: false });
+        this.canvas.addEventListener('touchmove', this.handleTouchMove, { passive: false });
+        this.canvas.addEventListener('touchend', this.handleTouchEnd, { passive: false });
+        this.canvas.addEventListener('touchcancel', this.handleTouchEnd, { passive: false });
     }
 
     detachEvents() {
+        // Mouse events
         this.canvas.removeEventListener('mousemove', this.handleMouseMove);
         this.canvas.removeEventListener('mousedown', this.handleMouseDown);
         this.canvas.removeEventListener('mouseup', this.handleMouseUp);
         this.canvas.removeEventListener('mouseleave', this.handleMouseLeave);
+
+        // Touch events
+        this.canvas.removeEventListener('touchstart', this.handleTouchStart);
+        this.canvas.removeEventListener('touchmove', this.handleTouchMove);
+        this.canvas.removeEventListener('touchend', this.handleTouchEnd);
+        this.canvas.removeEventListener('touchcancel', this.handleTouchEnd);
     }
 
     setCanvasSize(width, height) {
@@ -167,6 +186,112 @@ export class Input {
         }
         this.isSettingSpin = false;
         this.isMouseDown = false;
+    }
+
+    // Touch event handlers
+    getTouchPosition(touch) {
+        const rect = this.canvas.getBoundingClientRect();
+        const scaleX = this.canvas.width / rect.width;
+        const scaleY = this.canvas.height / rect.height;
+
+        return Vec2.create(
+            (touch.clientX - rect.left) * scaleX,
+            (touch.clientY - rect.top) * scaleY
+        );
+    }
+
+    handleTouchStart(event) {
+        event.preventDefault();
+
+        // Hide touch hint on first interaction
+        const touchHint = document.getElementById('touch-hint');
+        if (touchHint && !touchHint.classList.contains('fade-out')) {
+            touchHint.classList.add('fade-out');
+            setTimeout(() => touchHint.style.display = 'none', 500);
+        }
+
+        if (event.touches.length !== 1) return;
+        const touch = event.touches[0];
+
+        this.isMouseDown = true;
+        this.mousePos = this.getTouchPosition(touch);
+
+        // Check if touching spin indicator
+        if (this.canShoot && !this.ballInHandMode && this.isOverSpinIndicator(this.mousePos)) {
+            this.isSettingSpin = true;
+            this.updateSpin();
+            return;
+        }
+
+        // Ball placement mode
+        if (this.ballInHandMode && this.placementBall && this.placementValid) {
+            this.ballInHandMode = false;
+            this.placementBall = null;
+
+            if (this.onBallPlaced) {
+                this.onBallPlaced(this.mousePos);
+            }
+            return;
+        }
+
+        // Start aiming
+        if (this.cueBall && !this.cueBall.pocketed && this.canShoot) {
+            this.isDragging = true;
+            this.dragStart = Vec2.clone(this.mousePos);
+            this.updateAim();
+        }
+    }
+
+    handleTouchMove(event) {
+        event.preventDefault();
+
+        if (event.touches.length !== 1) return;
+        const touch = event.touches[0];
+
+        this.mousePos = this.getTouchPosition(touch);
+
+        // Handle spin adjustment
+        if (this.isSettingSpin) {
+            this.updateSpin();
+            return;
+        }
+
+        // Ball placement mode
+        if (this.ballInHandMode && this.placementBall) {
+            this.placementBall.position.x = this.mousePos.x;
+            this.placementBall.position.y = this.mousePos.y;
+
+            if (this.onBallInHand) {
+                this.onBallInHand(this.mousePos);
+            }
+            return;
+        }
+
+        // Update aim while dragging
+        if (this.isDragging && this.cueBall && !this.cueBall.pocketed) {
+            this.updateAim();
+        }
+    }
+
+    handleTouchEnd(event) {
+        event.preventDefault();
+
+        if (this.isSettingSpin) {
+            this.isSettingSpin = false;
+            this.isMouseDown = false;
+            return;
+        }
+
+        // Execute shot if we were aiming with enough power
+        if (this.isDragging && this.power > Constants.MIN_POWER) {
+            if (this.onShot) {
+                this.onShot(this.aimDirection, this.power, this.spin);
+            }
+        }
+
+        this.resetAim();
+        this.isMouseDown = false;
+        this.isDragging = false;
     }
 
     updateSpin() {

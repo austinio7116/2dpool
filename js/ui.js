@@ -28,6 +28,7 @@ export class UI {
         this.soundToggle = document.getElementById('sound-toggle');
         this.speedSlider = document.getElementById('speed-slider');
         this.speedValue = document.getElementById('speed-value');
+        this.btnFullscreen = document.getElementById('btn-fullscreen');
 
         // Callbacks
         this.onGameStart = null;
@@ -101,8 +102,43 @@ export class UI {
             }
         });
 
+        // Fullscreen button for mobile
+        if (this.btnFullscreen) {
+            this.btnFullscreen.addEventListener('click', () => {
+                this.toggleFullscreen();
+            });
+        }
+
         // Set initial display value
         this.speedValue.textContent = this.speedSlider.value + 'x';
+    }
+
+    // Toggle fullscreen mode
+    toggleFullscreen() {
+        const elem = document.documentElement;
+
+        if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+            // Enter fullscreen
+            if (elem.requestFullscreen) {
+                elem.requestFullscreen();
+            } else if (elem.webkitRequestFullscreen) {
+                elem.webkitRequestFullscreen();
+            }
+
+            // Lock orientation to landscape if supported
+            if (screen.orientation && screen.orientation.lock) {
+                screen.orientation.lock('landscape').catch(() => {
+                    // Orientation lock not supported or failed
+                });
+            }
+        } else {
+            // Exit fullscreen
+            if (document.exitFullscreen) {
+                document.exitFullscreen();
+            } else if (document.webkitExitFullscreen) {
+                document.webkitExitFullscreen();
+            }
+        }
     }
 
     // Show main menu

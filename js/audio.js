@@ -12,6 +12,9 @@ export class Audio {
 
         // Loaded sound buffers
         this.ballHitBuffer = null;
+        this.ballHitBuffer2 = null;
+        this.cueStrikeBuffer = null;
+        this.potBuffer = null;
     }
 
     // Initialize audio context (must be called after user interaction)
@@ -30,6 +33,9 @@ export class Audio {
 
             // Load sound effects
             this.loadSound('assets/sounds/ballhit.mp3', 'ballHitBuffer');
+            this.loadSound('assets/sounds/ballhit2.mp3', 'ballHitBuffer2');
+            this.loadSound('assets/sounds/cueshot.mp3', 'cueStrikeBuffer');
+            this.loadSound('assets/sounds/pot.mp3', 'potBuffer');
         } catch (e) {
             console.warn('Web Audio API not supported:', e);
             this.enabled = false;
@@ -82,17 +88,21 @@ export class Audio {
         return filter;
     }
 
-    // Ball-to-ball collision - plays loaded sound sample
+    // Ball-to-ball collision - plays loaded sound sample (randomly picks between two sounds)
     playBallCollision(intensity = 0.5) {
         if (!this.enabled || !this.initialized) return;
-        if (!this.ballHitBuffer) return;
+        if (!this.ballHitBuffer && !this.ballHitBuffer2) return;
         this.resume();
 
         const clampedIntensity = Math.min(1, Math.max(0.1, intensity));
         const volume = 0.25 + clampedIntensity * 0.75;
 
+        // Randomly choose between the two ball hit sounds
+        const buffers = [this.ballHitBuffer, this.ballHitBuffer2].filter(b => b);
+        const buffer = buffers[Math.floor(Math.random() * buffers.length)];
+
         const source = this.context.createBufferSource();
-        source.buffer = this.ballHitBuffer;
+        source.buffer = buffer;
 
         const gainNode = this.context.createGain();
         gainNode.gain.value = volume;
@@ -168,116 +178,40 @@ export class Audio {
     // Pocket sound - ball dropping into pocket
     playPocket() {
         if (!this.enabled || !this.initialized) return;
+        if (!this.potBuffer) return;
         this.resume();
 
-        const now = this.context.currentTime;
+        const source = this.context.createBufferSource();
+        source.buffer = this.potBuffer;
 
-        // Layer 1: Initial soft thud as ball hits pocket
-        const thudOsc = this.context.createOscillator();
-        const thudGain = this.context.createGain();
+        const gainNode = this.context.createGain();
+        gainNode.gain.value = 0.8;
 
-        thudOsc.type = 'sine';
-        thudOsc.frequency.setValueAtTime(180, now);
-        thudOsc.frequency.exponentialRampToValueAtTime(80, now + 0.1);
+        source.connect(gainNode);
+        gainNode.connect(this.masterGain);
 
-        thudGain.gain.setValueAtTime(0.35, now);
-        thudGain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
-
-        thudOsc.connect(thudGain);
-        thudGain.connect(this.masterGain);
-
-        thudOsc.start(now);
-        thudOsc.stop(now + 0.15);
-
-        // Layer 2: Muffled impact texture
-        const impactNoise = this.createNoiseSource();
-        const impactFilter = this.createLowpass(500);
-        const impactGain = this.context.createGain();
-
-        impactGain.gain.setValueAtTime(0.2, now);
-        impactGain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
-
-        impactNoise.connect(impactFilter);
-        impactFilter.connect(impactGain);
-        impactGain.connect(this.masterGain);
-
-        impactNoise.start(now);
-        impactNoise.stop(now + 0.1);
-
-        // Layer 3: Secondary thud as ball lands in pocket tray
-        const landOsc = this.context.createOscillator();
-        const landGain = this.context.createGain();
-
-        landOsc.type = 'sine';
-        landOsc.frequency.setValueAtTime(120, now + 0.15);
-        landOsc.frequency.exponentialRampToValueAtTime(60, now + 0.3);
-
-        landGain.gain.setValueAtTime(0, now);
-        landGain.gain.linearRampToValueAtTime(0.25, now + 0.16);
-        landGain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
-
-        landOsc.connect(landGain);
-        landGain.connect(this.masterGain);
-
-        landOsc.start(now + 0.15);
-        landOsc.stop(now + 0.4);
+        source.start();
     }
 
-    // Realistic cue strike - leather tip hitting ball
+    // Cue strike - cue tip hitting ball
     playCueStrike(power = 0.5) {
         if (!this.enabled || !this.initialized) return;
+        if (!this.cueStrikeBuffer) return;
         this.resume();
 
-        const now = this.context.currentTime;
         const clampedPower = Math.min(1, Math.max(0.1, power));
-        const volume = 0.2 + clampedPower * 0.2;
+        const volume = 0.4 + clampedPower * 0.6;
 
-        // Layer 1: Sharp attack (tip contact)
-        const attackNoise = this.createNoiseSource();
-        const attackFilter = this.createBandpass(2500 + clampedPower * 1000, 3);
-        const attackGain = this.context.createGain();
+        const source = this.context.createBufferSource();
+        source.buffer = this.cueStrikeBuffer;
 
-        attackGain.gain.setValueAtTime(volume * 0.9, now);
-        attackGain.gain.exponentialRampToValueAtTime(0.001, now + 0.02);
+        const gainNode = this.context.createGain();
+        gainNode.gain.value = volume;
 
-        attackNoise.connect(attackFilter);
-        attackFilter.connect(attackGain);
-        attackGain.connect(this.masterGain);
+        source.connect(gainNode);
+        gainNode.connect(this.masterGain);
 
-        attackNoise.start(now);
-        attackNoise.stop(now + 0.025);
-
-        // Layer 2: Cue stick "thock"
-        const thockNoise = this.createNoiseSource();
-        const thockFilter = this.createBandpass(1000, 2);
-        const thockGain = this.context.createGain();
-
-        thockGain.gain.setValueAtTime(volume * 0.6, now + 0.003);
-        thockGain.gain.exponentialRampToValueAtTime(0.001, now + 0.06);
-
-        thockNoise.connect(thockFilter);
-        thockFilter.connect(thockGain);
-        thockGain.connect(this.masterGain);
-
-        thockNoise.start(now);
-        thockNoise.stop(now + 0.07);
-
-        // Layer 3: Low body for power shots
-        if (clampedPower > 0.3) {
-            const bodyNoise = this.createNoiseSource();
-            const bodyFilter = this.createLowpass(500);
-            const bodyGain = this.context.createGain();
-
-            bodyGain.gain.setValueAtTime(volume * 0.4 * clampedPower, now);
-            bodyGain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
-
-            bodyNoise.connect(bodyFilter);
-            bodyFilter.connect(bodyGain);
-            bodyGain.connect(this.masterGain);
-
-            bodyNoise.start(now);
-            bodyNoise.stop(now + 0.1);
-        }
+        source.start();
     }
 
     // Scratch/foul sound - distinct but not jarring

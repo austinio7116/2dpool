@@ -30,11 +30,25 @@ export class Renderer {
 
         this.canvas.width = table.canvasWidth;
         this.canvas.height = table.canvasHeight;
+
+        // Load table image
+        this.tableImage = new Image();
+        this.tableImageLoaded = false;
+        this.tableImage.onload = () => {
+            this.tableImageLoaded = true;
+        };
+        this.tableImage.src = 'assets/pooltable.png';
     }
 
     render(state) {
         this.clear();
         this.drawTable();
+
+        // Draw table image overlay (if loaded)
+        if (this.tableImageLoaded) {
+            this.ctx.drawImage(this.tableImage, 0, 0, this.canvas.width, this.canvas.height);
+        }
+
         this.drawBalls(state.balls);
 
         if (state.showSpinIndicator) {

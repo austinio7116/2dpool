@@ -44,7 +44,7 @@ class PoolGame {
 
     bindCallbacks() {
         // UI callbacks
-        this.ui.onGameStart = (mode) => this.startGame(mode);
+        this.ui.onGameStart = (mode, options) => this.startGame(mode, options);
         this.ui.onPlayAgain = () => this.playAgain();
         this.ui.onMainMenu = () => this.returnToMenu();
         this.ui.onRerack = () => this.game.rerack();
@@ -64,10 +64,11 @@ class PoolGame {
         this.game.onBallPocketed = (ball) => this.handleBallPocketed(ball);
     }
 
-    startGame(mode) {
+    startGame(mode, options = {}) {
         this.audio.init();
         this.physics.reset();  // Clear old ball bodies before creating new game
-        this.game.startGame(mode);
+        this.game.startGame(mode, options);
+        this.lastGameOptions = options;  // Store for play again
 
         this.input.setCueBall(this.game.cueBall);
         this.input.setCanShoot(true);
@@ -77,7 +78,7 @@ class PoolGame {
     }
 
     playAgain() {
-        this.startGame(this.game.mode);
+        this.startGame(this.game.mode, this.lastGameOptions || {});
     }
 
     returnToMenu() {

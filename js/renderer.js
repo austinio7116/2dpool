@@ -33,10 +33,10 @@ export class Renderer {
 
         // Load table images
         this.tableImages = [];
-        this.tableImagesLoaded = [false, false, false, false];
+        this.tableImagesLoaded = [false, false, false, false, false];
         this.currentTableIndex = 0;
 
-        for (let i = 0; i < 4; i++) {
+        for (let i = 0; i < 6; i++) {
             const img = new Image();
             const index = i;
             img.onload = () => {
@@ -49,7 +49,7 @@ export class Renderer {
 
     setTableStyle(tableNum) {
         // tableNum is 1-4, convert to 0-3 index
-        this.currentTableIndex = Math.max(0, Math.min(3, tableNum - 1));
+        this.currentTableIndex = Math.max(0, Math.min(5, tableNum - 1));
     }
 
     render(state) {

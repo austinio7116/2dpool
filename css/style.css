@@ -96,6 +96,38 @@ body {
     font-size: 0.9rem;
 }
 
+/* UK 8-ball button row with inline color selector */
+.uk-8ball-row {
+    display: flex;
+    gap: 8px;
+    align-items: stretch;
+}
+
+.uk-8ball-row .menu-btn {
+    flex: 1;
+}
+
+.uk-color-dropdown {
+    padding: 8px 12px;
+    font-size: 0.9rem;
+    border-radius: 8px;
+    background: linear-gradient(135deg, #4a4a6a 0%, #2a2a4a 100%);
+    color: #fff;
+    border: 2px solid #5a5a8a;
+    cursor: pointer;
+    outline: none;
+    min-width: 110px;
+}
+
+.uk-color-dropdown:hover {
+    background: linear-gradient(135deg, #5a5a8a 0%, #3a3a5a 100%);
+}
+
+.uk-color-dropdown option {
+    background: #3a3a5a;
+    color: #fff;
+}
+
 .settings {
     margin-top: 30px;
     color: #aaa;
@@ -225,6 +257,19 @@ body {
 
 .ball-group .mini-ball.stripe {
     background: linear-gradient(135deg, #fff 0%, #fff 40%, #d4a017 40%, #d4a017 60%, #fff 60%, #fff 100%);
+}
+
+/* UK 8-ball colors */
+.ball-group .mini-ball.uk-red {
+    background: linear-gradient(135deg, #ff2222 0%, #aa0000 100%);
+}
+
+.ball-group .mini-ball.uk-blue {
+    background: linear-gradient(135deg, #2222ff 0%, #0000aa 100%);
+}
+
+.ball-group .mini-ball.uk-yellow {
+    background: linear-gradient(135deg, #ffdd00 0%, #ccaa00 100%);
 }
 
 .ball-group span {
@@ -422,6 +467,16 @@ body {
     .menu-btn.small {
         padding: 8px 15px;
         font-size: 0.8rem;
+    }
+
+    .uk-8ball-row {
+        flex-direction: row;
+    }
+
+    .uk-color-dropdown {
+        padding: 6px 8px;
+        font-size: 0.8rem;
+        min-width: 90px;
     }
 }
 

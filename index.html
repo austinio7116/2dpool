@@ -27,16 +27,15 @@
                 <h1>2D Pool</h1>
                 <div class="menu-buttons">
                     <button id="btn-8ball" class="menu-btn">8-Ball (US)</button>
-                    <button id="btn-uk8ball" class="menu-btn">8-Ball (UK)</button>
+                    <div class="uk-8ball-row">
+                        <button id="btn-uk8ball" class="menu-btn">8-Ball (UK)</button>
+                        <select id="uk-color-scheme" class="uk-color-dropdown" title="Ball colors">
+                            <option value="red-yellow">Red/Yellow</option>
+                            <option value="blue-yellow">Blue/Yellow</option>
+                        </select>
+                    </div>
                     <button id="btn-9ball" class="menu-btn">9-Ball</button>
                     <button id="btn-freeplay" class="menu-btn">Free Play</button>
-                </div>
-                <div id="uk-color-select" class="uk-colors hidden">
-                    <label>UK Ball Colors:</label>
-                    <select id="uk-color-scheme">
-                        <option value="red-yellow">Red & Yellow</option>
-                        <option value="blue-yellow">Blue & Yellow</option>
-                    </select>
                 </div>
                 <div class="settings">
                     <label>
@@ -50,6 +49,8 @@
                             <option value="2">Blue Felt</option>
                             <option value="3">Red Felt</option>
                             <option value="4">Tournament</option>
+                            <option value="5">Luxury</option>
+                            <option value="6">Glass</option>
                         </select>
                     </div>
                     <div class="slider-setting">

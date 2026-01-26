@@ -31,7 +31,6 @@ export class UI {
         this.speedValue = document.getElementById('speed-value');
         this.tableSelect = document.getElementById('table-select');
         this.btnFullscreen = document.getElementById('btn-fullscreen');
-        this.ukColorSelect = document.getElementById('uk-color-select');
         this.ukColorScheme = document.getElementById('uk-color-scheme');
 
         // Callbacks
@@ -67,18 +66,6 @@ export class UI {
             if (this.onGameStart) {
                 const colorScheme = this.ukColorScheme.value;
                 this.onGameStart(GameMode.UK_EIGHT_BALL, { colorScheme });
-            }
-        });
-
-        // Show/hide UK color options when hovering over UK button
-        this.btnUK8Ball.addEventListener('mouseenter', () => {
-            this.ukColorSelect.classList.remove('hidden');
-        });
-
-        this.ukColorSelect.addEventListener('mouseleave', (e) => {
-            // Only hide if not hovering over button or select
-            if (!this.btnUK8Ball.matches(':hover') && !this.ukColorSelect.matches(':hover')) {
-                this.ukColorSelect.classList.add('hidden');
             }
         });
 
@@ -223,18 +210,34 @@ export class UI {
     }
 
     // Update player indicator
-    updatePlayerIndicator(player, group = null) {
+    updatePlayerIndicator(player, group = null, gameInfo = null) {
         if (this.currentMode === GameMode.FREE_PLAY) return;
 
         let text = `Player ${player}'s Turn`;
 
         if (this.currentMode === GameMode.EIGHT_BALL && group) {
             text += ` (${group === 'solid' ? 'Solids' : 'Stripes'})`;
+        } else if (this.currentMode === GameMode.UK_EIGHT_BALL && group && gameInfo) {
+            const colorName = this.getUKGroupName(group, gameInfo.ukColorScheme);
+            text += ` (${colorName})`;
+            // Show shots remaining if using two-shot rule
+            if (gameInfo.shotsRemaining > 1) {
+                text += ` - ${gameInfo.shotsRemaining} shots`;
+            }
         } else if (this.currentMode === GameMode.NINE_BALL) {
             // Will be updated with lowest ball info
         }
 
         this.playerIndicator.textContent = text;
+    }
+
+    // Get the display name for a UK 8-ball group
+    getUKGroupName(group, colorScheme) {
+        if (colorScheme === 'red-yellow') {
+            return group === 'group1' ? 'Reds' : 'Yellows';
+        } else {
+            return group === 'group1' ? 'Blues' : 'Yellows';
+        }
     }
 
     // Update ball groups display (8-ball)
@@ -280,6 +283,55 @@ export class UI {
                 <span>Target: ${lowestBall}-Ball</span>
             </div>
         `;
+    }
+
+    // Update ball groups display for UK 8-ball
+    updateUKBallGroups(player1Group, player2Group, remaining, colorScheme) {
+        if (this.currentMode !== GameMode.UK_EIGHT_BALL) {
+            return;
+        }
+
+        this.ballGroups.innerHTML = '';
+
+        if (!player1Group) {
+            // Groups not yet assigned
+            return;
+        }
+
+        // Determine CSS class based on color scheme and group
+        const getColorClass = (group) => {
+            if (colorScheme === 'red-yellow') {
+                return group === 'group1' ? 'uk-red' : 'uk-yellow';
+            } else {
+                return group === 'group1' ? 'uk-blue' : 'uk-yellow';
+            }
+        };
+
+        const p1ColorClass = getColorClass(player1Group);
+        const p2ColorClass = getColorClass(player2Group);
+        const p1Name = this.getUKGroupName(player1Group, colorScheme);
+        const p2Name = this.getUKGroupName(player2Group, colorScheme);
+        const p1Count = player1Group === 'group1' ? remaining.group1 : remaining.group2;
+        const p2Count = player2Group === 'group1' ? remaining.group1 : remaining.group2;
+
+        // Player 1 group
+        const p1Div = document.createElement('div');
+        p1Div.className = 'ball-group';
+        p1Div.innerHTML = `
+            <div class="mini-ball ${p1ColorClass}"></div>
+            <span>P1 (${p1Name}): ${p1Count}</span>
+        `;
+
+        // Player 2 group
+        const p2Div = document.createElement('div');
+        p2Div.className = 'ball-group';
+        p2Div.innerHTML = `
+            <div class="mini-ball ${p2ColorClass}"></div>
+            <span>P2 (${p2Name}): ${p2Count}</span>
+        `;
+
+        this.ballGroups.appendChild(p1Div);
+        this.ballGroups.appendChild(p2Div);
     }
 
     // Show foul indicator
@@ -332,11 +384,16 @@ export class UI {
 
         // Update player indicator
         const currentGroup = info.currentPlayer === 1 ? info.player1Group : info.player2Group;
-        this.updatePlayerIndicator(info.currentPlayer, currentGroup);
+        this.updatePlayerIndicator(info.currentPlayer, currentGroup, info);
 
-        // Update ball groups (8-ball)
+        // Update ball groups (8-ball US)
         if (info.mode === GameMode.EIGHT_BALL) {
             this.updateBallGroups(info.player1Group, info.player2Group, info.remaining);
+        }
+
+        // Update ball groups (UK 8-ball)
+        if (info.mode === GameMode.UK_EIGHT_BALL) {
+            this.updateUKBallGroups(info.player1Group, info.player2Group, info.remainingUK, info.ukColorScheme);
         }
 
         // Update lowest ball (9-ball)
@@ -346,7 +403,11 @@ export class UI {
 
         // Ball in hand message
         if (info.state === GameState.BALL_IN_HAND) {
-            this.showMessage('Ball in hand - Click anywhere to place');
+            let message = 'Ball in hand - Click anywhere to place';
+            if (info.mode === GameMode.UK_EIGHT_BALL && info.twoShotRule) {
+                message += ` (2-shot rule: ${info.shotsRemaining} remaining)`;
+            }
+            this.showMessage(message);
         } else {
             this.hideMessage();
         }

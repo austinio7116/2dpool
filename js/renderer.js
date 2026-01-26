@@ -61,6 +61,9 @@ export class Renderer {
             this.ctx.drawImage(this.tableImages[this.currentTableIndex], 0, 0, this.canvas.width, this.canvas.height);
         }
 
+        // DEBUG: Draw pocket detection circles (uncomment to visualize)
+        // this.drawPocketDebug();
+
         this.drawBalls(state.balls);
 
         if (state.showSpinIndicator) {
@@ -395,6 +398,32 @@ export class Renderer {
         ctx.beginPath();
         ctx.arc(x, y, r * 0.7, 0, Math.PI * 2);
         ctx.fill();
+    }
+
+    // DEBUG: Temporary visualization of pocket detection circles
+    drawPocketDebug() {
+        const ctx = this.ctx;
+
+        for (const pocket of this.table.pockets) {
+            const x = pocket.position.x;
+            const y = pocket.position.y;
+            const r = pocket.radius;
+
+            // Draw detection circle outline
+            ctx.strokeStyle = pocket.type === 'side' ? '#ff00ff' : '#00ffff';
+            ctx.lineWidth = 3;
+            ctx.setLineDash([5, 5]);
+            ctx.beginPath();
+            ctx.arc(x, y, r, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            // Draw center point
+            ctx.fillStyle = pocket.type === 'side' ? '#ff00ff' : '#00ffff';
+            ctx.beginPath();
+            ctx.arc(x, y, 4, 0, Math.PI * 2);
+            ctx.fill();
+        }
     }
 
     createWoodGradient(x, y, w, h) {

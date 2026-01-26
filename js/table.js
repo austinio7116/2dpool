@@ -77,15 +77,16 @@ export class Table {
             type: 'corner'
         });
 
-        // Side pockets - at the center of long sides
+        // Side pockets - offset into the cushions
         const sidePocketRadius = pocketRadius * 0.9;
+        const sideOffset = 20; // Move pocket centers back into cushions
         pockets.push({
-            position: Vec2.create(this.center.x, b.top),
+            position: Vec2.create(this.center.x, b.top - sideOffset),
             radius: sidePocketRadius,
             type: 'side'
         });
         pockets.push({
-            position: Vec2.create(this.center.x, b.bottom),
+            position: Vec2.create(this.center.x, b.bottom + sideOffset),
             radius: sidePocketRadius,
             type: 'side'
         });

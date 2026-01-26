@@ -693,10 +693,36 @@ export class Renderer {
 
     drawBallShadow(x, y, radius) {
         const ctx = this.ctx;
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
-        ctx.beginPath();
-        ctx.ellipse(x + radius * 0.3, y + radius * 0.3, radius * 0.9, radius * 0.5, 0.3, 0, Math.PI * 2);
-        ctx.fill();
+
+        // Shadow offset (light from top-left)
+        const offsetX = radius * 0.3;
+        const offsetY = radius * 0.3;
+        const shadowX = x + offsetX;
+        const shadowY = y + offsetY;
+
+        // Multiple layered ellipses for soft shadow effect
+        const layers = [
+            { scale: 1.4, opacity: 0.06 },
+            { scale: 1.2, opacity: 0.08 },
+            { scale: 1.0, opacity: 0.10 },
+            { scale: 0.8, opacity: 0.12 },
+            { scale: 0.6, opacity: 0.14 },
+        ];
+
+        for (const layer of layers) {
+            ctx.fillStyle = `rgba(0, 0, 0, ${layer.opacity})`;
+            ctx.beginPath();
+            ctx.ellipse(
+                shadowX,
+                shadowY,
+                radius * layer.scale,
+                radius * layer.scale * 0.5,
+                0.3,
+                0,
+                Math.PI * 2
+            );
+            ctx.fill();
+        }
     }
 
     drawSolidBall(x, y, radius, ball) {

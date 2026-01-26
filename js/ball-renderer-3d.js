@@ -312,6 +312,11 @@ export class BallRenderer3D {
         const isEightBall = ball.isEightBall || false;
         const frames = this.generateBallFrames(ball.number, baseColor, isStripe, isUKBall, isEightBall);
 
+        // UK balls (except 8-ball) are solid color - use fixed frame so lighting stays consistent
+        if (isUKBall && !isEightBall) {
+            return frames[0];
+        }
+
         // Map displayRoll to frame index
         let frameIndex = Math.floor((ball.displayRoll / (Math.PI * 2)) * this.frameCount);
         frameIndex = ((frameIndex % this.frameCount) + this.frameCount) % this.frameCount;
@@ -340,6 +345,10 @@ export class BallRenderer3D {
         if (ball.isCueBall) {
             const frames = this.generateBallFrames(0, '#FFFFFF', false);
             ctx.drawImage(frames[0], -drawSize / 2, -drawSize / 2, drawSize, drawSize);
+        } else if (ball.isUKBall && !ball.isEightBall) {
+            // UK solid balls - no rotation so they all look identical
+            const frame = this.getFrame(ball);
+            ctx.drawImage(frame, -drawSize / 2, -drawSize / 2, drawSize, drawSize);
         } else {
             // Pre-render rotates around X axis (stripe rolls in Y direction)
             // Rotate image to align Y direction with travel direction

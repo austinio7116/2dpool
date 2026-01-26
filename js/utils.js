@@ -200,7 +200,7 @@ export const Constants = {
         2: '#0000CD',   // Blue
         3: '#FF0000',   // Red
         4: '#4B0082',   // Purple
-        5: '#FF4500',   // Orange
+        5: '#FF8C00',   // Orange (more yellow-orange)
         6: '#006400',   // Green
         7: '#800000',   // Maroon
         8: '#000000',   // Black (8-ball)
@@ -208,7 +208,7 @@ export const Constants = {
         10: '#0000CD',  // Blue stripe
         11: '#FF0000',  // Red stripe
         12: '#4B0082',  // Purple stripe
-        13: '#FF4500',  // Orange stripe
+        13: '#FF8C00',  // Orange stripe (more yellow-orange)
         14: '#006400',  // Green stripe
         15: '#800000',  // Maroon stripe
     },

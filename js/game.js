@@ -166,6 +166,11 @@ export class Game {
 
     // Called when all balls stop moving
     onBallsStopped() {
+        // Trigger face-up animation for all balls at turn end
+        for (const ball of this.balls) {
+            ball.resetRotation();
+        }
+
         if (this.mode === GameMode.FREE_PLAY) {
             this.state = GameState.PLAYING;
             return;
@@ -259,7 +264,8 @@ export class Game {
         } else if (this.firstBallHit && this.player1Group) {
             // Groups assigned - check if correct ball was hit first
             const currentGroup = this.currentPlayer === 1 ? this.player1Group : this.player2Group;
-            const needsEightBall = this.isGroupCleared(currentGroup);
+            // Check if group was cleared BEFORE this shot (exclude balls just pocketed)
+            const needsEightBall = this.isGroupCleared(currentGroup, true);
 
             if (needsEightBall) {
                 // Must hit 8-ball first
@@ -268,12 +274,16 @@ export class Game {
                     this.foulReason = 'Must hit 8-ball first';
                 }
             } else {
-                // Must hit own group first
+                // Must hit own group first - hitting 8-ball or opponent's ball is a foul
                 const hitOwnGroup = (currentGroup === 'solid' && this.firstBallHit.isSolid) ||
                                    (currentGroup === 'stripe' && this.firstBallHit.isStripe);
-                if (!hitOwnGroup && !this.firstBallHit.isEightBall) {
+                if (!hitOwnGroup) {
                     this.foul = true;
-                    this.foulReason = 'Hit opponent\'s ball first';
+                    if (this.firstBallHit.isEightBall) {
+                        this.foulReason = 'Hit 8-ball before clearing group';
+                    } else {
+                        this.foulReason = 'Hit opponent\'s ball first';
+                    }
                 }
             }
         }
@@ -390,7 +400,8 @@ export class Game {
         } else if (this.firstBallHit && this.player1Group) {
             // Groups assigned - check if correct ball was hit first
             const currentGroup = this.currentPlayer === 1 ? this.player1Group : this.player2Group;
-            const needsBlackBall = this.isUKGroupCleared(currentGroup);
+            // Check if group was cleared BEFORE this shot (exclude balls just pocketed)
+            const needsBlackBall = this.isUKGroupCleared(currentGroup, true);
 
             if (needsBlackBall) {
                 // Must hit black ball first
@@ -399,12 +410,16 @@ export class Game {
                     this.foulReason = 'Must hit black ball first';
                 }
             } else {
-                // Must hit own group first
+                // Must hit own group first - hitting black or opponent's ball is a foul
                 const hitOwnGroup = (currentGroup === 'group1' && this.firstBallHit.isGroup1) ||
                                    (currentGroup === 'group2' && this.firstBallHit.isGroup2);
-                if (!hitOwnGroup && !this.firstBallHit.isEightBall) {
+                if (!hitOwnGroup) {
                     this.foul = true;
-                    this.foulReason = 'Hit opponent\'s ball first';
+                    if (this.firstBallHit.isEightBall) {
+                        this.foulReason = 'Hit black before clearing group';
+                    } else {
+                        this.foulReason = 'Hit opponent\'s ball first';
+                    }
                 }
             }
         }
@@ -413,7 +428,8 @@ export class Game {
         if (blackBallPocketed) {
             const blackBall = this.balls.find(b => b.isEightBall);
             const currentGroup = this.currentPlayer === 1 ? this.player1Group : this.player2Group;
-            const groupCleared = currentGroup ? this.isUKGroupCleared(currentGroup) : false;
+            // UK rules: group must be cleared BEFORE this shot (can't pot last color and black together)
+            const groupCleared = currentGroup ? this.isUKGroupCleared(currentGroup, true) : false;
 
             if (this.isBreakShot) {
                 // Black on break - re-spot
@@ -471,9 +487,19 @@ export class Game {
     }
 
     // Check if a UK group is cleared
-    isUKGroupCleared(group) {
+    // If excludeJustPocketed is true, balls pocketed this turn are considered "not yet pocketed"
+    // This is used to determine if the group was cleared BEFORE this shot
+    isUKGroupCleared(group, excludeJustPocketed = false) {
         for (const ball of this.balls) {
-            if (ball.pocketed) continue;
+            // Skip balls that were pocketed in previous turns
+            if (ball.pocketed && !(excludeJustPocketed && this.ballsPocketed.includes(ball))) continue;
+            // If excludeJustPocketed, treat just-pocketed balls as still on table
+            if (excludeJustPocketed && this.ballsPocketed.includes(ball)) {
+                // Ball was just pocketed - count it as still on table for this check
+                if (group === 'group1' && ball.isGroup1) return false;
+                if (group === 'group2' && ball.isGroup2) return false;
+                continue;
+            }
             if (group === 'group1' && ball.isGroup1) return false;
             if (group === 'group2' && ball.isGroup2) return false;
         }
@@ -502,9 +528,19 @@ export class Game {
     }
 
     // Check if a group is cleared (8-ball)
-    isGroupCleared(group) {
+    // If excludeJustPocketed is true, balls pocketed this turn are considered "not yet pocketed"
+    // This is used to determine if the group was cleared BEFORE this shot
+    isGroupCleared(group, excludeJustPocketed = false) {
         for (const ball of this.balls) {
-            if (ball.pocketed) continue;
+            // Skip balls that were pocketed in previous turns
+            if (ball.pocketed && !(excludeJustPocketed && this.ballsPocketed.includes(ball))) continue;
+            // If excludeJustPocketed, treat just-pocketed balls as still on table
+            if (excludeJustPocketed && this.ballsPocketed.includes(ball)) {
+                // Ball was just pocketed - count it as still on table for this check
+                if (group === 'solid' && ball.isSolid) return false;
+                if (group === 'stripe' && ball.isStripe) return false;
+                continue;
+            }
             if (group === 'solid' && ball.isSolid) return false;
             if (group === 'stripe' && ball.isStripe) return false;
         }

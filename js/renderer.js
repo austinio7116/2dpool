@@ -1,6 +1,7 @@
 // Renderer - handles all canvas drawing and visual effects
 
 import { Vec2, Constants, lerp } from './utils.js';
+import { BallRenderer3D } from './ball-renderer-3d.js';
 
 // Polyfill for roundRect if not supported
 if (typeof CanvasRenderingContext2D !== 'undefined' && !CanvasRenderingContext2D.prototype.roundRect) {
@@ -45,6 +46,14 @@ export class Renderer {
             img.src = `assets/pooltable${i === 0 ? '' : i + 1}.png`;
             this.tableImages.push(img);
         }
+
+        // 3D ball renderer (alternative rendering mode)
+        this.ballRenderer3D = new BallRenderer3D(Constants.BALL_RADIUS);
+        this.use3DBalls = true; // 3D ball rendering enabled by default
+    }
+
+    setUse3DBalls(enabled) {
+        this.use3DBalls = enabled;
     }
 
     setTableStyle(tableNum) {
@@ -661,18 +670,23 @@ export class Renderer {
 
         this.drawBallShadow(x, y, radius);
 
-        if (ball.isStripe) {
-            this.drawStripeBall(x, y, radius, ball);
+        // Use 3D renderer if enabled, otherwise use simple 2D rendering
+        if (this.use3DBalls) {
+            this.ballRenderer3D.drawBall(ctx, ball, x, y, radius, alpha);
         } else {
-            this.drawSolidBall(x, y, radius, ball);
-        }
+            if (ball.isStripe) {
+                this.drawStripeBall(x, y, radius, ball);
+            } else {
+                this.drawSolidBall(x, y, radius, ball);
+            }
 
-        // Draw number - skip for UK balls except 8-ball
-        if (!ball.isCueBall && !(ball.isUKBall && !ball.isEightBall)) {
-            this.drawBallNumber(x, y, radius, ball.number, ball);
-        }
+            // Draw number - skip for UK balls except 8-ball
+            if (!ball.isCueBall && !(ball.isUKBall && !ball.isEightBall)) {
+                this.drawBallNumber(x, y, radius, ball.number, ball);
+            }
 
-        this.drawBallHighlight(x, y, radius);
+            this.drawBallHighlight(x, y, radius);
+        }
 
         ctx.globalAlpha = 1;
     }
@@ -717,27 +731,72 @@ export class Renderer {
         ctx.arc(x, y, radius, 0, Math.PI * 2);
         ctx.clip();
 
-        // Calculate stripe offset based on roll angle and travel direction
-        // The stripe moves parallel to travel direction (in the direction the ball is rolling)
-        const rollOffset = Math.sin(ball.displayRoll) * radius * 0.8;
+        // Slow down visual rotation for stripes to reduce strobing effect
+        const visualRoll = ball.displayRoll * 0.5;
 
-        // Offset in the direction of travel
-        const offsetX = Math.cos(ball.travelAngle) * rollOffset;
-        const offsetY = Math.sin(ball.travelAngle) * rollOffset;
-
-        // Stripe width varies based on roll - full width on top, narrow at edges
-        // cos(displayRoll) = 1 when on top, 0 at edges, -1 on back
-        const widthFactor = Math.abs(Math.cos(ball.displayRoll));
+        // cos(visualRoll) tells us if stripe faces camera (>0) or is on back (<0)
+        const facingCamera = Math.cos(visualRoll);
         const baseStripeWidth = radius * 1.2;
-        const stripeWidth = baseStripeWidth * (0.3 + widthFactor * 0.7);  // Min 30% width
 
-        // Rotate stripe band to be perpendicular to travel direction
-        ctx.save();
-        ctx.translate(x + offsetX, y + offsetY);
-        ctx.rotate(ball.travelAngle + Math.PI / 2);  // Perpendicular to travel
-        ctx.fillStyle = ball.color;
-        ctx.fillRect(-radius * 1.5, -stripeWidth / 2, radius * 3, stripeWidth);
-        ctx.restore();
+        // Transition threshold - switch between stripe mode and ring/pole mode
+        const transitionThreshold = 0.5;
+        const isStripeMode = Math.abs(facingCamera) > transitionThreshold;
+
+        if (isStripeMode) {
+            // STRIPE MODE: Draw the stripe band across the ball
+            const drawStripe = (offset, width, opacity) => {
+                const offsetX = Math.cos(ball.travelAngle) * offset;
+                const offsetY = Math.sin(ball.travelAngle) * offset;
+
+                ctx.save();
+                ctx.translate(x + offsetX, y + offsetY);
+                ctx.rotate(ball.travelAngle + Math.PI / 2);
+                ctx.globalAlpha = ctx.globalAlpha * opacity;
+                ctx.fillStyle = ball.color;
+                ctx.fillRect(-radius * 1.5, -width / 2, radius * 3, width);
+                ctx.restore();
+            };
+
+            // Draw back stripe (dimmer)
+            const backFacing = -facingCamera;
+            if (backFacing > transitionThreshold) {
+                const backOffset = -Math.sin(visualRoll) * radius * 0.8;
+                const backWidth = baseStripeWidth * Math.max(0.1, backFacing) * 0.7;
+                const backOpacity = Math.min(0.4, backFacing * 0.5);
+                drawStripe(backOffset, backWidth, backOpacity);
+            }
+
+            // Draw front stripe (brighter)
+            if (facingCamera > transitionThreshold) {
+                const frontOffset = Math.sin(visualRoll) * radius * 0.8;
+                const frontWidth = baseStripeWidth * facingCamera;
+                drawStripe(frontOffset, frontWidth, 1);
+            }
+        } else {
+            // RING/POLE MODE: Show colored ring with white pole moving across
+
+            // Draw the stripe color as a solid ring around the edge
+            ctx.fillStyle = ball.color;
+            ctx.beginPath();
+            ctx.arc(x, y, radius, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Calculate pole position - moves across the ball during this phase
+            // facingCamera goes from +threshold through 0 to -threshold (or vice versa)
+            // Map this to pole traveling from one side to the other
+            // Normalize facingCamera within the threshold range to -1 to +1
+            const poleTravel = -facingCamera / transitionThreshold;
+            const poleOffset = poleTravel * radius * 0.85;
+            const poleX = x + Math.cos(ball.travelAngle) * poleOffset;
+            const poleY = y + Math.sin(ball.travelAngle) * poleOffset;
+            const poleRadius = radius * 0.7;
+
+            // Draw pole as solid white circle with hard edge
+            ctx.fillStyle = '#FFFFFF';
+            ctx.beginPath();
+            ctx.arc(poleX, poleY, poleRadius, 0, Math.PI * 2);
+            ctx.fill();
+        }
 
         ctx.restore();
     }

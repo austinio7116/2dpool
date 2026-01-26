@@ -19,6 +19,11 @@ const SCALE = 100;
 // At 60fps, multiply by 60 to convert pixels/frame to pixels/second
 const VELOCITY_SCALE = 60;
 
+// Custom spin effects scale - set to 0 to disable custom spin physics
+// These effects (draw/follow, english) are applied on top of Planck's physics
+// and currently cause energy conservation issues. Set to 1.0 to re-enable.
+const SPIN_EFFECT_SCALE = 0;
+
 export class PlanckPhysics {
     constructor(table) {
         this.table = table;
@@ -281,6 +286,9 @@ export class PlanckPhysics {
 
     // Apply draw/follow: adjusts cue ball velocity after hitting object ball
     applyDrawFollow(ball, body, vel, speed, spinY) {
+        // Skip if spin effects are disabled
+        if (SPIN_EFFECT_SCALE === 0) return;
+
         // spinY is the angular velocity at time of collision
         // Negative = backspin (draw), High positive = topspin (follow)
         // Natural roll is somewhere in between (roughly 5-15 for typical shots)
@@ -293,8 +301,9 @@ export class PlanckPhysics {
         const normalizedSpin = clampedSpin / 40; // Range roughly -1.25 to 2
 
         // Apply velocity adjustment (backspin reduces, topspin increases)
-        // Clamp factor to avoid extreme values
-        const factor = Math.max(0.5, Math.min(1.8, 1 + (normalizedSpin * 0.35)));
+        // Clamp factor to avoid extreme values, scaled by SPIN_EFFECT_SCALE
+        const rawFactor = 1 + (normalizedSpin * 0.35);
+        const factor = Math.max(0.5, Math.min(1.8, 1 + (rawFactor - 1) * SPIN_EFFECT_SCALE));
 
         body.setLinearVelocity(planck.Vec2(vel.x * factor, vel.y * factor));
 
@@ -305,11 +314,14 @@ export class PlanckPhysics {
 
     // Apply english: adjusts ball angle off the rail
     applyEnglish(ball, body, vel, railType, spinX) {
+        // Skip if spin effects are disabled
+        if (SPIN_EFFECT_SCALE === 0) return;
+
         // Clamp the sidespin
         const clampedSpin = Math.max(-50, Math.min(50, spinX));
 
         // Scale influence - make it noticeable but not crazy
-        const spinInfluence = clampedSpin * 0.008;
+        const spinInfluence = clampedSpin * 0.008 * SPIN_EFFECT_SCALE;
 
         let newVelX = vel.x;
         let newVelY = vel.y;

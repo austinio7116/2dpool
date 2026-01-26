@@ -299,4 +299,13 @@ class PoolGame {
 
 document.addEventListener('DOMContentLoaded', () => {
     window.poolGame = new PoolGame();
+
+    // Keyboard shortcut to toggle 3D ball rendering (press '3')
+    document.addEventListener('keydown', (e) => {
+        if (e.key === '3') {
+            const renderer = window.poolGame.renderer;
+            renderer.use3DBalls = !renderer.use3DBalls;
+            console.log(`3D ball rendering: ${renderer.use3DBalls ? 'ON' : 'OFF'}`);
+        }
+    });
 });

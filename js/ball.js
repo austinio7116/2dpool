@@ -29,6 +29,7 @@ export class Ball {
         this.travelAngle = 0;    // Direction of travel (updated while moving)
         this.displayRoll = 0;    // Smoothed roll angle used for rendering
         this.isRolling = false;  // Whether ball is currently in motion
+        this.shouldResetRotation = false; // Whether to animate back to face-up
 
         // Angular velocity (spin) - continuous physics property
         // angularVel.x = sidespin (english) - rotation around vertical axis
@@ -57,11 +58,12 @@ export class Ball {
     // Update visual rotation based on velocity
     updateVisualRotation() {
         const speed = Math.sqrt(this.velocity.x * this.velocity.x + this.velocity.y * this.velocity.y);
-        // Match physics threshold: 8 pixels/second / 60 fps ≈ 0.13 pixels/frame
-        const minSpeed = 0.15;
+        // Very low threshold so balls keep rolling animation until nearly stopped
+        const minSpeed = 0.01;
 
         if (speed > minSpeed) {
             this.isRolling = true;
+            this.shouldResetRotation = false; // Don't reset while moving
 
             // Update travel direction
             this.travelAngle = Math.atan2(this.velocity.y, this.velocity.x);
@@ -80,14 +82,22 @@ export class Ball {
         } else {
             this.isRolling = false;
 
-            // Smoothly lerp displayRoll back to 0 (upright position)
-            if (Math.abs(this.displayRoll) > 0.02) {
-                this.displayRoll *= 0.88;
-            } else {
-                this.displayRoll = 0;
+            // Only lerp back to upright when turn has ended (triggered externally)
+            if (this.shouldResetRotation) {
+                if (Math.abs(this.displayRoll) > 0.02) {
+                    this.displayRoll *= 0.88;
+                } else {
+                    this.displayRoll = 0;
+                    this.shouldResetRotation = false;
+                }
+                this.rollAngle = this.displayRoll;
             }
-            this.rollAngle = this.displayRoll;
         }
+    }
+
+    // Called at turn end to trigger face-up animation
+    resetRotation() {
+        this.shouldResetRotation = true;
     }
 
     isMoving() {
@@ -140,6 +150,7 @@ export class Ball {
         this.travelAngle = 0;
         this.displayRoll = 0;
         this.isRolling = false;
+        this.shouldResetRotation = false;
     }
 
     // Get ball type as string for game logic

@@ -40,7 +40,7 @@ export class Renderer {
         this.onAssetsLoaded = null;
 
         let loadedCount = 0;
-        const totalImages = 6;
+        const totalImages = 8;
 
         for (let i = 0; i < totalImages; i++) {
             const img = new Image();
@@ -80,7 +80,7 @@ export class Renderer {
 
     setTableStyle(tableNum) {
         // tableNum is 1-4, convert to 0-3 index
-        this.currentTableIndex = Math.max(0, Math.min(5, tableNum - 1));
+        this.currentTableIndex = Math.max(0, Math.min(7, tableNum - 1));
     }
 
     render(state) {

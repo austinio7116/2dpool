@@ -729,6 +729,7 @@ export class Game {
         const cueBallPocketed = this.cueBall.pocketed || this.wasScratched;
         let foulPoints = 0;
         let scoredPoints = 0;
+        this.redsRemaining = this.getActualRedsRemaining();
 
         // Check for fouls
         if (cueBallPocketed) {
@@ -818,6 +819,11 @@ export class Game {
             this.onStateChange(this.state);
         }
     }
+
+    getActualRedsRemaining() {
+        return this.balls.filter(b => b.isRed && !b.pocketed).length;
+    }
+
 
     // Check if the first ball hit was valid for snooker
     isValidSnookerHit(ball) {

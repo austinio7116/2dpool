@@ -66,6 +66,102 @@ export class PlanckPhysics {
 
         // Right rail: one segment with gaps at corners
         this.createRailSegment(b.right, b.top + gap, b.right, b.bottom - gap, 'right');
+
+        // Add angled pocket entry segments to close gaps
+        this.createPocketEntrySegments();
+    }
+
+    createPocketEntrySegments() {
+        const b = this.table.bounds;
+        const pocketRadius = Constants.POCKET_RADIUS;
+        const ballRadius = Constants.BALL_RADIUS;
+        const gap = pocketRadius + ballRadius * 0.5;
+        const segmentLength = 20; // Length of angled segments
+
+        // Angles in degrees (configurable)
+        const sidePocketAngle = 70; // Degrees from cushion line for side pockets
+        const cornerPocketAngle = 45; // Degrees from cushion line for corner pockets
+
+        // Convert to radians
+        const sideRad = sidePocketAngle * Math.PI / 180;
+        const cornerRad = cornerPocketAngle * Math.PI / 180;
+
+        // Side pocket entry segments (top)
+        // Left side of top center pocket - angle goes up and right
+        this.createRailSegment(
+            this.table.center.x - gap, b.top,
+            this.table.center.x - gap + Math.cos(sideRad) * segmentLength, b.top - Math.sin(sideRad) * segmentLength,
+            'pocket'
+        );
+        // Right side of top center pocket - angle goes up and left
+        this.createRailSegment(
+            this.table.center.x + gap, b.top,
+            this.table.center.x + gap - Math.cos(sideRad) * segmentLength, b.top - Math.sin(sideRad) * segmentLength,
+            'pocket'
+        );
+
+        // Side pocket entry segments (bottom)
+        // Left side of bottom center pocket - angle goes down and right
+        this.createRailSegment(
+            this.table.center.x - gap, b.bottom,
+            this.table.center.x - gap + Math.cos(sideRad) * segmentLength, b.bottom + Math.sin(sideRad) * segmentLength,
+            'pocket'
+        );
+        // Right side of bottom center pocket - angle goes down and left
+        this.createRailSegment(
+            this.table.center.x + gap, b.bottom,
+            this.table.center.x + gap - Math.cos(sideRad) * segmentLength, b.bottom + Math.sin(sideRad) * segmentLength,
+            'pocket'
+        );
+
+        // Corner pocket entry segments
+        // Top-left corner
+        this.createRailSegment(
+            b.left + gap, b.top,
+            b.left + gap - Math.cos(cornerRad) * segmentLength, b.top - Math.sin(cornerRad) * segmentLength,
+            'pocket'
+        );
+        this.createRailSegment(
+            b.left, b.top + gap,
+            b.left - Math.sin(cornerRad) * segmentLength, b.top + gap - Math.cos(cornerRad) * segmentLength,
+            'pocket'
+        );
+
+        // Top-right corner
+        this.createRailSegment(
+            b.right - gap, b.top,
+            b.right - gap + Math.cos(cornerRad) * segmentLength, b.top - Math.sin(cornerRad) * segmentLength,
+            'pocket'
+        );
+        this.createRailSegment(
+            b.right, b.top + gap,
+            b.right + Math.sin(cornerRad) * segmentLength, b.top + gap - Math.cos(cornerRad) * segmentLength,
+            'pocket'
+        );
+
+        // Bottom-left corner
+        this.createRailSegment(
+            b.left + gap, b.bottom,
+            b.left + gap - Math.cos(cornerRad) * segmentLength, b.bottom + Math.sin(cornerRad) * segmentLength,
+            'pocket'
+        );
+        this.createRailSegment(
+            b.left, b.bottom - gap,
+            b.left - Math.sin(cornerRad) * segmentLength, b.bottom - gap + Math.cos(cornerRad) * segmentLength,
+            'pocket'
+        );
+
+        // Bottom-right corner
+        this.createRailSegment(
+            b.right - gap, b.bottom,
+            b.right - gap + Math.cos(cornerRad) * segmentLength, b.bottom + Math.sin(cornerRad) * segmentLength,
+            'pocket'
+        );
+        this.createRailSegment(
+            b.right, b.bottom - gap,
+            b.right + Math.sin(cornerRad) * segmentLength, b.bottom - gap + Math.cos(cornerRad) * segmentLength,
+            'pocket'
+        );
     }
 
     createRailSegment(x1, y1, x2, y2, railType) {

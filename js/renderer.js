@@ -64,6 +64,9 @@ export class Renderer {
         // DEBUG: Draw pocket detection circles (uncomment to visualize)
         // this.drawPocketDebug();
 
+        // DEBUG: Draw cushion collision boundaries (uncomment to visualize)
+        // this.drawCushionDebug();
+
         this.drawBalls(state.balls);
 
         if (state.showSpinIndicator) {
@@ -422,6 +425,156 @@ export class Renderer {
             ctx.fillStyle = pocket.type === 'side' ? '#ff00ff' : '#00ffff';
             ctx.beginPath();
             ctx.arc(x, y, 4, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    }
+
+    // DEBUG: Temporary visualization of cushion collision boundaries
+    drawCushionDebug() {
+        const ctx = this.ctx;
+        const b = this.table.bounds;
+        const pocketRadius = Constants.POCKET_RADIUS;
+        const ballRadius = Constants.BALL_RADIUS;
+        const gap = pocketRadius + ballRadius * 0.5;
+        const segmentLength = 20;
+
+        // Angles (must match physics)
+        const sidePocketAngle = 70;
+        const cornerPocketAngle = 45;
+        const sideRad = sidePocketAngle * Math.PI / 180;
+        const cornerRad = cornerPocketAngle * Math.PI / 180;
+
+        ctx.strokeStyle = '#ffff00';
+        ctx.lineWidth = 3;
+        ctx.setLineDash([8, 4]);
+
+        // Top rail segments
+        ctx.beginPath();
+        ctx.moveTo(b.left + gap, b.top);
+        ctx.lineTo(this.table.center.x - gap, b.top);
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.moveTo(this.table.center.x + gap, b.top);
+        ctx.lineTo(b.right - gap, b.top);
+        ctx.stroke();
+
+        // Bottom rail segments
+        ctx.beginPath();
+        ctx.moveTo(b.left + gap, b.bottom);
+        ctx.lineTo(this.table.center.x - gap, b.bottom);
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.moveTo(this.table.center.x + gap, b.bottom);
+        ctx.lineTo(b.right - gap, b.bottom);
+        ctx.stroke();
+
+        // Left rail
+        ctx.beginPath();
+        ctx.moveTo(b.left, b.top + gap);
+        ctx.lineTo(b.left, b.bottom - gap);
+        ctx.stroke();
+
+        // Right rail
+        ctx.beginPath();
+        ctx.moveTo(b.right, b.top + gap);
+        ctx.lineTo(b.right, b.bottom - gap);
+        ctx.stroke();
+
+        ctx.setLineDash([]);
+
+        // Draw angled pocket entry segments (solid green for visibility)
+        ctx.strokeStyle = '#00ff00';
+        ctx.lineWidth = 3;
+
+        // Side pocket entries (top)
+        ctx.beginPath();
+        ctx.moveTo(this.table.center.x - gap, b.top);
+        ctx.lineTo(this.table.center.x - gap + Math.cos(sideRad) * segmentLength, b.top - Math.sin(sideRad) * segmentLength);
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.moveTo(this.table.center.x + gap, b.top);
+        ctx.lineTo(this.table.center.x + gap - Math.cos(sideRad) * segmentLength, b.top - Math.sin(sideRad) * segmentLength);
+        ctx.stroke();
+
+        // Side pocket entries (bottom)
+        ctx.beginPath();
+        ctx.moveTo(this.table.center.x - gap, b.bottom);
+        ctx.lineTo(this.table.center.x - gap + Math.cos(sideRad) * segmentLength, b.bottom + Math.sin(sideRad) * segmentLength);
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.moveTo(this.table.center.x + gap, b.bottom);
+        ctx.lineTo(this.table.center.x + gap - Math.cos(sideRad) * segmentLength, b.bottom + Math.sin(sideRad) * segmentLength);
+        ctx.stroke();
+
+        // Corner pocket entries
+        // Top-left
+        ctx.beginPath();
+        ctx.moveTo(b.left + gap, b.top);
+        ctx.lineTo(b.left + gap - Math.cos(cornerRad) * segmentLength, b.top - Math.sin(cornerRad) * segmentLength);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(b.left, b.top + gap);
+        ctx.lineTo(b.left - Math.sin(cornerRad) * segmentLength, b.top + gap - Math.cos(cornerRad) * segmentLength);
+        ctx.stroke();
+
+        // Top-right
+        ctx.beginPath();
+        ctx.moveTo(b.right - gap, b.top);
+        ctx.lineTo(b.right - gap + Math.cos(cornerRad) * segmentLength, b.top - Math.sin(cornerRad) * segmentLength);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(b.right, b.top + gap);
+        ctx.lineTo(b.right + Math.sin(cornerRad) * segmentLength, b.top + gap - Math.cos(cornerRad) * segmentLength);
+        ctx.stroke();
+
+        // Bottom-left
+        ctx.beginPath();
+        ctx.moveTo(b.left + gap, b.bottom);
+        ctx.lineTo(b.left + gap - Math.cos(cornerRad) * segmentLength, b.bottom + Math.sin(cornerRad) * segmentLength);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(b.left, b.bottom - gap);
+        ctx.lineTo(b.left - Math.sin(cornerRad) * segmentLength, b.bottom - gap + Math.cos(cornerRad) * segmentLength);
+        ctx.stroke();
+
+        // Bottom-right
+        ctx.beginPath();
+        ctx.moveTo(b.right - gap, b.bottom);
+        ctx.lineTo(b.right - gap + Math.cos(cornerRad) * segmentLength, b.bottom + Math.sin(cornerRad) * segmentLength);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(b.right, b.bottom - gap);
+        ctx.lineTo(b.right + Math.sin(cornerRad) * segmentLength, b.bottom - gap + Math.cos(cornerRad) * segmentLength);
+        ctx.stroke();
+
+        // Draw gap endpoints as circles
+        ctx.fillStyle = '#ffff00';
+        const endpoints = [
+            // Top rail gaps
+            { x: b.left + gap, y: b.top },
+            { x: this.table.center.x - gap, y: b.top },
+            { x: this.table.center.x + gap, y: b.top },
+            { x: b.right - gap, y: b.top },
+            // Bottom rail gaps
+            { x: b.left + gap, y: b.bottom },
+            { x: this.table.center.x - gap, y: b.bottom },
+            { x: this.table.center.x + gap, y: b.bottom },
+            { x: b.right - gap, y: b.bottom },
+            // Left rail gaps
+            { x: b.left, y: b.top + gap },
+            { x: b.left, y: b.bottom - gap },
+            // Right rail gaps
+            { x: b.right, y: b.top + gap },
+            { x: b.right, y: b.bottom - gap }
+        ];
+
+        for (const pt of endpoints) {
+            ctx.beginPath();
+            ctx.arc(pt.x, pt.y, 5, 0, Math.PI * 2);
             ctx.fill();
         }
     }

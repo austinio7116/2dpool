@@ -181,10 +181,10 @@ export const Constants = {
     BALL_MASS: 1.0,            // Normalized ball mass
 
     // Controls
-    MAX_POWER: 20,
+    MAX_POWER: 50,
     MIN_POWER: 1,
     AIM_LINE_LENGTH: 350,
-    POWER_SCALE: 0.12,  // Drag distance to power multiplier
+    POWER_SCALE: 0.08,  // Drag distance to power multiplier
 
     // Colors
     FELT_COLOR: '#0d5c2e',

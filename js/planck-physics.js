@@ -4,8 +4,17 @@
 import planck from 'planck';
 import { Vec2, Constants } from './utils.js';
 
-// Use 1:1 scale for positions (pixels = Planck units)
-const SCALE = 1;
+// Adjust Planck's velocity threshold to account for our scale
+// Default is 1.0 m/s - we need it lower since our velocities are scaled down
+if (planck.Settings) {
+    planck.Settings.velocityThreshold = 0.01;
+} else if (planck.internal && planck.internal.Settings) {
+    planck.internal.Settings.velocityThreshold = 0.01;
+}
+
+// Scale factor: 100 pixels = 1 Planck meter
+// This keeps velocities within Planck's internal limits (~120 m/s max)
+const SCALE = 100;
 // Velocity conversion: game uses pixels/frame, Planck uses units/second
 // At 60fps, multiply by 60 to convert pixels/frame to pixels/second
 const VELOCITY_SCALE = 60;
@@ -72,7 +81,7 @@ export class PlanckPhysics {
                 planck.Vec2(toM(x1), toM(y1)),
                 planck.Vec2(toM(x2), toM(y2))
             ),
-            friction: 0.1, // Rail friction affects spin on cushion contact
+            friction: 0.1,
             restitution: Constants.RAIL_RESTITUTION
         });
 
@@ -233,8 +242,8 @@ export class PlanckPhysics {
             type: 'dynamic',
             position: pos,
             bullet: true, // CCD for fast balls
-            linearDamping: 1.2, // Rolling friction - slows balls over distance
-            angularDamping: 0.5 // Spin decay
+            linearDamping: 1.1, // Rolling friction - slows balls over distance
+            angularDamping: 2.5 // Spin decay
         });
 
         // Set initial velocity (convert from pixels/frame to pixels/second)
@@ -416,9 +425,10 @@ export class PlanckPhysics {
     }
 
     stopSlowBalls(balls) {
-        // Stop balls that are barely moving - 8 pixels/second threshold
-        const minSpeed = 8;
+        // Stop balls that are barely moving
+        const minSpeed = 1.0; // Planck units/second
         const minSpeedSq = minSpeed * minSpeed;
+        const minAngularSpeed = 80.0; // radians/second
 
         for (const ball of balls) {
             if (ball.pocketed || ball.sinking) continue;
@@ -428,19 +438,30 @@ export class PlanckPhysics {
 
             const vel = body.getLinearVelocity();
             const speedSq = vel.x * vel.x + vel.y * vel.y;
+            const angVel = Math.abs(body.getAngularVelocity());
 
+            // Stop linear velocity if below threshold
             if (speedSq < minSpeedSq) {
                 body.setLinearVelocity(planck.Vec2(0, 0));
+            }
+
+            // Stop angular velocity if below threshold
+            if (angVel < minAngularSpeed) {
                 body.setAngularVelocity(0);
-                body.setAwake(false); // Put body to sleep
+            }
+
+            // Put to sleep only if both are stopped
+            if (speedSq < minSpeedSq && angVel < minAngularSpeed) {
+                body.setAwake(false);
             }
         }
     }
 
     areBallsMoving(balls) {
-        // Use same threshold as stopSlowBalls
-        const minSpeed = 8;
+        // Use same thresholds as stopSlowBalls
+        const minSpeed = 1.0; // Planck units/second
         const minSpeedSq = minSpeed * minSpeed;
+        const minAngularSpeed = 80.0; // radians/second
 
         for (const ball of balls) {
             if (ball.pocketed) continue;
@@ -449,16 +470,16 @@ export class PlanckPhysics {
             const body = this.ballToBody.get(ball);
             if (!body) continue;
 
-            // Check if body is awake and moving
+            // Check if body is awake and has significant motion
             if (body.isAwake()) {
                 const vel = body.getLinearVelocity();
                 const speedSq = vel.x * vel.x + vel.y * vel.y;
                 if (speedSq > minSpeedSq) {
                     return true;
                 }
-                // Also check angular velocity
+
                 const angVel = Math.abs(body.getAngularVelocity());
-                if (angVel > 0.5) {
+                if (angVel > minAngularSpeed) {
                     return true;
                 }
             }

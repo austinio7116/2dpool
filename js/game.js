@@ -172,8 +172,10 @@ export class Game {
         }
 
         // Check for cue ball scratch
+        this.wasScratched = false;
         if (this.cueBall.pocketed) {
             this.foul = true;
+            this.wasScratched = true;
             this.foulReason = 'Scratch - Cue ball pocketed';
             this.cueBall.pocketed = false;
             this.cueBall.sinking = false;
@@ -195,10 +197,18 @@ export class Game {
                 this.twoShotRule = true;
                 this.shotsRemaining = 2;
                 this.isFreeShot = true;  // First shot is free (can't lose turn)
+
+                // UK rules: only ball in hand (behind the line) for scratch
+                if (this.wasScratched) {
+                    this.state = GameState.BALL_IN_HAND;
+                } else {
+                    // Non-scratch foul: ball stays where it is
+                    this.state = GameState.PLAYING;
+                }
             } else {
                 this.switchPlayer();  // Opponent gets ball in hand
+                this.state = GameState.BALL_IN_HAND;
             }
-            this.state = GameState.BALL_IN_HAND;
             if (this.onFoul) {
                 this.onFoul(this.foulReason + (this.mode === GameMode.UK_EIGHT_BALL ? ' - 2 shots' : ''));
             }

@@ -43,7 +43,6 @@ export class Input {
         this.handleMouseMove = this.handleMouseMove.bind(this);
         this.handleMouseDown = this.handleMouseDown.bind(this);
         this.handleMouseUp = this.handleMouseUp.bind(this);
-        this.handleMouseLeave = this.handleMouseLeave.bind(this);
 
         // Bind event handlers - touch
         this.handleTouchStart = this.handleTouchStart.bind(this);
@@ -54,11 +53,9 @@ export class Input {
     }
 
     attachEvents() {
-        // Mouse events
-        this.canvas.addEventListener('mousemove', this.handleMouseMove);
+        // Mouse events - mousedown on canvas, move on canvas for ball placement
         this.canvas.addEventListener('mousedown', this.handleMouseDown);
-        this.canvas.addEventListener('mouseup', this.handleMouseUp);
-        this.canvas.addEventListener('mouseleave', this.handleMouseLeave);
+        this.canvas.addEventListener('mousemove', this.handleMouseMove);
         this.canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
         // Touch events
@@ -70,10 +67,10 @@ export class Input {
 
     detachEvents() {
         // Mouse events
-        this.canvas.removeEventListener('mousemove', this.handleMouseMove);
         this.canvas.removeEventListener('mousedown', this.handleMouseDown);
-        this.canvas.removeEventListener('mouseup', this.handleMouseUp);
-        this.canvas.removeEventListener('mouseleave', this.handleMouseLeave);
+        this.canvas.removeEventListener('mousemove', this.handleMouseMove);
+        document.removeEventListener('mousemove', this.handleMouseMove);
+        document.removeEventListener('mouseup', this.handleMouseUp);
 
         // Touch events
         this.canvas.removeEventListener('touchstart', this.handleTouchStart);
@@ -118,6 +115,11 @@ export class Input {
             this.placementBall.position.x = this.mousePos.x;
             this.placementBall.position.y = this.mousePos.y;
 
+            // Update validity using the validation callback
+            if (this.placementValidation) {
+                this.placementValid = this.placementValidation(this.mousePos);
+            }
+
             if (this.onBallInHand) {
                 this.onBallInHand(this.mousePos);
             }
@@ -135,6 +137,10 @@ export class Input {
         this.isMouseDown = true;
         this.mousePos = this.getMousePosition(event);
 
+        // Add document-level listeners for dragging outside canvas
+        document.addEventListener('mousemove', this.handleMouseMove);
+        document.addEventListener('mouseup', this.handleMouseUp);
+
         // Check if clicking on spin indicator
         if (this.canShoot && !this.ballInHandMode && this.isOverSpinIndicator(this.mousePos)) {
             this.isSettingSpin = true;
@@ -143,8 +149,13 @@ export class Input {
         }
 
         if (this.ballInHandMode && this.placementBall && this.placementValid) {
+            // Remove document listeners we just added
+            document.removeEventListener('mousemove', this.handleMouseMove);
+            document.removeEventListener('mouseup', this.handleMouseUp);
+
             this.ballInHandMode = false;
             this.placementBall = null;
+            this.isMouseDown = false;
 
             if (this.onBallPlaced) {
                 this.onBallPlaced(this.mousePos);
@@ -163,8 +174,13 @@ export class Input {
     handleMouseUp(event) {
         if (event.button !== 0) return;
 
+        // Remove document-level listeners
+        document.removeEventListener('mousemove', this.handleMouseMove);
+        document.removeEventListener('mouseup', this.handleMouseUp);
+
         if (this.isSettingSpin) {
             this.isSettingSpin = false;
+            this.isMouseDown = false;
             return;
         }
 
@@ -177,15 +193,6 @@ export class Input {
         this.resetAim();
         this.isMouseDown = false;
         this.isDragging = false;
-    }
-
-    handleMouseLeave(event) {
-        if (this.isDragging) {
-            this.resetAim();
-            this.isDragging = false;
-        }
-        this.isSettingSpin = false;
-        this.isMouseDown = false;
     }
 
     // Touch event handlers
@@ -261,6 +268,11 @@ export class Input {
         if (this.ballInHandMode && this.placementBall) {
             this.placementBall.position.x = this.mousePos.x;
             this.placementBall.position.y = this.mousePos.y;
+
+            // Update validity using the validation callback
+            if (this.placementValidation) {
+                this.placementValid = this.placementValidation(this.mousePos);
+            }
 
             if (this.onBallInHand) {
                 this.onBallInHand(this.mousePos);
@@ -367,6 +379,8 @@ export class Input {
         this.ballInHandMode = true;
         this.placementBall = ball;
         this.placementValidation = validationCallback;
+        // Start with valid placement (will be updated on mouse move)
+        this.placementValid = true;
     }
 
     exitBallInHandMode() {

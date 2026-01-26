@@ -403,9 +403,11 @@ export class UI {
 
         // Ball in hand message
         if (info.state === GameState.BALL_IN_HAND) {
-            let message = 'Ball in hand - Click anywhere to place';
-            if (info.mode === GameMode.UK_EIGHT_BALL && info.twoShotRule) {
-                message += ` (2-shot rule: ${info.shotsRemaining} remaining)`;
+            let message;
+            if (info.mode === GameMode.UK_EIGHT_BALL) {
+                message = 'Place ball behind the line - 2 shots';
+            } else {
+                message = 'Ball in hand - Click anywhere to place';
             }
             this.showMessage(message);
         } else {

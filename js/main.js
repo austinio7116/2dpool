@@ -150,8 +150,9 @@ class PoolGame {
     }
 
     placeCueBall(position) {
-        // International rules: ball in hand anywhere after foul
-        const kitchenOnly = false;
+        // UK 8-ball: must place behind the line (kitchen)
+        // Other modes: ball in hand anywhere
+        const kitchenOnly = this.game.mode === GameMode.UK_EIGHT_BALL;
 
         if (this.game.canPlaceCueBall(position, kitchenOnly)) {
             this.game.placeCueBall(position, kitchenOnly);
@@ -165,16 +166,16 @@ class PoolGame {
         this.ui.updateFromGameInfo(this.game.getGameInfo());
 
         if (state === GameState.BALL_IN_HAND) {
-            // International rules: ball in hand anywhere after foul
-            const kitchenOnly = false;
+            // UK 8-ball: must place behind the line (kitchen)
+            // Other modes: ball in hand anywhere
+            const kitchenOnly = this.game.mode === GameMode.UK_EIGHT_BALL;
             this.input.enterBallInHandMode(this.game.cueBall, (pos) => {
                 return this.game.canPlaceCueBall(pos, kitchenOnly);
             });
 
-            const validPos = this.table.findValidCueBallPosition(
-                this.game.balls,
-                this.table.center.y
-            );
+            const validPos = kitchenOnly
+                ? this.table.findValidKitchenPosition(this.game.balls, this.table.center.y)
+                : this.table.findValidCueBallPosition(this.game.balls, this.table.center.y);
             this.game.cueBall.setPosition(validPos.x, validPos.y);
             this.game.cueBall.pocketed = false;
         } else if (state === GameState.PLAYING) {

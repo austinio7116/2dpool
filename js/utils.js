@@ -227,5 +227,38 @@ export const Constants = {
             black: '#000000',
             cue: '#FFFEF0'
         }
+    },
+
+    // Snooker ball colors
+    SNOOKER_BALL_COLORS: {
+        cue: '#FFFEF0',
+        red: '#CC0000',
+        yellow: '#FFD700',
+        green: '#228B22',
+        brown: '#8B4513',
+        blue: '#0066CC',
+        pink: '#FF69B4',
+        black: '#1a1a1a'
+    },
+
+    // Snooker point values
+    SNOOKER_POINTS: {
+        red: 1,
+        yellow: 2,
+        green: 3,
+        brown: 4,
+        blue: 5,
+        pink: 6,
+        black: 7
+    },
+
+    // Snooker color spot positions (relative to table center)
+    SNOOKER_SPOTS: {
+        yellow: { x: -200, y: -60 },   // Left of D
+        green: { x: -200, y: 60 },     // Right of D
+        brown: { x: -200, y: 0 },      // Center of baulk line
+        blue: { x: 0, y: 0 },          // Center spot
+        pink: { x: 150, y: 0 },        // Between center and reds
+        black: { x: 280, y: 0 }        // Behind reds
     }
 };

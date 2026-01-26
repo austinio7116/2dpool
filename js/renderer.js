@@ -34,14 +34,36 @@ export class Renderer {
 
         // Load table images
         this.tableImages = [];
-        this.tableImagesLoaded = [false, false, false, false, false];
+        this.tableImagesLoaded = [false, false, false, false, false, false];
         this.currentTableIndex = 0;
+        this.allAssetsLoaded = false;
+        this.onAssetsLoaded = null;
 
-        for (let i = 0; i < 6; i++) {
+        let loadedCount = 0;
+        const totalImages = 6;
+
+        for (let i = 0; i < totalImages; i++) {
             const img = new Image();
             const index = i;
             img.onload = () => {
                 this.tableImagesLoaded[index] = true;
+                loadedCount++;
+                if (loadedCount >= totalImages) {
+                    this.allAssetsLoaded = true;
+                    if (this.onAssetsLoaded) {
+                        this.onAssetsLoaded();
+                    }
+                }
+            };
+            img.onerror = () => {
+                // Count errors as "loaded" to not block forever
+                loadedCount++;
+                if (loadedCount >= totalImages) {
+                    this.allAssetsLoaded = true;
+                    if (this.onAssetsLoaded) {
+                        this.onAssetsLoaded();
+                    }
+                }
             };
             img.src = `assets/pooltable${i === 0 ? '' : i + 1}.png`;
             this.tableImages.push(img);
@@ -680,8 +702,8 @@ export class Renderer {
                 this.drawSolidBall(x, y, radius, ball);
             }
 
-            // Draw number - skip for UK balls except 8-ball
-            if (!ball.isCueBall && !(ball.isUKBall && !ball.isEightBall)) {
+            // Draw number - skip for UK balls except 8-ball, and skip for snooker balls
+            if (!ball.isCueBall && !(ball.isUKBall && !ball.isEightBall) && !ball.isSnookerBall) {
                 this.drawBallNumber(x, y, radius, ball.number, ball);
             }
 

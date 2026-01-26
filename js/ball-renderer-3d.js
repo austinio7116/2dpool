@@ -69,8 +69,8 @@ export class BallRenderer3D {
     }
 
     // Generate all rotation frames for a ball
-    generateBallFrames(ballNumber, baseColor, isStripe, isUKBall = false, isEightBall = false) {
-        const cacheKey = `${ballNumber}-${baseColor}-${isStripe}-${isUKBall}-${isEightBall}`;
+    generateBallFrames(ballNumber, baseColor, isStripe, isUKBall = false, isEightBall = false, isSnookerBall = false) {
+        const cacheKey = `${ballNumber}-${baseColor}-${isStripe}-${isUKBall}-${isEightBall}-${isSnookerBall}`;
         if (this.frameCache.has(cacheKey)) {
             return this.frameCache.get(cacheKey);
         }
@@ -78,7 +78,7 @@ export class BallRenderer3D {
         const frames = [];
         for (let i = 0; i < this.frameCount; i++) {
             const rotation = (i / this.frameCount) * Math.PI * 2;
-            const frame = this.renderBallFrame(ballNumber, baseColor, isStripe, rotation, isUKBall, isEightBall);
+            const frame = this.renderBallFrame(ballNumber, baseColor, isStripe, rotation, isUKBall, isEightBall, isSnookerBall);
             frames.push(frame);
         }
 
@@ -87,7 +87,7 @@ export class BallRenderer3D {
     }
 
     // Render a single frame of the ball at a specific rotation
-    renderBallFrame(ballNumber, baseColor, isStripe, rotation, isUKBall = false, isEightBall = false) {
+    renderBallFrame(ballNumber, baseColor, isStripe, rotation, isUKBall = false, isEightBall = false, isSnookerBall = false) {
         const size = this.resolution;
         const canvas = document.createElement('canvas');
         canvas.width = size;
@@ -138,8 +138,8 @@ export class BallRenderer3D {
                 if (ballNumber === 0) {
                     // Cue ball - pure white
                     r = g = b = 255;
-                } else if (isUKBall && !isEightBall) {
-                    // UK balls (except 8-ball) - pure solid color, no number spot
+                } else if ((isUKBall && !isEightBall) || isSnookerBall) {
+                    // UK balls (except 8-ball) and snooker balls - pure solid color, no number spot
                     r = rgb.r;
                     g = rgb.g;
                     b = rgb.b;
@@ -201,8 +201,8 @@ export class BallRenderer3D {
         ctx.putImageData(imageData, 0, 0);
 
         // Draw the number text on top of the number spot
-        // Skip for UK balls except 8-ball
-        const showNumber = ballNumber !== 0 && (!isUKBall || isEightBall);
+        // Skip for UK balls except 8-ball, and skip for snooker balls
+        const showNumber = ballNumber !== 0 && (!isUKBall || isEightBall) && !isSnookerBall;
         if (showNumber) {
             this.drawNumber(ctx, ballNumber, size, rotation, radius);
         }
@@ -310,10 +310,11 @@ export class BallRenderer3D {
         const baseColor = ball.color;
         const isUKBall = ball.isUKBall || false;
         const isEightBall = ball.isEightBall || false;
-        const frames = this.generateBallFrames(ball.number, baseColor, isStripe, isUKBall, isEightBall);
+        const isSnookerBall = ball.isSnookerBall || false;
+        const frames = this.generateBallFrames(ball.number, baseColor, isStripe, isUKBall, isEightBall, isSnookerBall);
 
-        // UK balls (except 8-ball) are solid color - use fixed frame so lighting stays consistent
-        if (isUKBall && !isEightBall) {
+        // UK balls (except 8-ball) and snooker balls are solid color - use fixed frame so lighting stays consistent
+        if ((isUKBall && !isEightBall) || isSnookerBall) {
             return frames[0];
         }
 
@@ -345,8 +346,8 @@ export class BallRenderer3D {
         if (ball.isCueBall) {
             const frames = this.generateBallFrames(0, '#FFFFFF', false);
             ctx.drawImage(frames[0], -drawSize / 2, -drawSize / 2, drawSize, drawSize);
-        } else if (ball.isUKBall && !ball.isEightBall) {
-            // UK solid balls - no rotation so they all look identical
+        } else if ((ball.isUKBall && !ball.isEightBall) || ball.isSnookerBall) {
+            // UK solid balls and snooker balls - no rotation so they all look identical
             const frame = this.getFrame(ball);
             ctx.drawImage(frame, -drawSize / 2, -drawSize / 2, drawSize, drawSize);
         } else {

@@ -310,3 +310,96 @@ export function rackBalls(balls, pattern, tableCenter, ballRadius) {
         cueBall.sinking = false;
     }
 }
+
+// Factory function to create 6-red snooker ball set
+export function createSnookerBallSet() {
+    const balls = [];
+    const colors = Constants.SNOOKER_BALL_COLORS;
+
+    // Cue ball (number 0)
+    const cueBall = new Ball(0, 0, 0);
+    cueBall.color = colors.cue;
+    cueBall.isSnookerBall = true;
+    balls.push(cueBall);
+
+    // 6 Red balls (numbers 1-6)
+    for (let i = 1; i <= 6; i++) {
+        const ball = new Ball(0, 0, i);
+        ball.color = colors.red;
+        ball.isRed = true;
+        ball.isSnookerBall = true;
+        ball.pointValue = 1;
+        balls.push(ball);
+    }
+
+    // Colored balls (numbers 7-12)
+    const coloredBalls = [
+        { num: 7, name: 'yellow', points: 2 },
+        { num: 8, name: 'green', points: 3 },
+        { num: 9, name: 'brown', points: 4 },
+        { num: 10, name: 'blue', points: 5 },
+        { num: 11, name: 'pink', points: 6 },
+        { num: 12, name: 'black', points: 7 }
+    ];
+
+    for (const c of coloredBalls) {
+        const ball = new Ball(0, 0, c.num);
+        ball.color = colors[c.name];
+        ball.colorName = c.name;
+        ball.isColor = true;
+        ball.isSnookerBall = true;
+        ball.pointValue = c.points;
+        balls.push(ball);
+    }
+
+    return balls;
+}
+
+// Position snooker balls on table
+export function positionSnookerBalls(balls, tableCenter, ballRadius) {
+    const spots = Constants.SNOOKER_SPOTS;
+
+    // Position colored balls on their spots
+    const colorMap = { 7: 'yellow', 8: 'green', 9: 'brown', 10: 'blue', 11: 'pink', 12: 'black' };
+
+    for (const [num, name] of Object.entries(colorMap)) {
+        const ball = balls.find(b => b.number === parseInt(num));
+        if (ball) {
+            ball.setPosition(tableCenter.x + spots[name].x, tableCenter.y + spots[name].y);
+            ball.spotPosition = { x: tableCenter.x + spots[name].x, y: tableCenter.y + spots[name].y };
+            ball.pocketed = false;
+            ball.sinking = false;
+        }
+    }
+
+    // Position 6 reds in small triangle behind pink
+    const redBalls = balls.filter(b => b.isRed);
+    const pinkSpot = spots.pink;
+    const startX = tableCenter.x + pinkSpot.x + ballRadius * 3;
+    const spacing = ballRadius * 2 + 0.5;
+
+    // Triangle: 1, 2, 3 rows (total 6 balls)
+    const redArrangement = [[0], [1, 2], [3, 4, 5]];
+    redArrangement.forEach((row, rowIndex) => {
+        const rowWidth = row.length;
+        const rowStartY = tableCenter.y - (rowWidth - 1) * spacing / 2;
+        row.forEach((redIndex, colIndex) => {
+            if (redBalls[redIndex]) {
+                redBalls[redIndex].setPosition(
+                    startX + rowIndex * spacing * Math.cos(Math.PI / 6),
+                    rowStartY + colIndex * spacing
+                );
+                redBalls[redIndex].pocketed = false;
+                redBalls[redIndex].sinking = false;
+            }
+        });
+    });
+
+    // Cue ball in baulk area (behind the baulk line)
+    const cueBall = balls.find(b => b.number === 0);
+    if (cueBall) {
+        cueBall.setPosition(tableCenter.x - 250, tableCenter.y);
+        cueBall.pocketed = false;
+        cueBall.sinking = false;
+    }
+}

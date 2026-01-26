@@ -13,6 +13,7 @@ import { Vec2 } from './utils.js';
 class PoolGame {
     constructor() {
         this.canvas = document.getElementById('game-canvas');
+        this.loadingScreen = document.getElementById('loading-screen');
 
         // Initialize game systems
         this.table = new Table();
@@ -32,6 +33,30 @@ class PoolGame {
 
         // Bind callbacks
         this.bindCallbacks();
+
+        // Wait for assets to load before showing the game
+        this.waitForAssets();
+    }
+
+    waitForAssets() {
+        if (this.renderer.allAssetsLoaded) {
+            this.onAssetsReady();
+        } else {
+            this.renderer.onAssetsLoaded = () => this.onAssetsReady();
+        }
+    }
+
+    onAssetsReady() {
+        // Hide loading screen with fade
+        if (this.loadingScreen) {
+            this.loadingScreen.classList.add('hidden');
+            // Remove from DOM after transition
+            setTimeout(() => {
+                if (this.loadingScreen.parentNode) {
+                    this.loadingScreen.parentNode.removeChild(this.loadingScreen);
+                }
+            }, 500);
+        }
 
         // Show main menu
         this.ui.showMainMenu();
@@ -150,9 +175,10 @@ class PoolGame {
     }
 
     placeCueBall(position) {
-        // UK 8-ball: must place behind the line (kitchen)
-        // Other modes: ball in hand anywhere
-        const kitchenOnly = this.game.mode === GameMode.UK_EIGHT_BALL;
+        // Break shot: always kitchen only (behind the baulk line)
+        // UK 8-ball fouls: kitchen only
+        // Other fouls: ball in hand anywhere
+        const kitchenOnly = this.game.isBreakShot || this.game.mode === GameMode.UK_EIGHT_BALL;
 
         if (this.game.canPlaceCueBall(position, kitchenOnly)) {
             this.game.placeCueBall(position, kitchenOnly);
@@ -166,9 +192,10 @@ class PoolGame {
         this.ui.updateFromGameInfo(this.game.getGameInfo());
 
         if (state === GameState.BALL_IN_HAND) {
-            // UK 8-ball: must place behind the line (kitchen)
-            // Other modes: ball in hand anywhere
-            const kitchenOnly = this.game.mode === GameMode.UK_EIGHT_BALL;
+            // Break shot: always kitchen only (behind the baulk line)
+            // UK 8-ball fouls: kitchen only
+            // Other fouls: ball in hand anywhere
+            const kitchenOnly = this.game.isBreakShot || this.game.mode === GameMode.UK_EIGHT_BALL;
             this.input.enterBallInHandMode(this.game.cueBall, (pos) => {
                 return this.game.canPlaceCueBall(pos, kitchenOnly);
             });

@@ -20,6 +20,13 @@
     </script>
 </head>
 <body>
+    <div id="loading-screen">
+        <div class="loading-content">
+            <h1>2D Pool</h1>
+            <div class="loading-spinner"></div>
+            <p>Loading...</p>
+        </div>
+    </div>
     <div id="game-container">
         <canvas id="game-canvas"></canvas>
         <div id="ui-overlay">
@@ -35,6 +42,7 @@
                         </select>
                     </div>
                     <button id="btn-9ball" class="menu-btn">9-Ball</button>
+                    <button id="btn-snooker" class="menu-btn">6-Red Snooker</button>
                     <button id="btn-freeplay" class="menu-btn">Free Play</button>
                 </div>
                 <div class="settings">
@@ -68,6 +76,11 @@
                 <div id="foul-indicator" class="hidden">FOUL</div>
                 <div id="game-message"></div>
                 <div id="touch-hint" class="mobile-only">Touch &amp; drag to aim, release to shoot</div>
+            </div>
+            <div id="snooker-hud" class="hidden">
+                <div id="snooker-score"></div>
+                <div id="snooker-break" class="hidden"></div>
+                <div id="snooker-target"></div>
             </div>
             <div id="game-over" class="menu hidden">
                 <h2 id="winner-text"></h2>

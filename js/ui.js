@@ -17,10 +17,17 @@ export class UI {
         this.gameMessage = document.getElementById('game-message');
         this.winnerText = document.getElementById('winner-text');
 
+        // Snooker HUD elements
+        this.snookerHud = document.getElementById('snooker-hud');
+        this.snookerScoreDisplay = document.getElementById('snooker-score');
+        this.snookerBreakDisplay = document.getElementById('snooker-break');
+        this.snookerTargetDisplay = document.getElementById('snooker-target');
+
         // Buttons
         this.btn8Ball = document.getElementById('btn-8ball');
         this.btnUK8Ball = document.getElementById('btn-uk8ball');
         this.btn9Ball = document.getElementById('btn-9ball');
+        this.btnSnooker = document.getElementById('btn-snooker');
         this.btnFreePlay = document.getElementById('btn-freeplay');
         this.btnPlayAgain = document.getElementById('btn-play-again');
         this.btnMainMenu = document.getElementById('btn-main-menu');
@@ -66,6 +73,12 @@ export class UI {
             if (this.onGameStart) {
                 const colorScheme = this.ukColorScheme.value;
                 this.onGameStart(GameMode.UK_EIGHT_BALL, { colorScheme });
+            }
+        });
+
+        this.btnSnooker.addEventListener('click', () => {
+            if (this.onGameStart) {
+                this.onGameStart(GameMode.SNOOKER);
             }
         });
 
@@ -172,6 +185,7 @@ export class UI {
         this.gameHud.classList.add('hidden');
         this.gameOverScreen.classList.add('hidden');
         this.freeplayControls.classList.add('hidden');
+        if (this.snookerHud) this.snookerHud.classList.add('hidden');
         this.currentMode = null;
     }
 
@@ -186,8 +200,14 @@ export class UI {
             this.freeplayControls.classList.remove('hidden');
             this.playerIndicator.textContent = 'Free Play';
             this.ballGroups.innerHTML = '';
+            if (this.snookerHud) this.snookerHud.classList.add('hidden');
+        } else if (mode === GameMode.SNOOKER) {
+            this.freeplayControls.classList.add('hidden');
+            if (this.snookerHud) this.snookerHud.classList.remove('hidden');
+            this.updatePlayerIndicator(1);
         } else {
             this.freeplayControls.classList.add('hidden');
+            if (this.snookerHud) this.snookerHud.classList.add('hidden');
             this.updatePlayerIndicator(1);
         }
 
@@ -199,6 +219,7 @@ export class UI {
     showGameOver(winner, reason) {
         this.gameOverScreen.classList.remove('hidden');
         this.freeplayControls.classList.add('hidden');
+        if (this.snookerHud) this.snookerHud.classList.add('hidden');
 
         if (winner) {
             this.winnerText.textContent = `Player ${winner} Wins!`;
@@ -226,6 +247,9 @@ export class UI {
             }
         } else if (this.currentMode === GameMode.NINE_BALL) {
             // Will be updated with lowest ball info
+        } else if (this.currentMode === GameMode.SNOOKER) {
+            // Snooker shows turn info in main player indicator
+            text = `Player ${player}'s Turn - 6-Red Snooker`;
         }
 
         this.playerIndicator.textContent = text;
@@ -401,17 +425,70 @@ export class UI {
             this.updateLowestBall(info.lowestBall);
         }
 
+        // Update snooker HUD
+        if (info.mode === GameMode.SNOOKER) {
+            this.updateSnookerHUD(info);
+        }
+
         // Ball in hand message
         if (info.state === GameState.BALL_IN_HAND) {
             let message;
-            if (info.mode === GameMode.UK_EIGHT_BALL) {
+            if (info.isBreakShot) {
+                message = 'Place cue ball behind the line to break';
+            } else if (info.mode === GameMode.UK_EIGHT_BALL) {
                 message = 'Place ball behind the line - 2 shots';
+            } else if (info.mode === GameMode.SNOOKER) {
+                message = 'Ball in hand - Click anywhere to place';
             } else {
                 message = 'Ball in hand - Click anywhere to place';
             }
             this.showMessage(message);
         } else {
             this.hideMessage();
+        }
+    }
+
+    // Update snooker HUD
+    updateSnookerHUD(info) {
+        if (!this.snookerScoreDisplay) return;
+
+        // Update scores
+        this.snookerScoreDisplay.innerHTML = `
+            <span class="snooker-p1${info.currentPlayer === 1 ? ' active' : ''}">P1: ${info.player1Score}</span>
+            <span class="snooker-p2${info.currentPlayer === 2 ? ' active' : ''}">P2: ${info.player2Score}</span>
+        `;
+
+        // Update break
+        if (this.snookerBreakDisplay) {
+            if (info.currentBreak > 0) {
+                this.snookerBreakDisplay.textContent = `Break: ${info.currentBreak}`;
+                this.snookerBreakDisplay.classList.remove('hidden');
+            } else {
+                this.snookerBreakDisplay.classList.add('hidden');
+            }
+        }
+
+        // Update target indicator
+        if (this.snookerTargetDisplay) {
+            if (info.snookerTarget === 'red') {
+                this.snookerTargetDisplay.innerHTML = '<span class="target-dot target-red"></span> Red';
+                this.snookerTargetDisplay.className = 'snooker-target-red';
+            } else if (info.snookerTarget === 'color') {
+                // Show all color options
+                this.snookerTargetDisplay.innerHTML =
+                    '<span class="target-dot target-yellow"></span>' +
+                    '<span class="target-dot target-green"></span>' +
+                    '<span class="target-dot target-brown"></span>' +
+                    '<span class="target-dot target-blue"></span>' +
+                    '<span class="target-dot target-pink"></span>' +
+                    '<span class="target-dot target-black"></span>';
+                this.snookerTargetDisplay.className = 'snooker-target-any';
+            } else {
+                // Specific color in sequence
+                const colorName = info.snookerTarget.charAt(0).toUpperCase() + info.snookerTarget.slice(1);
+                this.snookerTargetDisplay.innerHTML = `<span class="target-dot target-${info.snookerTarget}"></span> ${colorName}`;
+                this.snookerTargetDisplay.className = `snooker-target-${info.snookerTarget}`;
+            }
         }
     }
 

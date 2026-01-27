@@ -772,6 +772,7 @@ export class Game {
 
         // 3. Calculate Foul Penalty (If any foul occurred)
         if (isFoul) {
+            this.foul = true;
             // Penalty is Max(4, Value of Target, Value of First Hit, Value of any Potted Ball)
             let penalty = 4;
             
@@ -801,7 +802,6 @@ export class Game {
         
         // Handle Foul Scenario
         if (isFoul) {
-            this.foul = true;
             this.awardSnookerPoints(this.currentPlayer === 1 ? 2 : 1, foulValue); // Points to opponent
             this.currentBreak = 0; // Reset break
 
@@ -812,6 +812,16 @@ export class Game {
 
             // Handle State Transfer
             this.handleSnookerTurnChange(true); // Switch player, reset target logic
+            // Snooker uses ball in hand anywhere on the table
+            this.state = GameState.BALL_IN_HAND;
+
+            if (this.onFoul) {
+                this.onFoul(this.foulReason);
+            }
+
+            if (this.onStateChange) {
+                this.onStateChange(this.state);
+            }
         } 
         // Handle Valid Score Scenario
         else if (turnScore > 0) {
@@ -847,7 +857,7 @@ export class Game {
             // If it was a scratch/foul, ensure state is BALL_IN_HAND or PLAYING accordingly
             // In standard Snooker, foul yields a free shot from D only if cue ball pocketed, 
             // otherwise played from where it lies.
-            if (cueBallPocketed) {
+            if (isFoul) {
                 this.state = GameState.BALL_IN_HAND;
             } else {
                 this.state = GameState.PLAYING;

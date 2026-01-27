@@ -1000,7 +1000,7 @@ export class Game {
         if (!pos) return false;
         const margin = Constants.BALL_RADIUS * 2 + 0.5; // Slight buffer
         for (const b of this.balls) {
-            if (!b.pocketed && b !== this.cueBall && Vec2.distance(pos, b.position) < margin) {
+            if (!b.pocketed && Vec2.distance(pos, b.position) < margin) {
                 return false;
             }
         }
@@ -1008,17 +1008,40 @@ export class Game {
     }
 
     placeNearSpotTowardsTop(ball) {
-        // Simple logic: step upwards (y decreases usually, depends on your coordinate system)
-        // Assuming (0,0) is top-left. Top cushion is Y=0.
-        let tryPos = { x: ball.spotPosition.x, y: ball.spotPosition.y };
-        const step = Constants.BALL_RADIUS;
+        const startX = ball.spotPosition.x;
+        const y = ball.spotPosition.y; // Center line Y (constant)
         
-        // Move towards top cushion until clear
-        // Note: Check your specific coordinate system. This assumes Y goes 0 -> Height
-        while (!this.isSpotAvailable(tryPos) && tryPos.y > 0) {
-            tryPos.y -= step; 
+        // Use a small step for "As near as possible" accuracy
+        const step = Math.max(1, Constants.BALL_RADIUS * 0.1); 
+        const r = Constants.BALL_RADIUS;
+
+        // Boundaries from Table class
+        const rightLimit = this.table.bounds.right - r; // Top Cushion end
+        const leftLimit = this.table.bounds.left + r;   // Baulk Cushion end
+
+        // PHASE 1: Primary Direction - Towards Top Cushion (RIGHT)
+        let x = startX;
+        while (x <= rightLimit) {
+            // Pass 'ball' to ignore itself in the check
+            if (this.isSpotAvailable({x, y}, ball)) {
+                ball.setPosition(x, y);
+                return;
+            }
+            x += step;
         }
-        ball.setPosition(tryPos.x, tryPos.y);
+
+        // PHASE 2: Secondary Direction - Towards Baulk Cushion (LEFT)
+        // Only happens if the path to the right is completely blocked
+        x = startX;
+        while (x >= leftLimit) {
+            if (this.isSpotAvailable({x, y}, ball)) {
+                ball.setPosition(x, y);
+                return;
+            }
+            x -= step;
+        }
+
+        console.warn("Could not respot ball - center line full!");
     }
 
     // --- Helper: State Machine for Targets ---

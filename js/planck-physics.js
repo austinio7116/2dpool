@@ -517,6 +517,9 @@ export class PlanckPhysics {
                 const fallRadius = pocket.radius - ball.radius * 0.5;
 
                 if (distSq < fallRadius * fallRadius) {
+                    const velocity = body.getLinearVelocity();
+                    const speed = Math.sqrt(velocity.x * velocity.x + velocity.y * velocity.y);
+
                     ball.position.x = px;
                     ball.position.y = py;
                     ball.startSinking(pocket);
@@ -524,7 +527,8 @@ export class PlanckPhysics {
                     this.collisionEvents.push({
                         type: 'pocket',
                         ball: ball,
-                        pocket: pocket
+                        pocket: pocket,
+                        speed: speed
                     });
                     break;
                 }

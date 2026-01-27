@@ -75,7 +75,18 @@ class PoolGame {
         this.ui.onRerack = () => this.game.rerack();
         this.ui.onSoundToggle = (enabled) => this.audio.setEnabled(enabled);
         this.ui.onSpeedChange = (speed) => this.physics.setSpeedMultiplier(speed);
-        this.ui.onTableChange = (tableNum) => this.renderer.setTableStyle(tableNum);
+        this.ui.onTableChange = (tableNum) => {
+            // 1. Update the visual style (Renderer)
+            this.renderer.setTableStyle(tableNum);
+
+            // 2. Update the audio context (Audio)
+            // If tableNum is 8, set to snooker, otherwise default to pool
+            if (tableNum === 8) {
+                this.audio.setTableType('snooker');
+            } else {
+                this.audio.setTableType('pool');
+            }
+        };
 
         // Input callbacks - now includes spin
         this.input.onShot = (direction, power, spin) => this.executeShot(direction, power, spin);

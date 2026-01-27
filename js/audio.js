@@ -6,6 +6,7 @@ export class Audio {
         this.context = null;
         this.masterGain = null;
         this.initialized = false;
+        this.tableType = 'pool'; // defaults to pool
 
         // Precomputed noise buffer for performance
         this.noiseBuffer = null;
@@ -36,10 +37,17 @@ export class Audio {
             this.loadSound('assets/sounds/ballhit2.mp3', 'ballHitBuffer2');
             this.loadSound('assets/sounds/cueshot.mp3', 'cueStrikeBuffer');
             this.loadSound('assets/sounds/pot.mp3', 'potBuffer');
+            this.loadSound('assets/sounds/softpot.mp3', 'snookerPotBuffer');
+            this.loadSound('assets/sounds/hardpot.mp3', 'snookerHardPotBuffer');
         } catch (e) {
             console.warn('Web Audio API not supported:', e);
             this.enabled = false;
         }
+    }
+
+    setTableType(type) {
+        // 'pool' or 'snooker'
+        this.tableType = type;
     }
 
     // Load a sound file into a buffer
@@ -177,16 +185,49 @@ export class Audio {
     }
 
     // Pocket sound - ball dropping into pocket
-    playPocket() {
+    playPocket(speed = 0) {
         if (!this.enabled || !this.initialized) return;
-        if (!this.potBuffer) return;
         this.resume();
 
+        let buffer = null;
+        let volume = 0.8;
+
+        if (this.tableType === 'snooker') {
+            // Snooker Logic
+            
+            // Threshold for hard pot (adjust based on your physics scale)
+            // If normal ball hit max volume is speed 15, let's say 8 is a hard pot
+            const HARD_POT_THRESHOLD = 4.0; 
+
+            if (speed > HARD_POT_THRESHOLD) {
+                // Hard Pot
+                buffer = this.snookerHardPotBuffer;
+                
+                // Dynamic Volume:
+                // Start at 0.5 and add volume based on how much it exceeds threshold
+                // Cap at 1.0
+                const excessSpeed = speed - HARD_POT_THRESHOLD;
+                volume = Math.min(1.0, 0.5 + (excessSpeed * 0.05));
+            } else {
+                // Soft Pot
+                buffer = this.snookerPotBuffer;
+                // Soft pots are naturally quieter
+                volume = 0.6; 
+            }
+        } else {
+            // Pool Logic (Standard)
+            buffer = this.potBuffer;
+            volume = 0.8;
+        }
+
+        // Guard clause in case a specific buffer didn't load
+        if (!buffer) return;
+
         const source = this.context.createBufferSource();
-        source.buffer = this.potBuffer;
+        source.buffer = buffer;
 
         const gainNode = this.context.createGain();
-        gainNode.gain.value = 0.8;
+        gainNode.gain.value = volume;
 
         source.connect(gainNode);
         gainNode.connect(this.masterGain);
@@ -324,7 +365,8 @@ export class Audio {
                     this.playRailCollision(event.speed / 12);
                     break;
                 case 'pocket':
-                    this.playPocket();
+                    // Pass the captured speed to the pocket function
+                    this.playPocket(event.speed);
                     break;
             }
         }

@@ -343,10 +343,14 @@ export class Game {
         // Assign groups if not yet assigned
         if (!this.player1Group && !this.isBreakShot) {
             if (solidsPocketed.length > 0 && stripesPocketed.length === 0) {
-                this.assignGroups('solid');
+                // Determine what Player 1 gets based on who potted the Solid
+                const p1Group = this.currentPlayer === 1 ? 'solid' : 'stripe';
+                this.assignGroups(p1Group);
                 this.turnContinues = true;
             } else if (stripesPocketed.length > 0 && solidsPocketed.length === 0) {
-                this.assignGroups('stripe');
+                // Determine what Player 1 gets based on who potted the Stripe
+                const p1Group = this.currentPlayer === 1 ? 'stripe' : 'solid';
+                this.assignGroups(p1Group);
                 this.turnContinues = true;
             }
         } else if (this.player1Group) {
@@ -480,10 +484,15 @@ export class Game {
         // Assign groups if not yet assigned
         if (!this.player1Group && !this.isBreakShot) {
             if (group1Pocketed.length > 0 && group2Pocketed.length === 0) {
-                this.assignUKGroups('group1');
+                // If current player potted Group 1...
+                // Player 1 gets Group 1 if they are playing, otherwise they get Group 2
+                const p1Group = this.currentPlayer === 1 ? 'group1' : 'group2';
+                this.assignUKGroups(p1Group);
                 this.turnContinues = true;
             } else if (group2Pocketed.length > 0 && group1Pocketed.length === 0) {
-                this.assignUKGroups('group2');
+                 // If current player potted Group 2...
+                const p1Group = this.currentPlayer === 1 ? 'group2' : 'group1';
+                this.assignUKGroups(p1Group);
                 this.turnContinues = true;
             }
         } else if (this.player1Group) {

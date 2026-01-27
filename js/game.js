@@ -60,7 +60,6 @@ export class Game {
         this.currentBreak = 0;
         this.highestBreak = 0;
         this.snookerTarget = 'red';         // 'red', 'color', or specific color name
-        this.redsRemaining = 6;
         this.colorsPhase = false;           // True when potting colors in order
         this.nextColorInSequence = 'yellow';
         this.colorSequence = ['yellow', 'green', 'brown', 'blue', 'pink', 'black'];
@@ -102,7 +101,6 @@ export class Game {
         this.currentBreak = 0;
         this.highestBreak = 0;
         this.snookerTarget = 'red';
-        this.redsRemaining = 6;
         this.colorsPhase = false;
         this.nextColorInSequence = 'yellow';
 
@@ -702,7 +700,6 @@ export class Game {
             info.currentBreak = this.currentBreak;
             info.highestBreak = this.highestBreak;
             info.snookerTarget = this.snookerTarget;
-            info.redsRemaining = this.redsRemaining;
             info.colorsPhase = this.colorsPhase;
         }
 
@@ -724,166 +721,187 @@ export class Game {
     }
 
     // Snooker shot evaluation
+    // ==========================================
+    // SNOOKER LOGIC IMPLEMENTATION
+    // ==========================================
+
     evaluateSnookerShot() {
-        const pocketed = this.ballsPocketed.filter(b => !b.isCueBall);
+        // 1. Snapshot State
+        const pocketed = [...this.ballsPocketed]; // Copy array
         const cueBallPocketed = this.cueBall.pocketed || this.wasScratched;
-        let foulPoints = 0;
-        let scoredPoints = 0;
-        this.redsRemaining = this.getActualRedsRemaining();
+        const firstHit = this.firstBallHit;
+        
+        // 2. Determine Validity & Foul Status
+        let isFoul = false;
+        let foulValue = 0;
+        let turnScore = 0;
 
-        // Check for fouls
+        // -- Check A: Scratch (Cue Ball Potted) --
         if (cueBallPocketed) {
-            foulPoints = Math.max(4, this.getSnookerFoulValue());
-            this.foul = true;
-            this.foulReason = 'Cue ball pocketed';
-        } else if (!this.firstBallHit) {
-            foulPoints = Math.max(4, this.getTargetBallValue());
-            this.foul = true;
-            this.foulReason = 'No ball hit';
-        } else if (!this.isValidSnookerHit(this.firstBallHit)) {
-            foulPoints = Math.max(4, this.getSnookerFoulValue());
-            this.foul = true;
-            this.foulReason = 'Wrong ball hit first';
+            isFoul = true;
+            this.foulReason = 'Scratch - Cue ball pocketed';
         }
 
-        // Check for illegally pocketed balls
-        for (const ball of pocketed) {
-            if (!this.isValidSnookerPot(ball)) {
-                foulPoints = Math.max(foulPoints, 4, ball.pointValue || 4);
-                this.foul = true;
-                this.foulReason = 'Wrong ball pocketed';
-            }
+        // -- Check B: Air Shot (Miss) --
+        else if (!firstHit) {
+            isFoul = true;
+            this.foulReason = 'Foul - Miss (No ball hit)';
         }
 
-        if (this.foul) {
-            // Award foul points to opponent
-            this.awardSnookerPoints(this.currentPlayer === 1 ? 2 : 1, foulPoints);
-            this.currentBreak = 0;
-            this.respotSnookerColors(pocketed);
-            this.handleSnookerFoul();
-            return;
+        // -- Check C: Wrong First Ball Hit --
+        else if (!this.isValidSnookerHit(firstHit)) {
+            isFoul = true;
+            this.foulReason = `Foul - Hit wrong ball first (${firstHit.colorName || 'Red'})`;
         }
 
-        // Process legally pocketed balls
-        for (const ball of pocketed) {
-            if (ball.isRed) {
-                scoredPoints += 1;
-                this.redsRemaining--;
-                // After potting a red, target becomes any color
-                this.snookerTarget = 'color';
-            } else if (ball.isColor) {
-                scoredPoints += ball.pointValue;
-                if (!this.colorsPhase) {
-                    // Re-spot the color during red phase
-                    this.respotBall(ball);
-                    // After potting a color, target goes back to red (if reds remain)
-                    if (this.redsRemaining > 0) {
-                        this.snookerTarget = 'red';
-                    } else {
-                        // No reds left, check if we need to enter colors phase
-                        this.checkEnterColorsPhase();
-                    }
-                } else {
-                    // Colors phase - advance to next color
-                    this.advanceColorSequence();
+        // -- Check D: Illegal Pot (Check all potted balls) --
+        // In Snooker, you generally cannot pot a ball if you fouled on the hit.
+        // Also, you cannot pot a Red and a Color in the same shot.
+        // You CAN pot multiple Reds in one shot.
+        if (!isFoul) {
+            for (const ball of pocketed) {
+                if (ball.isCueBall) continue; // Handled in Check A
+
+                if (!this.isValidSnookerPot(ball)) {
+                    isFoul = true;
+                    this.foulReason = `Foul - Potted wrong ball (${ball.colorName || 'Red'})`;
+                    break;
                 }
             }
         }
 
-        if (scoredPoints > 0) {
-            this.awardSnookerPoints(this.currentPlayer, scoredPoints);
-            this.currentBreak += scoredPoints;
+        // 3. Calculate Foul Penalty (If any foul occurred)
+        if (isFoul) {
+            // Penalty is Max(4, Value of Target, Value of First Hit, Value of any Potted Ball)
+            let penalty = 4;
+            
+            // Target value
+            penalty = Math.max(penalty, this.getCurrentTargetValue());
+
+            // First hit value (if exists)
+            if (firstHit) penalty = Math.max(penalty, this.getSnookerBallValue(firstHit));
+
+            // Potted balls value
+            for (const ball of pocketed) {
+                penalty = Math.max(penalty, this.getSnookerBallValue(ball));
+            }
+
+            foulValue = penalty;
+        }
+
+        // 4. Calculate Score (Only if NO foul)
+        if (!isFoul) {
+            for (const ball of pocketed) {
+                if (ball.isCueBall) continue;
+                turnScore += this.getSnookerBallValue(ball);
+            }
+        }
+
+        // 5. Execute Game Logic (Respotting & Phase Switching)
+        
+        // Handle Foul Scenario
+        if (isFoul) {
+            this.foul = true;
+            this.awardSnookerPoints(this.currentPlayer === 1 ? 2 : 1, foulValue); // Points to opponent
+            this.currentBreak = 0; // Reset break
+
+            // Respotting on Foul:
+            // 1. All Colors are respotted.
+            // 2. Reds generally stay off table (except in very specific re-rack scenarios, typically ignored in games).
+            this.respotSnookerBalls(pocketed, true); 
+
+            // Handle State Transfer
+            this.handleSnookerTurnChange(true); // Switch player, reset target logic
+        } 
+        // Handle Valid Score Scenario
+        else if (turnScore > 0) {
+            this.awardSnookerPoints(this.currentPlayer, turnScore);
+            this.currentBreak += turnScore;
             this.highestBreak = Math.max(this.highestBreak, this.currentBreak);
+            
+            // Respotting on Valid Pot:
+            // 1. Colors are respotted IF we are not in the "Clearance" phase.
+            // 2. Reds stay down.
+            const isClearance = this.colorsPhase;
+            this.respotSnookerBalls(pocketed, !isClearance);
+
+            // Determine Next Target
+            this.advanceSnookerTargetState(pocketed);
+            
             this.turnContinues = true;
-        } else {
-            // No ball potted - end of break
+        } 
+        // Handle Valid Safety/Miss (No Pot, No Foul)
+        else {
             this.currentBreak = 0;
-            this.turnContinues = false;
+            this.handleSnookerTurnChange(false); // Switch player
         }
 
-        // Check if game is over
-        if (this.isSnookerGameOver()) {
+        // 6. Check Game Over
+        if (this.checkSnookerGameOver()) {
             this.endSnookerGame();
-            return;
+        } else {
+            // Clean up state
+            this.isBreakShot = false;
+            this.ballsPocketed = []; // Clear for next turn
+            
+            // If it was a scratch/foul, ensure state is BALL_IN_HAND or PLAYING accordingly
+            // In standard Snooker, foul yields a free shot from D only if cue ball pocketed, 
+            // otherwise played from where it lies.
+            if (cueBallPocketed) {
+                this.state = GameState.BALL_IN_HAND;
+            } else {
+                this.state = GameState.PLAYING;
+            }
+
+            if (this.onStateChange) this.onStateChange(this.state);
+        }
+    }
+
+    // --- Helper: Validate Hit ---
+    isValidSnookerHit(ball) {
+        if (!ball) return false;
+
+        // 1. Target is Red
+        if (this.snookerTarget === 'red') {
+            return ball.isRed;
+        }
+        
+        // 2. Target is "Any Color" (Nomination phase after a red)
+        if (this.snookerTarget === 'color') {
+            return ball.isColor; // Any color is valid to HIT in this phase
         }
 
-        // Handle turn change
-        if (!this.turnContinues) {
-            this.switchPlayer();
+        // 3. Target is Specific Color (Clearance phase)
+        return ball.colorName === this.snookerTarget;
+    }
+
+    // --- Helper: Validate Pot ---
+    isValidSnookerPot(ball) {
+        if (ball.isCueBall) return false;
+
+        // 1. Target Red
+        if (this.snookerTarget === 'red') {
+            return ball.isRed;
         }
 
-        this.isBreakShot = false;
-        this.state = GameState.PLAYING;
-
-        if (this.onStateChange) {
-            this.onStateChange(this.state);
+        // 2. Target "Any Color" (After Red)
+        if (this.snookerTarget === 'color') {
+            // If we hit a color, we must pot THAT color.
+            // If we hit multiple colors (rare/lucky), it's complex, 
+            // but standard rule: You can only pot the nominated (first hit) color.
+            if (!this.firstBallHit) return false; 
+            return ball.isColor && ball.colorName === this.firstBallHit.colorName;
         }
+
+        // 3. Target Specific Color
+        return ball.colorName === this.snookerTarget;
     }
 
     getActualRedsRemaining() {
         return this.balls.filter(b => b.isRed && !b.pocketed).length;
     }
 
-
-    // Check if the first ball hit was valid for snooker
-    isValidSnookerHit(ball) {
-        if (this.snookerTarget === 'red') {
-            return ball.isRed;
-        } else if (this.snookerTarget === 'color') {
-            return ball.isColor;
-        } else {
-            // Specific color in sequence
-            return ball.colorName === this.snookerTarget;
-        }
-    }
-
-    // Check if a pocketed ball was valid
-    isValidSnookerPot(ball) {
-        if (this.snookerTarget === 'red') {
-            return ball.isRed;
-        } else if (this.snookerTarget === 'color') {
-            return ball.isColor;
-        } else {
-            // Specific color in sequence
-            return ball.colorName === this.snookerTarget;
-        }
-    }
-
-    // Get the foul value based on balls involved
-    getSnookerFoulValue() {
-        let maxValue = 4;
-
-        // Check first ball hit
-        if (this.firstBallHit && this.firstBallHit.pointValue) {
-            maxValue = Math.max(maxValue, this.firstBallHit.pointValue);
-        }
-
-        // Check pocketed balls
-        for (const ball of this.ballsPocketed) {
-            if (ball.pointValue) {
-                maxValue = Math.max(maxValue, ball.pointValue);
-            }
-        }
-
-        // Check target ball value
-        maxValue = Math.max(maxValue, this.getTargetBallValue());
-
-        return maxValue;
-    }
-
-    // Get the value of the current target ball
-    getTargetBallValue() {
-        if (this.snookerTarget === 'red') {
-            return 4; // Minimum foul value
-        } else if (this.snookerTarget === 'color') {
-            return 4; // Any color, minimum value
-        } else {
-            // Specific color
-            return Constants.SNOOKER_POINTS[this.snookerTarget] || 4;
-        }
-    }
-
-    // Award points to a player in snooker
+    // --- Helper: Award Points ---
     awardSnookerPoints(player, points) {
         if (player === 1) {
             this.player1Score += points;
@@ -892,127 +910,171 @@ export class Game {
         }
     }
 
-    // Re-spot a snooker color ball on its spot
-    respotBall(ball) {
-        if (!ball.spotPosition) return;
-
-        // Try original spot first
-        if (this.isSpotClear(ball.spotPosition, ball)) {
-            ball.setPosition(ball.spotPosition.x, ball.spotPosition.y);
-        } else {
-            // Find nearest clear spot toward black end
-            const clearSpot = this.findNearestClearSpot(ball.spotPosition, ball);
-            ball.setPosition(clearSpot.x, clearSpot.y);
-        }
-
-        ball.pocketed = false;
-        ball.sinking = false;
-        ball.velocity = Vec2.create(0, 0);
+    // --- Helper: Get Point Value ---
+    getSnookerBallValue(ball) {
+        if (ball.isRed) return 1;
+        // Mapping for colors
+        const values = { 'yellow': 2, 'green': 3, 'brown': 4, 'blue': 5, 'pink': 6, 'black': 7 };
+        return values[ball.colorName] || 4;
     }
 
-    // Re-spot any illegally pocketed color balls
-    respotSnookerColors(pocketed) {
-        for (const ball of pocketed) {
-            if (ball.isColor) {
-                this.respotBall(ball);
+    // --- Helper: Get Value of Current Target (for fouls) ---
+    getCurrentTargetValue() {
+        if (this.snookerTarget === 'red') return 1; // Foul on red is min 4 anyway
+        if (this.snookerTarget === 'color') return 7; // Technically unknown, but standard logic maxes penalty
+        
+        const values = { 'yellow': 2, 'green': 3, 'brown': 4, 'blue': 5, 'pink': 6, 'black': 7 };
+        return values[this.snookerTarget] || 4;
+    }
+
+    // --- Helper: Respotting Logic ---
+    respotSnookerBalls(pocketedBalls, shouldRespotColors) {
+        for (const ball of pocketedBalls) {
+            if (ball.isCueBall) continue;
+
+            // Reds never respot (unless specific foul scenarios not covered here)
+            if (ball.isRed) continue;
+
+            // Colors
+            if (ball.isColor && shouldRespotColors) {
+                this.respotSingleBall(ball);
             }
         }
     }
 
-    // Check if a spot is clear of other balls
-    isSpotClear(spot, excludeBall) {
-        const minDist = Constants.BALL_RADIUS * 2.2;
-        for (const ball of this.balls) {
-            if (ball === excludeBall || ball.pocketed) continue;
-            const dist = Vec2.distance(spot, ball.position);
-            if (dist < minDist) return false;
+    respotSingleBall(ball) {
+        ball.pocketed = false;
+        ball.sinking = false;
+        ball.velocity = Vec2.create(0, 0); // Stop movement
+
+        // 1. Try Own Spot
+        if (this.isSpotAvailable(ball.spotPosition)) {
+            ball.setPosition(ball.spotPosition.x, ball.spotPosition.y);
+            return;
+        }
+
+        // 2. Try Highest Value Spots (Black -> Pink -> ... -> Yellow)
+        // If own spot taken, place on highest value available spot
+        const spots = [
+            this.table.blackSpot,
+            this.table.pinkSpot,
+            this.table.blueSpot,
+            this.table.brownSpot,
+            this.table.greenSpot,
+            this.table.yellowSpot
+        ];
+
+        for (const spot of spots) {
+            // Ensure we define these spots in your table setup, or use hardcoded coordinates if needed
+            if (spot && this.isSpotAvailable(spot)) {
+                ball.setPosition(spot.x, spot.y);
+                return;
+            }
+        }
+
+        // 3. If ALL spots occupied (Very rare)
+        // Place as close as possible to own spot, on the Long String (vertical line), towards Top Cushion
+        this.placeNearSpotTowardsTop(ball);
+    }
+
+    isSpotAvailable(pos) {
+        if (!pos) return false;
+        const margin = Constants.BALL_RADIUS * 2 + 0.5; // Slight buffer
+        for (const b of this.balls) {
+            if (!b.pocketed && b !== this.cueBall && Vec2.distance(pos, b.position) < margin) {
+                return false;
+            }
         }
         return true;
     }
 
-    // Find the nearest clear spot (toward black end of table)
-    findNearestClearSpot(spot, ball) {
-        const tableCenter = this.table.center;
-        const step = Constants.BALL_RADIUS * 0.5;
-
-        // Try spots toward the black end (positive X)
-        for (let offset = step; offset < 200; offset += step) {
-            const testSpot = { x: spot.x + offset, y: spot.y };
-            if (this.isSpotClear(testSpot, ball) && this.table.isOnTable(testSpot.x, testSpot.y)) {
-                return testSpot;
-            }
+    placeNearSpotTowardsTop(ball) {
+        // Simple logic: step upwards (y decreases usually, depends on your coordinate system)
+        // Assuming (0,0) is top-left. Top cushion is Y=0.
+        let tryPos = { x: ball.spotPosition.x, y: ball.spotPosition.y };
+        const step = Constants.BALL_RADIUS;
+        
+        // Move towards top cushion until clear
+        // Note: Check your specific coordinate system. This assumes Y goes 0 -> Height
+        while (!this.isSpotAvailable(tryPos) && tryPos.y > 0) {
+            tryPos.y -= step; 
         }
-
-        // If no spot toward black, try behind the spot
-        for (let offset = step; offset < 200; offset += step) {
-            const testSpot = { x: spot.x - offset, y: spot.y };
-            if (this.isSpotClear(testSpot, ball) && this.table.isOnTable(testSpot.x, testSpot.y)) {
-                return testSpot;
-            }
-        }
-
-        // Fallback to original spot
-        return spot;
+        ball.setPosition(tryPos.x, tryPos.y);
     }
 
-    // Handle foul in snooker - opponent gets ball in hand anywhere
-    handleSnookerFoul() {
-        this.switchPlayer();
-        this.currentBreak = 0;
-
-        // Reset target to red if reds are still on the table
-        if (this.redsRemaining > 0) {
-            this.snookerTarget = 'red';
-        } else if (!this.colorsPhase) {
-            // No reds left but not yet in colors phase - enter colors phase
-            this.colorsPhase = true;
-            this.snookerTarget = 'yellow';
-        }
-        // If already in colors phase, target stays the same (current color in sequence)
-
-        // Snooker uses ball in hand anywhere on the table
-        this.state = GameState.BALL_IN_HAND;
-
-        if (this.onFoul) {
-            this.onFoul(this.foulReason);
+    // --- Helper: State Machine for Targets ---
+    advanceSnookerTargetState(pocketedBalls) {
+        const redsRemaining = this.getActualRedsRemaining();
+        
+        // If we are in Clearance Phase (no reds left, potting colors in order)
+        if (this.colorsPhase) {
+            // If we potted the target, move to next
+            const pottedTarget = pocketedBalls.find(b => b.colorName === this.snookerTarget);
+            if (pottedTarget) {
+                this.advanceSequence();
+            }
+            return;
         }
 
-        if (this.onStateChange) {
-            this.onStateChange(this.state);
-        }
-    }
-
-    // Check if we should enter colors phase
-    checkEnterColorsPhase() {
-        if (this.redsRemaining === 0 && !this.colorsPhase) {
-            // If current target is 'color' (just potted the last red's color)
-            // or 'red' (didn't pot the color after last red), enter colors phase
-            if (this.snookerTarget === 'red' || this.snookerTarget === 'color') {
+        // Standard Phase (Red -> Color -> Red)
+        const pottedRed = pocketedBalls.some(b => b.isRed);
+        
+        if (pottedRed) {
+            // Potted a Red? Next target is Any Color
+            this.snookerTarget = 'color';
+        } else {
+            // Potted a Color?
+            // If Reds remain -> Back to Red
+            if (redsRemaining > 0) {
+                this.snookerTarget = 'red';
+            } else {
+                // Potted last Color after last Red? Begin Clearance
                 this.colorsPhase = true;
                 this.snookerTarget = 'yellow';
-                this.nextColorInSequence = 'yellow';
             }
         }
     }
 
-    // Advance to the next color in the sequence
-    advanceColorSequence() {
-        const currentIndex = this.colorSequence.indexOf(this.snookerTarget);
-        if (currentIndex < this.colorSequence.length - 1) {
-            this.snookerTarget = this.colorSequence[currentIndex + 1];
-            this.nextColorInSequence = this.snookerTarget;
-        }
-    }
+    // --- Helper: Turn Change ---
+    handleSnookerTurnChange(wasFoul) {
+        this.switchPlayer();
+        this.turnContinues = false;
 
-    // Check if the snooker game is over
-    isSnookerGameOver() {
-        // Game is over when black is potted in colors phase
+        // Reset target based on game state
         if (this.colorsPhase) {
-            const blackBall = this.balls.find(b => b.colorName === 'black');
-            if (blackBall && blackBall.pocketed) {
-                return true;
+            // Target remains specific color in sequence
+        } else {
+            const reds = this.getActualRedsRemaining();
+            if (reds > 0) {
+                this.snookerTarget = 'red';
+            } else {
+                // Rare: Foul on the last red or color could trigger clearance start
+                this.colorsPhase = true;
+                this.snookerTarget = 'yellow';
             }
         }
+    }
+
+    advanceSequence() {
+        const sequence = ['yellow', 'green', 'brown', 'blue', 'pink', 'black'];
+        const idx = sequence.indexOf(this.snookerTarget);
+        if (idx !== -1 && idx < sequence.length - 1) {
+            this.snookerTarget = sequence[idx + 1];
+        } else if (this.snookerTarget === 'black') {
+            // Handled in CheckSnookerGameOver
+        }
+    }
+
+    checkSnookerGameOver() {
+        // End frame if Black is potted in Clearance phase
+        if (this.colorsPhase && this.snookerTarget === 'black') {
+            const black = this.balls.find(b => b.colorName === 'black');
+            if (black && black.pocketed) return true;
+        }
+        
+        // Optional: End if only Black remains and score difference > 7
+        // (Simplified for this implementation, usually keep playing until conceded)
+        
         return false;
     }
 
@@ -1041,7 +1103,7 @@ export class Game {
             currentBreak: this.currentBreak,
             highestBreak: this.highestBreak,
             snookerTarget: this.snookerTarget,
-            redsRemaining: this.redsRemaining,
+            redsRemaining: this.getActualRedsRemaining(),
             colorsPhase: this.colorsPhase
         };
     }

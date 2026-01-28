@@ -192,7 +192,7 @@ export class Game {
     onBallsStopped() {
         // Trigger face-up animation for all balls at turn end
         for (const ball of this.balls) {
-            ball.resetRotation();
+            //ball.resetRotation();
         }
 
         if (this.mode === GameMode.FREE_PLAY) {

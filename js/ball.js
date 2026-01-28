@@ -71,7 +71,7 @@ export class Ball {
             // Calculate rotation based on distance traveled
             // One full rotation = 2 * PI * radius of travel
             // velocity is pixels per frame, so rotation per frame = speed / radius
-            const rotationSpeed = speed / this.radius;
+            const rotationSpeed = speed / this.radius / 2; //divided by 2 seems to make more sense visually
             this.rollAngle += rotationSpeed;
 
             // Keep rollAngle in reasonable range

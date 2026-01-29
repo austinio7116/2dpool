@@ -431,7 +431,7 @@ export class PlanckPhysics {
         body.createFixture({
             shape: planck.Circle(ball.radius / SCALE),
             density: 1.0,
-            friction: 0.05, // Ball-ball friction for spin transfer
+            friction: 0.00, // Ball-ball friction for spin transfer
             restitution: Constants.RESTITUTION
         });
 

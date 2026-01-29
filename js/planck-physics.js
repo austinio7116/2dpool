@@ -22,7 +22,7 @@ const VELOCITY_SCALE = 60;
 // Custom spin effects scale - set to 0 to disable custom spin physics
 // These effects (draw/follow, english) are applied on top of Planck's physics
 // and currently cause energy conservation issues. Set to 1.0 to re-enable.
-const SPIN_EFFECT_SCALE = 0;
+const SPIN_EFFECT_SCALE = 2;
 
 export class PlanckPhysics {
     constructor(table) {
@@ -200,12 +200,13 @@ export class PlanckPhysics {
 
             if (!dataA || !dataB) return;
 
-            // Ball-Ball collision
+            // --- BALL ON BALL ---
             if (dataA.type === 'ball' && dataB.type === 'ball') {
                 const ballA = dataA.ball;
                 const ballB = dataB.ball;
-
-                // Calculate collision speed for sound
+                
+                // 1. CRITICAL FIX: Always report the collision to the game rules!
+                // Without this, the game thinks you missed the object ball (Foul).
                 const velA = bodyA.getLinearVelocity();
                 const velB = bodyB.getLinearVelocity();
                 const relVelX = velA.x - velB.x;
@@ -219,41 +220,58 @@ export class PlanckPhysics {
                     speed: speed
                 });
 
-                // Queue spin effect to apply after collision resolves
+                // 2. Spin Effects Logic (Cue Ball Only)
                 if (ballA.number === 0 || ballB.number === 0) {
+                    const cueBody = ballA.number === 0 ? bodyA : bodyB;
                     const cueBall = ballA.number === 0 ? ballA : ballB;
-                    this.pendingSpinEffects.push({
-                        type: 'ball',
-                        ball: cueBall,
-                        spinY: cueBall.angularVel.y,
-                        spinX: cueBall.angularVel.x
-                    });
+                    
+                    // Get velocity BEFORE the collision resolution changes it
+                    const vel = cueBody.getLinearVelocity();
+                    const curSpeed = vel.length();
+
+                    // Only apply if moving fast enough to matter
+                    if (curSpeed > 0.5) {
+                        const dir = planck.Vec2(vel.x / curSpeed, vel.y / curSpeed);
+                        const angularVel = cueBody.getAngularVelocity();
+
+                        this.pendingSpinEffects.push({
+                            type: 'ball',
+                            ball: cueBall,
+                            body: cueBody,
+                            impactDir: dir,
+                            spinY: angularVel
+                        });
+                    }
                 }
             }
 
-            // Ball-Rail collision
+            // --- BALL ON RAIL ---
             if ((dataA.type === 'ball' && dataB.type === 'rail') ||
                 (dataA.type === 'rail' && dataB.type === 'ball')) {
+                
                 const ballData = dataA.type === 'ball' ? dataA : dataB;
                 const railData = dataA.type === 'rail' ? dataA : dataB;
                 const body = dataA.type === 'ball' ? bodyA : bodyB;
 
                 const vel = body.getLinearVelocity();
-                const speed = Math.sqrt(vel.x * vel.x + vel.y * vel.y);
+                const speed = vel.length();
 
+                // 1. Report collision (for sound/rules)
                 this.collisionEvents.push({
                     type: 'rail',
                     ball: ballData.ball,
+                    railType: railData.railType,
                     speed: speed
                 });
 
-                // Queue english effect to apply after collision resolves
-                if (Math.abs(ballData.ball.angularVel.x) > 0.5) {
+                // 2. Apply English (Cue Ball Only)
+                if (ballData.ball.number === 0) {
                     this.pendingSpinEffects.push({
                         type: 'rail',
                         ball: ballData.ball,
+                        body: body,
                         railType: railData.railType,
-                        spinX: ballData.ball.angularVel.x
+                        spinX: ballData.ball.angularVel.x 
                     });
                 }
             }
@@ -263,81 +281,79 @@ export class PlanckPhysics {
     // Apply queued spin effects after physics step
     applyPendingSpinEffects() {
         for (const effect of this.pendingSpinEffects) {
-            // Check if already processed this frame
+            // Prevent double application
             const key = `${effect.type}-${effect.ball.number}`;
             if (this.processedCollisions.has(key)) continue;
             this.processedCollisions.add(key);
 
-            const body = this.ballToBody.get(effect.ball);
-            if (!body) continue;
-
-            const vel = body.getLinearVelocity();
-            const speed = Math.sqrt(vel.x * vel.x + vel.y * vel.y);
-            if (speed < 0.5) continue;
-
             if (effect.type === 'ball') {
-                this.applyDrawFollow(effect.ball, body, vel, speed, effect.spinY);
+                this.applyDrawFollow(effect.body, effect.impactDir, effect.spinY);
             } else if (effect.type === 'rail') {
-                this.applyEnglish(effect.ball, body, vel, effect.railType, effect.spinX);
+                this.applyEnglish(effect.body, effect.railType, effect.spinX);
             }
         }
         this.pendingSpinEffects = [];
     }
 
-    // Apply draw/follow: adjusts cue ball velocity after hitting object ball
-    applyDrawFollow(ball, body, vel, speed, spinY) {
-        // Skip if spin effects are disabled
+    applyDrawFollow(body, impactDir, spinRadPerSec) {
         if (SPIN_EFFECT_SCALE === 0) return;
 
-        // spinY is the angular velocity at time of collision
-        // Negative = backspin (draw), High positive = topspin (follow)
-        // Natural roll is somewhere in between (roughly 5-15 for typical shots)
+        // 1. SCALING: Get the mass. This is the most important fix.
+        // Box2D balls are ~0.03kg. Applying force without mass scaling = explosion.
+        const mass = body.getMass(); 
+        
+        // 2. CLAMPING: Cap the spin to avoiding glitchy super-forces
+        // 150 rad/s is extremely high spin. Anything more is likely a bug.
+        const cleanSpin = Math.max(-150, Math.min(150, spinRadPerSec));
 
-        // Clamp to reasonable range
-        const clampedSpin = Math.max(-50, Math.min(80, spinY));
+        // 3. COEFFICIENT: How much force per unit of spin?
+        // spin (rad/s) * coeff = Acceleration (m/s^2)
+        // We want Backspin (-100) to cause maybe -1.5 m/s change in velocity.
+        // 100 * 0.015 = 1.5. 
+        const drawPower = 0.015 * SPIN_EFFECT_SCALE;
 
-        // Scale: with natural roll ~10, backspin gives -20 to -40, topspin gives +30 to +60
-        // We want backspin to noticeably slow/reverse, topspin to push through
-        const normalizedSpin = clampedSpin / 40; // Range roughly -1.25 to 2
+        // Calculate Impulse (Mass * DeltaV)
+        const impulseMag = cleanSpin * drawPower * mass;
 
-        // Apply velocity adjustment (backspin reduces, topspin increases)
-        // Clamp factor to avoid extreme values, scaled by SPIN_EFFECT_SCALE
-        const rawFactor = 1 + (normalizedSpin * 0.35);
-        const factor = Math.max(0.5, Math.min(1.8, 1 + (rawFactor - 1) * SPIN_EFFECT_SCALE));
+        // Apply along the impact vector
+        // Positive spin (Topspin) pushes forward (+impactDir)
+        // Negative spin (Backspin) pushes backward (-impactDir)
+        const impulse = planck.Vec2(
+            impactDir.x * impulseMag,
+            impactDir.y * impulseMag
+        );
 
-        body.setLinearVelocity(planck.Vec2(vel.x * factor, vel.y * factor));
+        // Apply to center of mass
+        body.applyLinearImpulse(impulse, body.getWorldCenter(), true);
 
-        // Consume the spin
-        ball.angularVel.y *= 0.3;
-        ball.angularVel.x *= 0.5;
+        // Dampen spin significantly after impact
+        body.setAngularVelocity(body.getAngularVelocity() * 0.5);
     }
 
-    // Apply english: adjusts ball angle off the rail
-    applyEnglish(ball, body, vel, railType, spinX) {
-        // Skip if spin effects are disabled
+    applyEnglish(body, railType, spinX) {
         if (SPIN_EFFECT_SCALE === 0) return;
 
-        // Clamp the sidespin
-        const clampedSpin = Math.max(-50, Math.min(50, spinX));
+        const mass = body.getMass();
+        
+        // Side spin usually ranges -1 to 1 in game units, or -50 to 50 in rads.
+        // Assuming spinX is roughly -50 to 50 range.
+        const cleanSpin = Math.max(-50, Math.min(50, spinX));
+        
+        // English force is weaker than draw/follow
+        const englishPower = 0.01 * SPIN_EFFECT_SCALE;
+        const impulseMag = cleanSpin * englishPower * mass;
 
-        // Scale influence - make it noticeable but not crazy
-        const spinInfluence = clampedSpin * 0.008 * SPIN_EFFECT_SCALE;
+        let impulse = planck.Vec2(0, 0);
 
-        let newVelX = vel.x;
-        let newVelY = vel.y;
-
-        if (railType === 'left' || railType === 'right') {
-            // Side rails: english affects vertical component
-            newVelY += spinInfluence * Math.abs(vel.x);
-        } else if (railType === 'top' || railType === 'bottom') {
-            // Top/bottom rails: english affects horizontal component
-            newVelX += spinInfluence * Math.abs(vel.y);
+        // Tangential forces
+        switch(railType) {
+            case 'top':    impulse = planck.Vec2(impulseMag, 0); break;  // Top rail + Right English = Kick Right
+            case 'bottom': impulse = planck.Vec2(-impulseMag, 0); break; // Bottom rail + Right English = Kick Left
+            case 'left':   impulse = planck.Vec2(0, impulseMag); break;  // Left rail + Right English = Kick Down
+            case 'right':  impulse = planck.Vec2(0, -impulseMag); break; // Right rail + Right English = Kick Up
         }
 
-        body.setLinearVelocity(planck.Vec2(newVelX, newVelY));
-
-        // Consume some sidespin
-        ball.angularVel.x *= 0.7;
+        body.applyLinearImpulse(impulse, body.getWorldCenter(), true);
     }
 
     createBallBody(ball) {
@@ -349,9 +365,9 @@ export class PlanckPhysics {
         const body = this.world.createBody({
             type: 'dynamic',
             position: pos,
-            bullet: true, // CCD for fast balls
-            linearDamping: 1.1, // Rolling friction - slows balls over distance
-            angularDamping: 2.5 // Spin decay
+            bullet: true,
+            linearDamping: 1.1,  // Slight increase (Cloth drag)
+            angularDamping: 2.5  // Slight increase (Spin decay)
         });
 
         // Set initial velocity (convert from pixels/frame to pixels/second)
@@ -428,13 +444,19 @@ export class PlanckPhysics {
 
             ball.position.x = pos.x * SCALE;
             ball.position.y = pos.y * SCALE;
-            // Convert velocity from pixels/second back to pixels/frame
             ball.velocity.x = vel.x * SCALE / VELOCITY_SCALE;
             ball.velocity.y = vel.y * SCALE / VELOCITY_SCALE;
 
-            // Sync angular velocity from Planck (2D rotation)
-            const angVel = body.getAngularVelocity();
-            ball.angularVel.y = angVel; // Use for visual rotation
+            // --- THE FIX FOR ZOMBIE SPIN ---
+            if (!body.isAwake()) {
+                // If Box2D says it's asleep, FORCE visual spin to zero
+                ball.angularVel.x = 0;
+                ball.angularVel.y = 0;
+            } else {
+                // Otherwise sync normally
+                ball.angularVel.y = body.getAngularVelocity() / VELOCITY_SCALE;
+                //ball.angularVel.x *= 0.98;
+            }
         }
     }
 
@@ -537,10 +559,13 @@ export class PlanckPhysics {
     }
 
     stopSlowBalls(balls) {
-        // Stop balls that are barely moving
-        const minSpeed = 1.0; // Planck units/second
-        const minSpeedSq = minSpeed * minSpeed;
-        const minAngularSpeed = 80.0; // radians/second
+        // Lower threshold to let balls roll naturally to the very end
+        const stopThreshold = 0.05; 
+        const stopThresholdSq = stopThreshold * stopThreshold;
+        const brakeThresholdSq = 0.5 * 0.5;
+
+        // CRITICAL: Lower this. 2.0 rad/s is visible. 0.1 is virtually stopped.
+        const spinSleepThreshold = 0.1; 
 
         for (const ball of balls) {
             if (ball.pocketed || ball.sinking) continue;
@@ -548,32 +573,36 @@ export class PlanckPhysics {
             const body = this.ballToBody.get(ball);
             if (!body) continue;
 
+            // If already asleep, skip math to save performance
+            if (!body.isAwake()) continue;
+
             const vel = body.getLinearVelocity();
             const speedSq = vel.x * vel.x + vel.y * vel.y;
-            const angVel = Math.abs(body.getAngularVelocity());
+            let angVel = body.getAngularVelocity();
 
-            // Stop linear velocity if below threshold
-            if (speedSq < minSpeedSq) {
+            // 1. Linear Motion Check
+            if (speedSq < stopThresholdSq) {
+                // Force linear stop
                 body.setLinearVelocity(planck.Vec2(0, 0));
-            }
 
-            // Stop angular velocity if below threshold
-            if (angVel < minAngularSpeed) {
-                body.setAngularVelocity(0);
-            }
+                // Aggressive spin braking (friction with cloth)
+                angVel *= 0.3;
+                body.setAngularVelocity(angVel);
 
-            // Put to sleep only if both are stopped
-            if (speedSq < minSpeedSq && angVel < minAngularSpeed) {
-                body.setAwake(false);
+                // 2. Sleep Check
+                // Only sleep if BOTH linear is stopped AND spin is tiny
+                if (Math.abs(angVel) < spinSleepThreshold) {
+                    // Force absolute zero before sleeping to prevent zombie animation
+                    body.setAngularVelocity(0); 
+                    body.setAwake(false);
+                }
             }
         }
     }
 
     areBallsMoving(balls) {
-        // Use same thresholds as stopSlowBalls
-        const minSpeed = 1.0; // Planck units/second
-        const minSpeedSq = minSpeed * minSpeed;
-        const minAngularSpeed = 80.0; // radians/second
+        const minSpeedSq = 0.01 * 0.01; // Extremely sensitive check
+        const minAngularSpeed = 0.1;    // Match the sleep threshold
 
         for (const ball of balls) {
             if (ball.pocketed) continue;
@@ -582,18 +611,22 @@ export class PlanckPhysics {
             const body = this.ballToBody.get(ball);
             if (!body) continue;
 
-            // Check if body is awake and has significant motion
+            // If Box2D thinks it's awake, we double check values
             if (body.isAwake()) {
                 const vel = body.getLinearVelocity();
                 const speedSq = vel.x * vel.x + vel.y * vel.y;
-                if (speedSq > minSpeedSq) {
-                    return true;
-                }
+                
+                // If it's moving linearly, it's definitely moving
+                if (speedSq > minSpeedSq) return true;
 
-                const angVel = Math.abs(body.getAngularVelocity());
-                if (angVel > minAngularSpeed) {
-                    return true;
-                }
+                // If it's spinning, it's definitely moving
+                if (Math.abs(body.getAngularVelocity()) > minAngularSpeed) return true;
+                
+                // If it's awake but values are tiny (waiting for stopSlowBalls to catch it),
+                // we can consider it "stopped" for the sake of the turn timer,
+                // BUT usually it's safer to wait for stopSlowBalls to sleep it.
+                // Returning true here is safer to prevent cutting animation short.
+                return true; 
             }
         }
         return false;

@@ -205,8 +205,6 @@ export class PlanckPhysics {
                 const ballA = dataA.ball;
                 const ballB = dataB.ball;
                 
-                // 1. CRITICAL FIX: Always report the collision to the game rules!
-                // Without this, the game thinks you missed the object ball (Foul).
                 const velA = bodyA.getLinearVelocity();
                 const velB = bodyB.getLinearVelocity();
                 const relVelX = velA.x - velB.x;
@@ -220,16 +218,15 @@ export class PlanckPhysics {
                     speed: speed
                 });
 
-                // 2. Spin Effects Logic (Cue Ball Only)
+                // Spin Effects (Cue Ball Only)
+                // We leave this exactly as you had it, since it was working for you
                 if (ballA.number === 0 || ballB.number === 0) {
                     const cueBody = ballA.number === 0 ? bodyA : bodyB;
                     const cueBall = ballA.number === 0 ? ballA : ballB;
                     
-                    // Get velocity BEFORE the collision resolution changes it
                     const vel = cueBody.getLinearVelocity();
                     const curSpeed = vel.length();
 
-                    // Only apply if moving fast enough to matter
                     if (curSpeed > 0.5) {
                         const dir = planck.Vec2(vel.x / curSpeed, vel.y / curSpeed);
                         const angularVel = cueBody.getAngularVelocity();
@@ -256,7 +253,6 @@ export class PlanckPhysics {
                 const vel = body.getLinearVelocity();
                 const speed = vel.length();
 
-                // 1. Report collision (for sound/rules)
                 this.collisionEvents.push({
                     type: 'rail',
                     ball: ballData.ball,
@@ -264,13 +260,22 @@ export class PlanckPhysics {
                     speed: speed
                 });
 
-                // 2. Apply English (Cue Ball Only)
+                // Apply English (Cue Ball Only)
                 if (ballData.ball.number === 0) {
+                    // 1. Calculate the Normal (The direction the rail is facing)
+                    const worldManifold = contact.getWorldManifold();
+                    let normal = worldManifold.normal;
+                    
+                    // Ensure normal points Rail -> Ball (Into the table)
+                    if (dataA.type === 'ball') normal = planck.Vec2(-normal.x, -normal.y);
+
                     this.pendingSpinEffects.push({
                         type: 'rail',
                         ball: ballData.ball,
                         body: body,
-                        railType: railData.railType,
+                        // CHANGE: Pass the normal vector
+                        normal: normal,
+                        // CHANGE: Explicitly read X-Spin (English) from JS object
                         spinX: ballData.ball.angularVel.x 
                     });
                 }
@@ -289,7 +294,8 @@ export class PlanckPhysics {
             if (effect.type === 'ball') {
                 this.applyDrawFollow(effect.body, effect.impactDir, effect.spinY);
             } else if (effect.type === 'rail') {
-                this.applyEnglish(effect.body, effect.railType, effect.spinX);
+                // CHANGE: Pass 'normal' and 'spinX'
+                this.applyEnglish(effect.body, effect.normal, effect.spinX);
             }
         }
         this.pendingSpinEffects = [];
@@ -310,7 +316,7 @@ export class PlanckPhysics {
         // spin (rad/s) * coeff = Acceleration (m/s^2)
         // We want Backspin (-100) to cause maybe -1.5 m/s change in velocity.
         // 100 * 0.015 = 1.5. 
-        const drawPower = 0.015 * SPIN_EFFECT_SCALE;
+        const drawPower = 0.01 * SPIN_EFFECT_SCALE;
 
         // Calculate Impulse (Mass * DeltaV)
         const impulseMag = cleanSpin * drawPower * mass;
@@ -330,30 +336,34 @@ export class PlanckPhysics {
         body.setAngularVelocity(body.getAngularVelocity() * 0.5);
     }
 
-    applyEnglish(body, railType, spinX) {
+    applyEnglish(body, normal, spinX) {
         if (SPIN_EFFECT_SCALE === 0) return;
 
         const mass = body.getMass();
+        const cleanSpin = Math.max(-100, Math.min(100, spinX));
         
-        // Side spin usually ranges -1 to 1 in game units, or -50 to 50 in rads.
-        // Assuming spinX is roughly -50 to 50 range.
-        const cleanSpin = Math.max(-50, Math.min(50, spinX));
-        
-        // English force is weaker than draw/follow
+        // CHANGE: Vector Math
+        // Tangent Vector: Rotates Normal 90 degrees
+        // If Normal is (0, 1) [Top Rail], Tangent becomes (1, 0) [Right]
+        const tangent = planck.Vec2(normal.y, -normal.x);
+
+        // Power coefficient
         const englishPower = 0.01 * SPIN_EFFECT_SCALE;
         const impulseMag = cleanSpin * englishPower * mass;
 
-        let impulse = planck.Vec2(0, 0);
-
-        // Tangential forces
-        switch(railType) {
-            case 'top':    impulse = planck.Vec2(impulseMag, 0); break;  // Top rail + Right English = Kick Right
-            case 'bottom': impulse = planck.Vec2(-impulseMag, 0); break; // Bottom rail + Right English = Kick Left
-            case 'left':   impulse = planck.Vec2(0, impulseMag); break;  // Left rail + Right English = Kick Down
-            case 'right':  impulse = planck.Vec2(0, -impulseMag); break; // Right rail + Right English = Kick Up
-        }
+        const impulse = planck.Vec2(
+            tangent.x * impulseMag,
+            tangent.y * impulseMag
+        );
 
         body.applyLinearImpulse(impulse, body.getWorldCenter(), true);
+        
+        // Dampen the English (X) on the Ball object
+        // (Since Box2D doesn't know about X-spin, we dampen it manually here)
+        const ball = this.bodyToBall.get(body);
+        if (ball) {
+            ball.angularVel.x *= 0.6; 
+        }
     }
 
     createBallBody(ball) {

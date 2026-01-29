@@ -190,98 +190,131 @@ export class PlanckPhysics {
     }
 
     setupContactListener() {
-        this.world.on('begin-contact', (contact) => {
-            const fixtureA = contact.getFixtureA();
-            const fixtureB = contact.getFixtureB();
-            const bodyA = fixtureA.getBody();
-            const bodyB = fixtureB.getBody();
-            const dataA = bodyA.getUserData();
-            const dataB = bodyB.getUserData();
+    // Helper: classify fixtures/bodies in a contact
+    const getContactInfo = (contact) => {
+        const fixtureA = contact.getFixtureA();
+        const fixtureB = contact.getFixtureB();
+        const bodyA = fixtureA.getBody();
+        const bodyB = fixtureB.getBody();
+        const dataA = bodyA.getUserData();
+        const dataB = bodyB.getUserData();
+        return { fixtureA, fixtureB, bodyA, bodyB, dataA, dataB };
+    };
 
-            if (!dataA || !dataB) return;
+    this.world.on('begin-contact', (contact) => {
+        const { bodyA, bodyB, dataA, dataB } = getContactInfo(contact);
+        if (!dataA || !dataB) return;
 
-            // --- BALL ON BALL ---
-            if (dataA.type === 'ball' && dataB.type === 'ball') {
-                const ballA = dataA.ball;
-                const ballB = dataB.ball;
-                
-                const velA = bodyA.getLinearVelocity();
-                const velB = bodyB.getLinearVelocity();
-                const relVelX = velA.x - velB.x;
-                const relVelY = velA.y - velB.y;
-                const speed = Math.sqrt(relVelX * relVelX + relVelY * relVelY);
+        // --- BALL ON BALL ---
+        if (dataA.type === 'ball' && dataB.type === 'ball') {
+        const ballA = dataA.ball;
+        const ballB = dataB.ball;
 
-                this.collisionEvents.push({
-                    type: 'ball',
-                    ballA: ballA,
-                    ballB: ballB,
-                    speed: speed
-                });
+        const velA = bodyA.getLinearVelocity();
+        const velB = bodyB.getLinearVelocity();
+        const relVelX = velA.x - velB.x;
+        const relVelY = velA.y - velB.y;
+        const speed = Math.sqrt(relVelX * relVelX + relVelY * relVelY);
 
-                // Spin Effects (Cue Ball Only)
-                // We leave this exactly as you had it, since it was working for you
-                if (ballA.number === 0 || ballB.number === 0) {
-                    const cueBody = ballA.number === 0 ? bodyA : bodyB;
-                    const cueBall = ballA.number === 0 ? ballA : ballB;
-                    
-                    const vel = cueBody.getLinearVelocity();
-                    const curSpeed = vel.length();
-
-                    if (curSpeed > 0.5) {
-                        const dir = planck.Vec2(vel.x / curSpeed, vel.y / curSpeed);
-                        const angularVel = cueBody.getAngularVelocity();
-
-                        this.pendingSpinEffects.push({
-                            type: 'ball',
-                            ball: cueBall,
-                            body: cueBody,
-                            impactDir: dir,
-                            spinY: angularVel
-                        });
-                    }
-                }
-            }
-
-            // --- BALL ON RAIL ---
-            if ((dataA.type === 'ball' && dataB.type === 'rail') ||
-                (dataA.type === 'rail' && dataB.type === 'ball')) {
-                
-                const ballData = dataA.type === 'ball' ? dataA : dataB;
-                const railData = dataA.type === 'rail' ? dataA : dataB;
-                const body = dataA.type === 'ball' ? bodyA : bodyB;
-
-                const vel = body.getLinearVelocity();
-                const speed = vel.length();
-
-                this.collisionEvents.push({
-                    type: 'rail',
-                    ball: ballData.ball,
-                    railType: railData.railType,
-                    speed: speed
-                });
-
-                // Apply English (Cue Ball Only)
-                if (ballData.ball.number === 0) {
-                    // 1. Calculate the Normal (The direction the rail is facing)
-                    const worldManifold = contact.getWorldManifold();
-                    let normal = worldManifold.normal;
-                    
-                    // Ensure normal points Rail -> Ball (Into the table)
-                    if (dataA.type === 'ball') normal = planck.Vec2(-normal.x, -normal.y);
-
-                    this.pendingSpinEffects.push({
-                        type: 'rail',
-                        ball: ballData.ball,
-                        body: body,
-                        // CHANGE: Pass the normal vector
-                        normal: normal,
-                        // CHANGE: Explicitly read X-Spin (English) from JS object
-                        spinX: ballData.ball.angularVel.x 
-                    });
-                }
-            }
+        this.collisionEvents.push({
+            type: 'ball',
+            ballA,
+            ballB,
+            speed
         });
+
+        // Spin Effects (Cue Ball Only) — keep your working draw/follow behavior
+        if (ballA.number === 0 || ballB.number === 0) {
+            const cueBody = ballA.number === 0 ? bodyA : bodyB;
+            const cueBall = ballA.number === 0 ? ballA : ballB;
+
+            const v = cueBody.getLinearVelocity();
+            const curSpeed = v.length();
+
+            if (curSpeed > 0.5) {
+            const impactDir = planck.Vec2(v.x / curSpeed, v.y / curSpeed);
+            const spinY = cueBody.getAngularVelocity();
+
+            this.pendingSpinEffects.push({
+                type: 'ball',
+                ball: cueBall,
+                body: cueBody,
+                impactDir,
+                spinY
+            });
+            }
+        }
+
+        return; // avoid double-processing
+        }
+
+        // --- BALL ON RAIL ---
+        const isBallRail =
+        (dataA.type === 'ball' && dataB.type === 'rail') ||
+        (dataA.type === 'rail' && dataB.type === 'ball');
+
+        if (!isBallRail) return;
+
+        const ballBody = dataA.type === 'ball' ? bodyA : bodyB;
+        const ballData = dataA.type === 'ball' ? dataA : dataB;
+        const railData = dataA.type === 'rail' ? dataA : dataB;
+
+        const vel = ballBody.getLinearVelocity();
+        const speed = vel.length();
+
+        this.collisionEvents.push({
+        type: 'rail',
+        ball: ballData.ball,
+        railType: railData.railType,
+        speed
+        });
+
+        // Apply English (Cue Ball Only)
+        if (ballData.ball.number !== 0) return;
+
+        const wm = contact.getWorldManifold();
+
+        // wm.normal points from fixtureA -> fixtureB.
+        // We want Rail -> Ball.
+        let normal = wm.normal;
+        const railIsA = (dataA.type === 'rail');
+        if (!railIsA) normal = planck.Vec2(-normal.x, -normal.y);
+
+        // Contact point (first point is enough for edges)
+        const contactPoint =
+        (wm.points && wm.points.length) ? wm.points[0] : ballBody.getWorldCenter();
+
+        // Ball velocity at the contact point (includes angular contribution)
+        const contactVel = ballBody.getLinearVelocityFromWorldPoint
+        ? ballBody.getLinearVelocityFromWorldPoint(contactPoint)
+        : ballBody.getLinearVelocity();
+
+        this.pendingSpinEffects.push({
+        type: 'rail',
+        ball: ballData.ball,
+        body: ballBody,
+        normal,
+        contactPoint,
+        contactVel,
+        spinX: ballData.ball.angularVel.x
+        });
+    });
+
+    // Kill Planck’s built-in rail tangential friction impulse (prevents topspin/backspin faking english)
+    this.world.on('pre-solve', (contact) => {
+        const { dataA, dataB } = getContactInfo(contact);
+        if (!dataA || !dataB) return;
+
+        const isBallRail =
+        (dataA.type === 'ball' && dataB.type === 'rail') ||
+        (dataA.type === 'rail' && dataB.type === 'ball');
+
+        if (isBallRail) {
+        contact.setFriction(0.0);
+        }
+    });
     }
+
 
     // Apply queued spin effects after physics step
     applyPendingSpinEffects() {
@@ -295,7 +328,7 @@ export class PlanckPhysics {
                 this.applyDrawFollow(effect.body, effect.impactDir, effect.spinY);
             } else if (effect.type === 'rail') {
                 // CHANGE: Pass 'normal' and 'spinX'
-                this.applyEnglish(effect.body, effect.normal, effect.spinX);
+                this.applyEnglish(effect.body, effect.normal, effect.spinX, effect.contactVel);
             }
         }
         this.pendingSpinEffects = [];
@@ -336,35 +369,44 @@ export class PlanckPhysics {
         body.setAngularVelocity(body.getAngularVelocity() * 0.5);
     }
 
-    applyEnglish(body, normal, spinX) {
+    applyEnglish(body, normal, spinX, contactVel) {
         if (SPIN_EFFECT_SCALE === 0) return;
 
         const mass = body.getMass();
         const cleanSpin = Math.max(-100, Math.min(100, spinX));
-        
-        // CHANGE: Vector Math
-        // Tangent Vector: Rotates Normal 90 degrees
-        // If Normal is (0, 1) [Top Rail], Tangent becomes (1, 0) [Right]
-        const tangent = planck.Vec2(normal.y, -normal.x);
 
-        // Power coefficient
-        const englishPower = 0.01 * SPIN_EFFECT_SCALE;
-        const impulseMag = cleanSpin * englishPower * mass;
+        // Tangent is perpendicular to the rail normal
+        // (Perp(normal) gives a direction along the cushion face)
+        let t = planck.Vec2(-normal.y, normal.x);
 
-        const impulse = planck.Vec2(
-            tangent.x * impulseMag,
-            tangent.y * impulseMag
-        );
+        // If we have contact-point velocity, align tangent with the current motion along the rail
+        // so english sign is stable across all rail segment orientations.
+        if (contactVel) {
+            const vt = contactVel.x * t.x + contactVel.y * t.y;  // tangential component
+            if (vt < 0) t = planck.Vec2(-t.x, -t.y);
+        }
+
+        // Scale by how hard we’re compressing into the rail:
+        // normal approach speed = -(v ⋅ n) when moving into the rail.
+        let vn = 1.0;
+        if (contactVel) {
+            vn = -(contactVel.x * normal.x + contactVel.y * normal.y);
+            vn = Math.max(0, vn); // only if actually impacting into the cushion
+        }
+
+        // Tune coefficient: impulse per spin per (m/s of normal impact)
+        const englishPower = 0.06 * SPIN_EFFECT_SCALE;
+
+        const impulseMag = cleanSpin * englishPower * vn * mass;
+        const impulse = planck.Vec2(t.x * impulseMag, t.y * impulseMag);
 
         body.applyLinearImpulse(impulse, body.getWorldCenter(), true);
-        
-        // Dampen the English (X) on the Ball object
-        // (Since Box2D doesn't know about X-spin, we dampen it manually here)
+
+        // Dampen stored english spin
         const ball = this.bodyToBall.get(body);
-        if (ball) {
-            ball.angularVel.x *= 0.6; 
+        if (ball) ball.angularVel.x *= 0.6;
         }
-    }
+
 
     createBallBody(ball) {
         const pos = planck.Vec2(

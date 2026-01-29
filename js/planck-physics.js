@@ -365,8 +365,10 @@ export class PlanckPhysics {
         // Apply to center of mass
         body.applyLinearImpulse(impulse, body.getWorldCenter(), true);
 
-        // Dampen spin significantly after impact
-        body.setAngularVelocity(body.getAngularVelocity() * 0.5);
+        // Dampen spin significantly after impact and reverse direction
+        body.setAngularVelocity(body.getAngularVelocity() * -0.5);
+        body.spinX *= -1;
+        body.spinY *= -1;
     }
 
     applyEnglish(body, normal, spinX, contactVel) {
@@ -405,7 +407,7 @@ export class PlanckPhysics {
         // Dampen stored english spin
         const ball = this.bodyToBall.get(body);
         if (ball) ball.angularVel.x *= 0.6;
-        }
+    }
 
 
     createBallBody(ball) {

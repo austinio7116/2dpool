@@ -286,7 +286,7 @@ class PoolGame {
         // Update visual rotation for all balls (rolling animation + return to upright)
         for (const ball of this.game.balls) {
             if (!ball.pocketed) {
-                ball.updateVisualRotation();
+                ball.updateVisualRotation(deltaTime/1000);
             }
         }
     }

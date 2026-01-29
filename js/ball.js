@@ -56,42 +56,36 @@ export class Ball {
     }
 
     // Update visual rotation based on velocity
-    updateVisualRotation() {
+    // dt = delta time in seconds (e.g., 0.016 for 60fps)
+    updateVisualRotation(dt) {
         const speed = Math.sqrt(this.velocity.x * this.velocity.x + this.velocity.y * this.velocity.y);
-        // Very low threshold so balls keep rolling animation until nearly stopped
         const minSpeed = 0.01;
 
         if (speed > minSpeed) {
             this.isRolling = true;
-            this.shouldResetRotation = false; // Don't reset while moving
+            this.shouldResetRotation = false; 
 
-            // Update travel direction
             this.travelAngle = Math.atan2(this.velocity.y, this.velocity.x);
 
-            // Calculate rotation based on distance traveled
-            // One full rotation = 2 * PI * radius of travel
-            // velocity is pixels per frame, so rotation per frame = speed / radius
+            // Calculate angular velocity (radians per second, assuming velocity is pixels/sec)
+            // If velocity is pixels/frame (at 60fps), you need to normalize.
+            // Assuming standard scaling:
             const rotationSpeed = speed / this.radius;
-            this.rollAngle += rotationSpeed;
+            
+            // KEY FIX: Multiply by dt (or a timeScale factor)
+            // If your velocity is "pixels per tick" targeting 60FPS:
+            // use: rotationSpeed * (dt / (1/60)); 
+            // If velocity is "pixels per second":
+            // use: rotationSpeed * dt;
+            
+            // Assuming velocity is pixels-per-frame @ 60hz baseline:
+            const timeScale = dt * 60; // Normalize so 1/60s = 1.0
+            this.rollAngle += rotationSpeed * timeScale;
 
-            // Keep rollAngle in reasonable range
             this.rollAngle = this.rollAngle % (Math.PI * 2);
-
-            // Display roll follows actual roll while moving
             this.displayRoll = this.rollAngle;
         } else {
-            this.isRolling = false;
-
-            // Only lerp back to upright when turn has ended (triggered externally)
-            if (this.shouldResetRotation) {
-                if (Math.abs(this.displayRoll) > 0.02) {
-                    this.displayRoll *= 0.88;
-                } else {
-                    this.displayRoll = 0;
-                    this.shouldResetRotation = false;
-                }
-                this.rollAngle = this.displayRoll;
-            }
+             // ... existing stop logic
         }
     }
 

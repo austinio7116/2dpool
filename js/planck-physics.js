@@ -365,10 +365,8 @@ export class PlanckPhysics {
         // Apply to center of mass
         body.applyLinearImpulse(impulse, body.getWorldCenter(), true);
 
-        // Dampen spin significantly after impact and reverse direction
-        body.setAngularVelocity(body.getAngularVelocity() * -0.5);
-        body.spinX *= -1;
-        body.spinY *= -1;
+        // Dampen spin significantly after impact
+        body.setAngularVelocity(body.getAngularVelocity() * 0.5);
     }
 
     applyEnglish(body, normal, spinX, contactVel) {
@@ -377,36 +375,34 @@ export class PlanckPhysics {
         const mass = body.getMass();
         const cleanSpin = Math.max(-100, Math.min(100, spinX));
 
-        // Tangent is perpendicular to the rail normal
-        // (Perp(normal) gives a direction along the cushion face)
-        let t = planck.Vec2(-normal.y, normal.x);
+        // 1. Calculate current speed to determine the "Speed Multiplier"
+        const currentVel = body.getLinearVelocity();
+        const currentSpeed = currentVel.length(); 
 
-        // If we have contact-point velocity, align tangent with the current motion along the rail
-        // so english sign is stable across all rail segment orientations.
+        // 2. Define your thresholds (in Planck meters/second)
+        // 2.0 m/s is a medium-soft shot. 0.5 m/s is a very slow roll.
+        const normalThreshold = 2.0; 
+        
+        // Scale the effect: 0.0 at stopped, 1.0 at normalThreshold and above
+        const speedScale = Math.min(1.0, currentSpeed / normalThreshold);
+
+        // 3. Tangent calculation (remains the same)
+        let t = planck.Vec2(-normal.y, normal.x);
         if (contactVel) {
-            const vt = contactVel.x * t.x + contactVel.y * t.y;  // tangential component
+            const vt = contactVel.x * t.x + contactVel.y * t.y;
             if (vt < 0) t = planck.Vec2(-t.x, -t.y);
         }
 
-        // Scale by how hard we’re compressing into the rail:
-        // normal approach speed = -(v ⋅ n) when moving into the rail.
-        let vn = 1.0;
-        if (contactVel) {
-            vn = -(contactVel.x * normal.x + contactVel.y * normal.y);
-            vn = Math.max(0, vn); // only if actually impacting into the cushion
-        }
+        // 4. Apply the power with the new speedScale
+        // Higher EnglishPower since it will now be throttled at low speeds
+        const baseEnglishPower = 0.20 * SPIN_EFFECT_SCALE;
+        const impulseMag = cleanSpin * baseEnglishPower * mass * speedScale;
 
-        // Tune coefficient: impulse per spin per (m/s of normal impact)
-        const englishPower = 0.06 * SPIN_EFFECT_SCALE;
-
-        const impulseMag = cleanSpin * englishPower * vn * mass;
         const impulse = planck.Vec2(t.x * impulseMag, t.y * impulseMag);
-
         body.applyLinearImpulse(impulse, body.getWorldCenter(), true);
 
         // Dampen stored english spin
-        const ball = this.bodyToBall.get(body);
-        if (ball) ball.angularVel.x *= 0.6;
+        body.setAngularVelocity(body.getAngularVelocity() * 0.5);
     }
 
 

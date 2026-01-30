@@ -1,80 +1,60 @@
 // Physics engine using Planck.js (Box2D port)
-// Planck handles all physics: collisions, friction, and angular velocity
+// Refactored to use native Z-spin and custom Slip Friction for X/Y spin
 
 import planck from 'planck';
 import { Vec2, Constants } from './utils.js';
 
-// Adjust Planck's velocity threshold to account for our scale
-// Default is 1.0 m/s - we need it lower since our velocities are scaled down
 if (planck.Settings) {
-    planck.Settings.velocityThreshold = 0.01;
+    planck.Settings.velocityThreshold = 0.01;
 } else if (planck.internal && planck.internal.Settings) {
-    planck.internal.Settings.velocityThreshold = 0.01;
+    planck.internal.Settings.velocityThreshold = 0.01;
 }
 
-// Scale factor: 100 pixels = 1 Planck meter
-// This keeps velocities within Planck's internal limits (~120 m/s max)
 const SCALE = 100;
-// Velocity conversion: game uses pixels/frame, Planck uses units/second
-// At 60fps, multiply by 60 to convert pixels/frame to pixels/second
 const VELOCITY_SCALE = 60;
 
-// Custom spin effects scale - set to 0 to disable custom spin physics
-// These effects (draw/follow, english) are applied on top of Planck's physics
-// and currently cause energy conservation issues. Set to 1.0 to re-enable.
-const SPIN_EFFECT_SCALE = 2;
-
 export class PlanckPhysics {
-    constructor(table) {
-        this.table = table;
-        this.collisionEvents = [];
-        this.processedCollisions = new Set(); // Track spin effects applied this frame
-        this.pendingSpinEffects = []; // Queue spin effects to apply after collision resolution
-        this.speedMultiplier = 1.0; // Adjustable simulation speed
-        this.accumulator = 0; // Time accumulator for fixed timestep
+    constructor(table) {
+        this.table = table;
+        this.collisionEvents = [];
+        this.speedMultiplier = 1.0;
+        this.accumulator = 0;
 
-        // Create Planck world with zero gravity (horizontal table)
-        this.world = planck.World({
-            gravity: planck.Vec2(0, 0)
-        });
+        // Constants for the Slip Friction Model
+        // Friction coefficient between ball and cloth (dynamic)
+        this.mu_slide = 0.05; 
+        // Friction coefficient for rolling (much lower)
+        this.mu_roll = 0.01;
+        // Gravitational acceleration (scaled m/s^2)
+        this.g = 9.8; 
 
-        // Ball <-> Body mappings
-        this.ballToBody = new Map();
-        this.bodyToBall = new Map();
+        this.world = planck.World({
+            gravity: planck.Vec2(0, 0)
+        });
 
-        // Setup collision detection
-        this.setupContactListener();
+        this.ballToBody = new Map();
+        this.bodyToBall = new Map();
 
-        // Create table boundaries with pocket gaps
-        this.createTableBoundaries();
-    }
+        this.setupContactListener();
+        this.createTableBoundaries();
+    }
 
-    createTableBoundaries() {
-        const b = this.table.bounds;
-        const pocketRadius = Constants.POCKET_RADIUS;
-        const ballRadius = Constants.BALL_RADIUS;
-        const gap = pocketRadius + ballRadius * 0.5; // Gap at pockets
+    createTableBoundaries() {
+        const b = this.table.bounds;
+        const pocketRadius = Constants.POCKET_RADIUS;
+        const ballRadius = Constants.BALL_RADIUS;
+        const gap = pocketRadius + ballRadius * 0.5;
 
-        // Convert to meters
-        const toM = (px) => px / SCALE;
+        // Create Rails
+        this.createRailSegment(b.left + gap, b.top, this.table.center.x - gap, b.top, 'top');
+        this.createRailSegment(this.table.center.x + gap, b.top, b.right - gap, b.top, 'top');
+        this.createRailSegment(b.left + gap, b.bottom, this.table.center.x - gap, b.bottom, 'bottom');
+        this.createRailSegment(this.table.center.x + gap, b.bottom, b.right - gap, b.bottom, 'bottom');
+        this.createRailSegment(b.left, b.top + gap, b.left, b.bottom - gap, 'left');
+        this.createRailSegment(b.right, b.top + gap, b.right, b.bottom - gap, 'right');
 
-        // Top rail: two segments with gap at center (side pocket)
-        this.createRailSegment(b.left + gap, b.top, this.table.center.x - gap, b.top, 'top');
-        this.createRailSegment(this.table.center.x + gap, b.top, b.right - gap, b.top, 'top');
-
-        // Bottom rail: two segments with gap at center
-        this.createRailSegment(b.left + gap, b.bottom, this.table.center.x - gap, b.bottom, 'bottom');
-        this.createRailSegment(this.table.center.x + gap, b.bottom, b.right - gap, b.bottom, 'bottom');
-
-        // Left rail: one segment with gaps at corners
-        this.createRailSegment(b.left, b.top + gap, b.left, b.bottom - gap, 'left');
-
-        // Right rail: one segment with gaps at corners
-        this.createRailSegment(b.right, b.top + gap, b.right, b.bottom - gap, 'right');
-
-        // Add angled pocket entry segments to close gaps
-        this.createPocketEntrySegments();
-    }
+        this.createPocketEntrySegments();
+    }
 
     createPocketEntrySegments() {
         const b = this.table.bounds;
@@ -170,511 +150,374 @@ export class PlanckPhysics {
     }
 
     createRailSegment(x1, y1, x2, y2, railType) {
-        const body = this.world.createBody({
-            type: 'static',
-            position: planck.Vec2(0, 0)
-        });
-
-        const toM = (px) => px / SCALE;
-
-        body.createFixture({
-            shape: planck.Edge(
-                planck.Vec2(toM(x1), toM(y1)),
-                planck.Vec2(toM(x2), toM(y2))
-            ),
-            friction: 0.1,
-            restitution: Constants.RAIL_RESTITUTION
-        });
-
-        body.setUserData({ type: 'rail', railType: railType });
-    }
-
-    setupContactListener() {
-    // Helper: classify fixtures/bodies in a contact
-    const getContactInfo = (contact) => {
-        const fixtureA = contact.getFixtureA();
-        const fixtureB = contact.getFixtureB();
-        const bodyA = fixtureA.getBody();
-        const bodyB = fixtureB.getBody();
-        const dataA = bodyA.getUserData();
-        const dataB = bodyB.getUserData();
-        return { fixtureA, fixtureB, bodyA, bodyB, dataA, dataB };
-    };
-
-    this.world.on('begin-contact', (contact) => {
-        const { bodyA, bodyB, dataA, dataB } = getContactInfo(contact);
-        if (!dataA || !dataB) return;
-
-        // --- BALL ON BALL ---
-        if (dataA.type === 'ball' && dataB.type === 'ball') {
-        const ballA = dataA.ball;
-        const ballB = dataB.ball;
-
-        const velA = bodyA.getLinearVelocity();
-        const velB = bodyB.getLinearVelocity();
-        const relVelX = velA.x - velB.x;
-        const relVelY = velA.y - velB.y;
-        const speed = Math.sqrt(relVelX * relVelX + relVelY * relVelY);
-
-        this.collisionEvents.push({
-            type: 'ball',
-            ballA,
-            ballB,
-            speed
-        });
-
-        // Spin Effects (Cue Ball Only) — keep your working draw/follow behavior
-        if (ballA.number === 0 || ballB.number === 0) {
-            const cueBody = ballA.number === 0 ? bodyA : bodyB;
-            const cueBall = ballA.number === 0 ? ballA : ballB;
-
-            const v = cueBody.getLinearVelocity();
-            const curSpeed = v.length();
-
-            if (curSpeed > 0.5) {
-            const impactDir = planck.Vec2(v.x / curSpeed, v.y / curSpeed);
-            const spinY = cueBody.getAngularVelocity();
-
-            this.pendingSpinEffects.push({
-                type: 'ball',
-                ball: cueBall,
-                body: cueBody,
-                impactDir,
-                spinY
-            });
-            }
-        }
-
-        return; // avoid double-processing
-        }
-
-        // --- BALL ON RAIL ---
-        const isBallRail =
-        (dataA.type === 'ball' && dataB.type === 'rail') ||
-        (dataA.type === 'rail' && dataB.type === 'ball');
-
-        if (!isBallRail) return;
-
-        const ballBody = dataA.type === 'ball' ? bodyA : bodyB;
-        const ballData = dataA.type === 'ball' ? dataA : dataB;
-        const railData = dataA.type === 'rail' ? dataA : dataB;
-
-        const vel = ballBody.getLinearVelocity();
-        const speed = vel.length();
-
-        this.collisionEvents.push({
-        type: 'rail',
-        ball: ballData.ball,
-        railType: railData.railType,
-        speed
-        });
-
-        // Apply English (Cue Ball Only)
-        if (ballData.ball.number !== 0) return;
-
-        const wm = contact.getWorldManifold();
-
-        // wm.normal points from fixtureA -> fixtureB.
-        // We want Rail -> Ball.
-        let normal = wm.normal;
-        const railIsA = (dataA.type === 'rail');
-        if (!railIsA) normal = planck.Vec2(-normal.x, -normal.y);
-
-        // Contact point (first point is enough for edges)
-        const contactPoint =
-        (wm.points && wm.points.length) ? wm.points[0] : ballBody.getWorldCenter();
-
-        // Ball velocity at the contact point (includes angular contribution)
-        const contactVel = ballBody.getLinearVelocityFromWorldPoint
-        ? ballBody.getLinearVelocityFromWorldPoint(contactPoint)
-        : ballBody.getLinearVelocity();
-
-        this.pendingSpinEffects.push({
-        type: 'rail',
-        ball: ballData.ball,
-        body: ballBody,
-        normal,
-        contactPoint,
-        contactVel,
-        spinX: ballData.ball.angularVel.x
-        });
-    });
-
-    // Kill Planck’s built-in rail tangential friction impulse (prevents topspin/backspin faking english)
-    this.world.on('pre-solve', (contact) => {
-        const { dataA, dataB } = getContactInfo(contact);
-        if (!dataA || !dataB) return;
-
-        const isBallRail =
-        (dataA.type === 'ball' && dataB.type === 'rail') ||
-        (dataA.type === 'rail' && dataB.type === 'ball');
-
-        if (isBallRail) {
-        contact.setFriction(0.0);
-        }
-    });
-    }
-
-
-    // Apply queued spin effects after physics step
-    applyPendingSpinEffects() {
-        for (const effect of this.pendingSpinEffects) {
-            // Prevent double application
-            const key = `${effect.type}-${effect.ball.number}`;
-            if (this.processedCollisions.has(key)) continue;
-            this.processedCollisions.add(key);
-
-            if (effect.type === 'ball') {
-                this.applyDrawFollow(effect.body, effect.impactDir, effect.spinY);
-            } else if (effect.type === 'rail') {
-                // CHANGE: Pass 'normal' and 'spinX'
-                this.applyEnglish(effect.body, effect.normal, effect.spinX, effect.contactVel);
-            }
-        }
-        this.pendingSpinEffects = [];
-    }
-
-    applyDrawFollow(body, impactDir, spinRadPerSec) {
-        if (SPIN_EFFECT_SCALE === 0) return;
-
-        // 1. SCALING: Get the mass. This is the most important fix.
-        // Box2D balls are ~0.03kg. Applying force without mass scaling = explosion.
-        const mass = body.getMass(); 
-        
-        // 2. CLAMPING: Cap the spin to avoiding glitchy super-forces
-        // 150 rad/s is extremely high spin. Anything more is likely a bug.
-        const cleanSpin = Math.max(-150, Math.min(150, spinRadPerSec));
-
-        // 3. COEFFICIENT: How much force per unit of spin?
-        // spin (rad/s) * coeff = Acceleration (m/s^2)
-        // We want Backspin (-100) to cause maybe -1.5 m/s change in velocity.
-        // 100 * 0.015 = 1.5. 
-        const drawPower = 0.01 * SPIN_EFFECT_SCALE;
-
-        // Calculate Impulse (Mass * DeltaV)
-        const impulseMag = cleanSpin * drawPower * mass;
-
-        // Apply along the impact vector
-        // Positive spin (Topspin) pushes forward (+impactDir)
-        // Negative spin (Backspin) pushes backward (-impactDir)
-        const impulse = planck.Vec2(
-            impactDir.x * impulseMag,
-            impactDir.y * impulseMag
-        );
-
-        // Apply to center of mass
-        body.applyLinearImpulse(impulse, body.getWorldCenter(), true);
-
-        // Dampen spin significantly after impact
-        body.setAngularVelocity(body.getAngularVelocity() * 0.5);
-    }
-
-    applyEnglish(body, normal, spinX, contactVel) {
-        if (SPIN_EFFECT_SCALE === 0) return;
-
-        const mass = body.getMass();
-        const cleanSpin = Math.max(-100, Math.min(100, spinX));
-
-        // Tangent is perpendicular to the rail normal
-        // (Perp(normal) gives a direction along the cushion face)
-        let t = planck.Vec2(-normal.y, normal.x);
-
-        // Keep direction alignment:
-        // If we have contact-point velocity, align tangent with the current motion 
-        // along the rail so english sign is stable (prevents kicking the wrong way).
-        if (contactVel) {
-            const vt = contactVel.x * t.x + contactVel.y * t.y;  // tangential component
-            if (vt < 0) t = planck.Vec2(-t.x, -t.y);
-        }
-
-        const englishPower = 0.20 * SPIN_EFFECT_SCALE;
-
-        // Formula is now: Spin * Constant * Mass
-        const impulseMag = cleanSpin * englishPower * mass;
-        const impulse = planck.Vec2(t.x * impulseMag, t.y * impulseMag);
-
-        body.applyLinearImpulse(impulse, body.getWorldCenter(), true);
-
-        // Dampen stored english spin
-        body.setAngularVelocity(body.getAngularVelocity() * 0.5);
-    }
-
-
-    createBallBody(ball) {
-        const pos = planck.Vec2(
-            ball.position.x / SCALE,
-            ball.position.y / SCALE
-        );
-
-        const body = this.world.createBody({
-            type: 'dynamic',
-            position: pos,
-            bullet: true,
-            linearDamping: 1.1,  // Slight increase (Cloth drag)
-            angularDamping: 2.5  // Slight increase (Spin decay)
-        });
-
-        // Set initial velocity (convert from pixels/frame to pixels/second)
-        body.setLinearVelocity(planck.Vec2(
-            ball.velocity.x * VELOCITY_SCALE / SCALE,
-            ball.velocity.y * VELOCITY_SCALE / SCALE
-        ));
-
-        body.createFixture({
-            shape: planck.Circle(ball.radius / SCALE),
-            density: 1.0,
-            friction: 0.00, // Ball-ball friction for spin transfer
-            restitution: Constants.RESTITUTION
-        });
-
-        body.setUserData({ type: 'ball', ball: ball });
-
-        // Set initial angular velocity (for spin effects)
-        // Convert from game units to Planck angular velocity
-        body.setAngularVelocity(ball.angularVel.y * VELOCITY_SCALE);
-
-        this.ballToBody.set(ball, body);
-        this.bodyToBall.set(body, ball);
-
-        return body;
-    }
-
-    syncBallsToPlanck(balls) {
-        for (const ball of balls) {
-            if (ball.pocketed || ball.sinking) continue;
-
-            let body = this.ballToBody.get(ball);
-            if (!body) {
-                // New ball - create body and sync initial state
-                body = this.createBallBody(ball);
-                continue;
-            }
-
-            // Only sync if ball velocity was changed externally (e.g., shot taken)
-            // Check if ball.velocity differs significantly from what Planck has
-            const planckVel = body.getLinearVelocity();
-            const expectedVelX = planckVel.x / VELOCITY_SCALE;
-            const expectedVelY = planckVel.y / VELOCITY_SCALE;
-
-            const velDiffX = Math.abs(ball.velocity.x - expectedVelX);
-            const velDiffY = Math.abs(ball.velocity.y - expectedVelY);
-
-            // If there's a significant difference, the game set a new velocity (shot taken)
-            if (velDiffX > 0.1 || velDiffY > 0.1) {
-                body.setPosition(planck.Vec2(
-                    ball.position.x / SCALE,
-                    ball.position.y / SCALE
-                ));
-                body.setLinearVelocity(planck.Vec2(
-                    ball.velocity.x * VELOCITY_SCALE / SCALE,
-                    ball.velocity.y * VELOCITY_SCALE / SCALE
-                ));
-                // Set angular velocity from ball's spin
-                body.setAngularVelocity(ball.angularVel.y * VELOCITY_SCALE);
-                body.setAwake(true);
-            }
-        }
-    }
-
-    syncPlanckToBalls(balls) {
-        for (const ball of balls) {
-            if (ball.pocketed || ball.sinking) continue;
-
-            const body = this.ballToBody.get(ball);
-            if (!body) continue;
-
-            const pos = body.getPosition();
-            const vel = body.getLinearVelocity();
-
-            ball.position.x = pos.x * SCALE;
-            ball.position.y = pos.y * SCALE;
-            ball.velocity.x = vel.x * SCALE / VELOCITY_SCALE;
-            ball.velocity.y = vel.y * SCALE / VELOCITY_SCALE;
-
-            // --- THE FIX FOR ZOMBIE SPIN ---
-            if (!body.isAwake()) {
-                // If Box2D says it's asleep, FORCE visual spin to zero
-                ball.angularVel.x = 0;
-                ball.angularVel.y = 0;
-            } else {
-                // Otherwise sync normally
-                ball.angularVel.y = body.getAngularVelocity() / VELOCITY_SCALE;
-                //ball.angularVel.x *= 0.98;
-            }
-        }
-    }
+        const body = this.world.createBody({
+            type: 'static',
+            position: planck.Vec2(0, 0)
+        });
+
+        const toM = (px) => px / SCALE;
+
+        body.createFixture({
+            shape: planck.Edge(
+                planck.Vec2(toM(x1), toM(y1)),
+                planck.Vec2(toM(x2), toM(y2))
+            ),
+            // INCREASED FRICTION:
+            // This enables the "Check Side" and "Running Side" effects natively.
+            // When a spinning ball hits this, the friction causes a tangential kick.
+            friction: 0.3, 
+            restitution: Constants.RAIL_RESTITUTION
+        });
+
+        body.setUserData({ type: 'rail', railType: railType });
+    }
+
+setupContactListener() {
+        // We only need to track collisions for Game Logic (sounds, rules).
+        // Physics (English/Throw) is now handled natively by Planck friction.
+        this.world.on('begin-contact', (contact) => {
+            const fixtureA = contact.getFixtureA();
+            const fixtureB = contact.getFixtureB();
+            const dataA = fixtureA.getBody().getUserData();
+            const dataB = fixtureB.getBody().getUserData();
+
+            if (!dataA || !dataB) return;
+
+            // Ball-Ball Collision
+            if (dataA.type === 'ball' && dataB.type === 'ball') {
+                const velA = fixtureA.getBody().getLinearVelocity();
+                const velB = fixtureB.getBody().getLinearVelocity();
+                const relVelX = velA.x - velB.x;
+                const relVelY = velA.y - velB.y;
+                const speed = Math.sqrt(relVelX * relVelX + relVelY * relVelY);
+
+                this.collisionEvents.push({
+                    type: 'ball',
+                    ballA: dataA.ball,
+                    ballB: dataB.ball,
+                    speed
+                });
+            }
+            // Ball-Rail Collision
+            else if ((dataA.type === 'ball' && dataB.type === 'rail') || 
+                     (dataA.type === 'rail' && dataB.type === 'ball')) {
+                
+                const ballBody = dataA.type === 'ball' ? fixtureA.getBody() : fixtureB.getBody();
+                const ballData = dataA.type === 'ball' ? dataA : dataB;
+                const railData = dataA.type === 'rail' ? dataA : dataB;
+                const speed = ballBody.getLinearVelocity().length();
+
+                this.collisionEvents.push({
+                    type: 'rail',
+                    ball: ballData.ball,
+                    railType: railData.railType,
+                    speed
+                });
+            }
+        });
+    }
+
+
+    createBallBody(ball) {
+        const pos = planck.Vec2(ball.position.x / SCALE, ball.position.y / SCALE);
+
+        const body = this.world.createBody({
+            type: 'dynamic',
+            position: pos,
+            bullet: true,
+            // Native damping handles basic air resistance
+            linearDamping: 1, 
+            // Angular damping for the Z-axis (English decay)
+            angularDamping: 4 
+        });
+
+        body.setLinearVelocity(planck.Vec2(
+            ball.velocity.x * VELOCITY_SCALE / SCALE,
+            ball.velocity.y * VELOCITY_SCALE / SCALE
+        ));
+
+        body.createFixture({
+            shape: planck.Circle(ball.radius / SCALE),
+            density: 1.0,
+            // Friction enables "Throw" (spin transfer between balls) and English on rails
+            friction: 0.2, 
+            restitution: Constants.RESTITUTION
+        });
+
+        body.setUserData({ type: 'ball', ball: ball });
+
+        // Sync Z-Spin (English) from Ball to Body
+        body.setAngularVelocity(ball.spinZ);
+
+        this.ballToBody.set(ball, body);
+        this.bodyToBall.set(body, ball);
+
+        return body;
+    }
+
+    syncBallsToPlanck(balls) {
+        for (const ball of balls) {
+            if (ball.pocketed || ball.sinking) continue;
+
+            let body = this.ballToBody.get(ball);
+            if (!body) {
+                body = this.createBallBody(ball);
+                continue;
+            }
+
+            // Sync if game logic forced a change (e.g. shot execution)
+            if (ball.forceSync) {
+                body.setPosition(planck.Vec2(ball.position.x / SCALE, ball.position.y / SCALE));
+                body.setLinearVelocity(planck.Vec2(
+                    ball.velocity.x * VELOCITY_SCALE / SCALE,
+                    ball.velocity.y * VELOCITY_SCALE / SCALE
+                ));
+                body.setAngularVelocity(ball.spinZ); // Sync English
+                body.setAwake(true);
+                ball.forceSync = false;
+            }
+        }
+    }
+
+    syncPlanckToBalls(balls) {
+        for (const ball of balls) {
+            if (ball.pocketed || ball.sinking) continue;
+
+            const body = this.ballToBody.get(ball);
+            if (!body) continue;
+
+            const pos = body.getPosition();
+            const vel = body.getLinearVelocity();
+
+            ball.position.x = pos.x * SCALE;
+            ball.position.y = pos.y * SCALE;
+            ball.velocity.x = vel.x * SCALE / VELOCITY_SCALE;
+            ball.velocity.y = vel.y * SCALE / VELOCITY_SCALE;
+            
+            // Sync Z-Spin back to ball for storage/vis
+            ball.spinZ = body.getAngularVelocity();
+        }
+    }
+
+    /**
+     * The Core Integrator for Cloth Physics
+     * Simulates friction based on the relative velocity between the contact point and the cloth.
+     * This naturally produces: Draw, Follow, Drag, and Masse curves.
+     */
+    applyClothFriction(ball, body, dt) {
+        if (!body.isAwake()) return;
+
+        const v = body.getLinearVelocity(); 
+        const speed = v.length();
+        const radius = ball.radius / SCALE;
+        const omega = ball.spin; 
+
+        // 1. Calculate Contact Point Velocity
+        // V_cp = V_cm + (Omega x R)
+        const v_cp_x = v.x + omega.y * radius;
+        const v_cp_y = v.y - omega.x * radius;
+        const slipSpeed = Math.sqrt(v_cp_x * v_cp_x + v_cp_y * v_cp_y);
+
+        // 2. Determine Friction Impulse
+        const isSlipping = slipSpeed > 0.05;
+        
+        if (isSlipping) {
+            // SLIDING (Draw/Follow/Curve)
+            const forceMag = this.mu_slide * body.getMass() * this.g;
+            
+            // Normalized direction of slip
+            const dirX = -v_cp_x / slipSpeed;
+            const dirY = -v_cp_y / slipSpeed;
+
+            // Raw Friction Force
+            let fx = dirX * forceMag;
+            let fy = dirY * forceMag;
+
+            // --- MAGNUS SUPPRESSION FOR OBJECT BALLS ---
+            // If this is NOT the cue ball, we suppress the sideways (curve) component
+            if (ball.number !== 0 && speed > 0.1) {
+                // Project force onto the velocity vector to get only the Braking/Accelerating component
+                // Unit vector of velocity
+                const vxNorm = v.x / speed;
+                const vyNorm = v.y / speed;
+                
+                // Dot product: How much of the friction is parallel to motion?
+                const dot = fx * vxNorm + fy * vyNorm;
+                
+                // Reconstruct force using ONLY the parallel component
+                // This preserves Draw/Follow physics (speeding up/slowing down)
+                // but eliminates Swerve (curving left/right)
+                fx = dot * vxNorm;
+                fy = dot * vyNorm;
+            }
+            // -------------------------------------------
+
+            body.applyForceToCenter(planck.Vec2(fx, fy), true);
+
+            // Torque (Spin Decay)
+            const alpha = 5.0 * dt; 
+
+            // Ideal rotation for pure roll
+            const idealOmegaX = v.y / radius;
+            const idealOmegaY = -v.x / radius;
+            
+            ball.spin.x = ball.spin.x * (1 - alpha) + idealOmegaX * alpha;
+            ball.spin.y = ball.spin.y * (1 - alpha) + idealOmegaY * alpha;
+            ball.isSliding = true;
+
+        } else {
+            // ROLLING
+            const dragMag = this.mu_roll * body.getMass() * this.g;
+            
+            if (speed > 0.01) {
+                const dirX = -v.x / speed;
+                const dirY = -v.y / speed;
+                body.applyForceToCenter(planck.Vec2(dirX * dragMag, dirY * dragMag), true);
+                
+                ball.spin.x = v.y / radius;
+                ball.spin.y = -v.x / radius;
+            } else {
+                body.setLinearVelocity(planck.Vec2(0,0));
+                body.setAngularVelocity(0);
+                ball.spin.x = 0;
+                ball.spin.y = 0;
+            }
+            ball.isSliding = false;
+        }
+    }
 
     update(balls, deltaTime = 16.67) {
-        this.collisionEvents = [];
-        this.processedCollisions.clear(); // Reset spin collision tracking each frame
-        this.pendingSpinEffects = []; // Clear pending effects
+        this.collisionEvents = [];
+        
+        // Clean up pocketed balls
+        for (const ball of balls) {
+            if ((ball.pocketed || ball.sinking) && this.ballToBody.has(ball)) {
+                this.world.destroyBody(this.ballToBody.get(ball));
+                this.ballToBody.delete(ball);
+                this.bodyToBall.delete(this.ballToBody.get(ball));
+            }
+        }
 
-        // Remove pocketed balls from physics world
-        for (const ball of balls) {
-            if ((ball.pocketed || ball.sinking) && this.ballToBody.has(ball)) {
-                const body = this.ballToBody.get(ball);
-                this.world.destroyBody(body);
-                this.ballToBody.delete(ball);
-                this.bodyToBall.delete(body);
-            }
-        }
+        this.syncBallsToPlanck(balls);
 
-        // Ensure all active balls have bodies and are synced
-        this.syncBallsToPlanck(balls);
+        const fixedDt = (1.0 / 60.0) * this.speedMultiplier;
+        const dtSec = fixedDt; // Seconds
+        
+        this.accumulator += Math.min(deltaTime, 50) / 1000;
 
-        // Fixed timestep physics with accumulator for frame-rate independence
-        // Physics runs at 60Hz base rate, scaled by speedMultiplier
-        const fixedDt = (1.0 / 60.0) * this.speedMultiplier;
-        const substepsPerFrame = 8;
-        const substepDt = fixedDt / substepsPerFrame;
+        let framesRun = 0;
+        while (this.accumulator >= fixedDt && framesRun < 3) {
+            
+            // 1. Apply our custom Cloth Forces (Magnus/Friction) BEFORE the physics step
+            for (const ball of balls) {
+                if (ball.pocketed || ball.sinking) continue;
+                const body = this.ballToBody.get(ball);
+                if (body) {
+                    this.applyClothFriction(ball, body, dtSec);
+                }
+            }
 
-        // Add frame time to accumulator (cap at 50ms to prevent spiral of death)
-        this.accumulator += Math.min(deltaTime, 50) / 1000;
+            // 2. Step the physics world
+            this.world.step(fixedDt, 8, 3);
+            
+            this.handlePockets(balls);
+            
+            this.accumulator -= fixedDt;
+            framesRun++;
+        }
 
-        // Run physics frames until we've caught up, max 3 to prevent freezing
-        let framesRun = 0;
-        while (this.accumulator >= fixedDt && framesRun < 3) {
-            for (let step = 0; step < substepsPerFrame; step++) {
-                // Step Planck world - handles all physics including friction
-                this.world.step(substepDt, 6, 2);
+        this.syncPlanckToBalls(balls);
+        this.stopSlowBalls(balls);
+        
+        // Update sinking animation
+        for (const ball of balls) {
+            if (ball.sinking) ball.update();
+        }
 
-                // Check pockets (not a Planck collision)
-                this.handlePockets(balls);
-            }
-            this.accumulator -= fixedDt;
-            framesRun++;
-        }
-
-        // Apply spin effects AFTER physics has resolved collisions
-        this.applyPendingSpinEffects();
-
-        // Sync final state back to Ball objects
-        this.syncPlanckToBalls(balls);
-
-        // Stop very slow balls
-        this.stopSlowBalls(balls);
-
-        // Update sinking animations
-        for (const ball of balls) {
-            if (ball.sinking) {
-                ball.update();
-            }
-        }
-
-        return this.collisionEvents;
-    }
+        return this.collisionEvents;
+    }
 
     handlePockets(balls) {
-        for (const ball of balls) {
-            if (ball.pocketed || ball.sinking) continue;
+        for (const ball of balls) {
+            if (ball.pocketed || ball.sinking) continue;
 
-            // Get current position from Planck body
-            const body = this.ballToBody.get(ball);
-            if (!body) continue;
+            const body = this.ballToBody.get(ball);
+            if (!body) continue;
 
-            const pos = body.getPosition();
-            const px = pos.x * SCALE;
-            const py = pos.y * SCALE;
+            const pos = body.getPosition();
+            const px = pos.x * SCALE;
+            const py = pos.y * SCALE;
 
-            for (const pocket of this.table.pockets) {
-                const dx = px - pocket.position.x;
-                const dy = py - pocket.position.y;
-                const distSq = dx * dx + dy * dy;
-                const fallRadius = pocket.radius - ball.radius * 0.5;
+            for (const pocket of this.table.pockets) {
+                const dx = px - pocket.position.x;
+                const dy = py - pocket.position.y;
+                const distSq = dx * dx + dy * dy;
+                const fallRadius = pocket.radius - ball.radius * 0.5;
 
-                if (distSq < fallRadius * fallRadius) {
-                    const velocity = body.getLinearVelocity();
-                    const speed = Math.sqrt(velocity.x * velocity.x + velocity.y * velocity.y);
+                if (distSq < fallRadius * fallRadius) {
+                    const velocity = body.getLinearVelocity();
+                    const speed = velocity.length();
 
-                    ball.position.x = px;
-                    ball.position.y = py;
-                    ball.startSinking(pocket);
+                    ball.position.x = px;
+                    ball.position.y = py;
+                    ball.startSinking(pocket);
 
-                    this.collisionEvents.push({
-                        type: 'pocket',
-                        ball: ball,
-                        pocket: pocket,
-                        speed: speed
-                    });
-                    break;
-                }
-            }
-        }
-    }
+                    this.collisionEvents.push({
+                        type: 'pocket',
+                        ball: ball,
+                        pocket: pocket,
+                        speed: speed
+                    });
+                    break;
+                }
+            }
+        }
+    }
 
-    stopSlowBalls(balls) {
-        // Lower threshold to let balls roll naturally to the very end
-        const stopThreshold = 0.05; 
-        const stopThresholdSq = stopThreshold * stopThreshold;
-        const brakeThresholdSq = 0.5 * 0.5;
+    stopSlowBalls(balls) {
+        const stopLinearSq = 0.005 * 0.005; // Planck units
+        const stopSpin = 0.5;
 
-        // CRITICAL: Lower this. 2.0 rad/s is visible. 0.1 is virtually stopped.
-        const spinSleepThreshold = 0.1; 
+        for (const ball of balls) {
+            if (ball.pocketed || ball.sinking) continue;
+            const body = this.ballToBody.get(ball);
+            if (!body) continue;
 
-        for (const ball of balls) {
-            if (ball.pocketed || ball.sinking) continue;
+            const v = body.getLinearVelocity();
+            const wZ = body.getAngularVelocity();
+            const wXY = Math.abs(ball.spin.x) + Math.abs(ball.spin.y);
 
-            const body = this.ballToBody.get(ball);
-            if (!body) continue;
+            // If everything is moving very slowly, kill it
+            if (v.lengthSquared() < stopLinearSq && Math.abs(wZ) < stopSpin && wXY < stopSpin) {
+                body.setLinearVelocity(planck.Vec2(0,0));
+                body.setAngularVelocity(0);
+                ball.spin.x = 0;
+                ball.spin.y = 0;
+                body.setAwake(false);
+            }
+        }
+    }
 
-            // If already asleep, skip math to save performance
-            if (!body.isAwake()) continue;
+    areBallsMoving(balls) {
+        const minVelSq = 0.001 * 0.001;
+        const minSpin = 0.1;
 
-            const vel = body.getLinearVelocity();
-            const speedSq = vel.x * vel.x + vel.y * vel.y;
-            let angVel = body.getAngularVelocity();
+        for (const ball of balls) {
+            if (ball.pocketed || ball.sinking) continue;
+            const body = this.ballToBody.get(ball);
+            if (!body) continue;
+            if (!body.isAwake()) continue;
 
-            // 1. Linear Motion Check
-            if (speedSq < stopThresholdSq) {
-                // Force linear stop
-                body.setLinearVelocity(planck.Vec2(0, 0));
-
-                // Aggressive spin braking (friction with cloth)
-                angVel *= 0.3;
-                body.setAngularVelocity(angVel);
-
-                // 2. Sleep Check
-                // Only sleep if BOTH linear is stopped AND spin is tiny
-                if (Math.abs(angVel) < spinSleepThreshold) {
-                    // Force absolute zero before sleeping to prevent zombie animation
-                    body.setAngularVelocity(0); 
-                    body.setAwake(false);
-                }
-            }
-        }
-    }
-
-    areBallsMoving(balls) {
-        const minSpeedSq = 0.01 * 0.01; // Extremely sensitive check
-        const minAngularSpeed = 0.1;    // Match the sleep threshold
-
-        for (const ball of balls) {
-            if (ball.pocketed) continue;
-            if (ball.sinking) return true;
-
-            const body = this.ballToBody.get(ball);
-            if (!body) continue;
-
-            // If Box2D thinks it's awake, we double check values
-            if (body.isAwake()) {
-                const vel = body.getLinearVelocity();
-                const speedSq = vel.x * vel.x + vel.y * vel.y;
-                
-                // If it's moving linearly, it's definitely moving
-                if (speedSq > minSpeedSq) return true;
-
-                // If it's spinning, it's definitely moving
-                if (Math.abs(body.getAngularVelocity()) > minAngularSpeed) return true;
-                
-                // If it's awake but values are tiny (waiting for stopSlowBalls to catch it),
-                // we can consider it "stopped" for the sake of the turn timer,
-                // BUT usually it's safer to wait for stopSlowBalls to sleep it.
-                // Returning true here is safer to prevent cutting animation short.
-                return true; 
-            }
-        }
-        return false;
-    }
+            const v = body.getLinearVelocity();
+            // Check Linear
+            if (v.lengthSquared() > minVelSq) return true;
+            // Check English (Z)
+            if (Math.abs(body.getAngularVelocity()) > minSpin) return true;
+            // Check Draw/Follow (X/Y)
+            if (Math.abs(ball.spin.x) > minSpin || Math.abs(ball.spin.y) > minSpin) return true;
+        }
+        return false;
+    }
 
     setSpeedMultiplier(multiplier) {
         this.speedMultiplier = Math.max(0.1, Math.min(3.0, multiplier));
@@ -691,8 +534,6 @@ export class PlanckPhysics {
 
         // Clear pending state
         this.collisionEvents = [];
-        this.processedCollisions.clear();
-        this.pendingSpinEffects = [];
         this.accumulator = 0;
     }
 

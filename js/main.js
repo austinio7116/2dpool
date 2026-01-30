@@ -129,43 +129,71 @@ class PoolGame {
 
         const cueBall = this.game.cueBall;
 
-        // Apply linear velocity
+        // 1. Calculate Linear Velocity (Shot Power)
+        // power is roughly 0-20. 
         const velocity = Vec2.multiply(direction, power);
         cueBall.velocity.x = velocity.x;
         cueBall.velocity.y = velocity.y;
-
-        // Calculate natural roll angular velocity for this shot speed
+        
+        // 2. Calculate "Natural Roll" spin rate for this speed
+        // Omega = V / R
         const speed = Math.sqrt(velocity.x * velocity.x + velocity.y * velocity.y);
-        const naturalRoll = speed / cueBall.radius;
+        const R = cueBall.radius; // Game units (pixels)
+        const naturalOmega = speed / R; // radians/frame (approx)
 
-        // Spin intensity is relative to natural roll - keeps spin proportional to shot power
-        // Full backspin gives -2x natural roll, full topspin gives +4x natural roll
-        // Moderate values for realistic spin without excessive sliding friction
-        const spinIntensity = naturalRoll * 3;
+        // 3. Apply Spin based on Hit Position (UI Spin Vector)
+        // spin.x = Left/Right (English) -> Z Axis
+        // spin.y = Down/Up (Draw/Follow) -> X/Y Axis
+        
+        // Z-Axis (English): 
+        // Max english is usually defined by tip offset. 
+        // 2.5 rad/unit is a tuning constant for how much english the cue imparts.
+        // We set this directly on the ball, it gets synced to Planck body next frame.
+        // Note: Planck uses Units/Sec. Our Physics class handles the conversion from pixels.
+        // We store "radians per second" type values in spinZ for consistency with Planck.
+        // VELOCITY_SCALE (60) converts per-frame to per-second.
+        cueBall.spinZ = -spin.x * naturalOmega * 2.0 * 60; // Negative because left-english (negative x) is positive rotation
 
-        // Sidespin (english): spin.x is left (-1) to right (+1) offset on cue ball face
-        cueBall.angularVel.x = spin.x * spinIntensity;
+        // X/Y Axis (Follow/Draw/Masse):
+        // We are constructing the spin vector parallel to the table.
+        // First, find the axis of rotation for pure topspin (Perpendicular to velocity).
+        // If moving along (1,0), pure topspin axis is (0, 1).
+        const perpX = -direction.y;
+        const perpY = direction.x;
+        
+        // Base spin (pure rolling)
+        const rollingSpinX = perpX * naturalOmega * 60;
+        const rollingSpinY = perpY * naturalOmega * 60;
 
-        // Top/backspin based on where cue hits the ball:
-        // spin.y > 0 (click below center) = hit bottom of ball = BACKSPIN
-        // spin.y < 0 (click above center) = hit top of ball = TOPSPIN
-        // Subtract because: clicking below (spin.y > 0) should give backspin (less angular vel)
-        cueBall.angularVel.y = naturalRoll - (spin.y * spinIntensity);
+        // Adjust based on vertical hit position (spin.y)
+        // spin.y = 1.0 (Top) -> Increases rotation (Follow)
+        // spin.y = -1.0 (Bottom) -> Reverses rotation (Draw)
+        // spin.y = 0.0 (Center) -> Stun shot (No rotation initially)
+        // Note: Realistically, a center hit is a "Stun", so spin is 0. 
+        // A top hit creates rolling spin.
+        
+        // Let's model it as: Center hit = Sliding (0 spin). Top hit = Rolling. Bottom = Backspin.
+        // Range -1 to 1.
+        // The factor 2.5 determines max draw/follow speed relative to ball speed.
+        const spinFactor = spin.y * 10; 
 
-        // Mark ball as sliding if spin doesn't match natural roll
-        cueBall.isSliding = Math.abs(spin.x) > 0.1 || Math.abs(spin.y) > 0.1;
+        cueBall.spin.x = rollingSpinX * spinFactor;
+        cueBall.spin.y = rollingSpinY * spinFactor;
 
-        // Store direction for spin physics (needed if ball slows down quickly)
-        cueBall.lastDirX = direction.x;
-        cueBall.lastDirY = direction.y;
+        // Add Masse (Side spin on the horizontal axis)
+        // If we have spin.x (English), and we elevate the cue (not simulated explicitly yet),
+        // we get swerve. For now, we mix a little spin.x into the roll axis to simulate
+        // imperfect cues or slight squirt, or simply let the physics engine handle throw.
+        // But for pure Swerve, we would need an "elevation" variable.
+        // For now, simple draw/follow is sufficient.
+
+        cueBall.forceSync = true; // Tell physics to overwrite Body state
+        cueBall.isSliding = true;
 
         this.audio.playCueStrike(power / 20);
 
-        // Update game state
         this.game.onShotTaken();
         this.input.setCanShoot(false);
-
-        // Clear trajectory
         this.trajectory = null;
     }
 

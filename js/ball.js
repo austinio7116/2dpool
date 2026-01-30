@@ -9,43 +9,38 @@ export class Ball {
         this.radius = Constants.BALL_RADIUS;
         this.number = number;
         this.pocketed = false;
-        this.sinking = false;  // Animation state for sinking
+        this.sinking = false;
         this.sinkProgress = 0;
         this.sinkPocket = null;
 
-        // Determine ball type
         this.isCueBall = number === 0;
         this.isSolid = number >= 1 && number <= 7;
         this.isStripe = number >= 9 && number <= 15;
         this.isEightBall = number === 8;
-
-        // Visual properties
         this.color = Constants.BALL_COLORS[number];
-        this.rotation = 0;  // For visual spin effect
+        
+        // VISUALS
+        this.rotation = 0; // Legacy 2D rotation (can map to Z-spin)
+        this.rollAngle = 0;
+        this.travelAngle = 0;
+        this.displayRoll = 0;
+        
+        // PHYSICS STATE
+        // spin: Rotation around horizontal axes (Vector3 X/Y components)
+        // x: Rotation around global X axis (tumble forward/back if moving Y)
+        // y: Rotation around global Y axis (tumble left/right if moving X)
+        // This handles Draw, Follow, and Swerve (Magnus)
+        this.spin = { x: 0, y: 0 }; 
 
-        // 3D rotation tracking for realistic rolling visuals
-        // These represent rotation around different axes
-        this.rollAngle = 0;      // Rotation from rolling (around axis perpendicular to travel)
-        this.travelAngle = 0;    // Direction of travel (updated while moving)
-        this.displayRoll = 0;    // Smoothed roll angle used for rendering
-        this.isRolling = false;  // Whether ball is currently in motion
-        this.shouldResetRotation = false; // Whether to animate back to face-up
+        // spinZ: Rotation around vertical Z axis (English)
+        // Handled natively by Planck, mirrored here for access
+        this.spinZ = 0;
 
-        // Angular velocity (spin) - continuous physics property
-        // angularVel.x = sidespin (english) - rotation around vertical axis
-        //   positive = clockwise when viewed from above (right english)
-        //   negative = counter-clockwise (left english)
-        // angularVel.y = forward/back spin - rotation around horizontal axis perpendicular to travel
-        //   positive = topspin (ball surface moving in direction of travel)
-        //   negative = backspin (ball surface moving opposite to travel)
-        this.angularVel = { x: 0, y: 0 };
-
-        // Track if ball is sliding (spin not matching natural roll)
         this.isSliding = false;
+        this.forceSync = false; // Flag to push state to physics engine
     }
 
     update() {
-        // Only handle sinking animation - physics handles movement
         if (this.sinking) {
             this.sinkProgress += 0.1;
             if (this.sinkProgress >= 1) {

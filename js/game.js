@@ -147,14 +147,55 @@ export class Game {
     rerack() {
         if (this.mode !== GameMode.FREE_PLAY) return;
 
-        // Reset all balls
+        // Put game back in a ready-to-shoot state
+        this.state = GameState.PLAYING;
+        this.isBreakShot = false;
+
+        // Clear shot bookkeeping (prevents any "stuck" shot logic elsewhere)
+        this.firstBallHit = null;
+        this.ballsPocketed = [];
+        this.foul = false;
+        this.foulReason = '';
+        this.turnContinues = false;
+
+        // Hard reset all balls (visual + pocketing + motion + physics sync)
         for (const ball of this.balls) {
             ball.pocketed = false;
             ball.sinking = false;
+            ball.sinkProgress = 0;
+            ball.sinkPocket = null;
+
+            // stop motion
             ball.velocity = Vec2.create(0, 0);
+
+            // reset spin / sliding / visuals that can make it look "not stopped"
+            ball.spin = { x: 0, y: 0 };
+            ball.spinZ = 0;
+            ball.isSliding = false;
+
+            ball.rotation = 0;
+            ball.rollAngle = 0;
+            ball.travelAngle = 0;
+            ball.displayRoll = 0;
+            ball.isRolling = false;
+            ball.shouldResetRotation = false;
+
+            // IMPORTANT: tell physics layer to accept new state immediately
+            ball.forceSync = true;
         }
 
+        // Reposition balls into the rack (this also sets pocketed/sinking false)
         this.rackBalls();
+
+        // After repositioning, force sync again because positions changed
+        for (const ball of this.balls) {
+            ball.velocity = Vec2.create(0, 0);
+            ball.forceSync = true;
+        }
+
+        if (this.onStateChange) {
+            this.onStateChange(this.state);
+        }
     }
 
     // Process a shot
@@ -197,6 +238,9 @@ export class Game {
 
         if (this.mode === GameMode.FREE_PLAY) {
             this.state = GameState.PLAYING;
+            if (this.onStateChange) {
+                this.onStateChange(this.state);
+            }
             return;
         }
 

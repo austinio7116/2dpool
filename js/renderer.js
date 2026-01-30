@@ -34,7 +34,7 @@ export class Renderer {
 
         // Load table images
         this.tableImages = [];
-        this.tableImagesLoaded = [false, false, false, false, false, false];
+        this.tableImagesLoaded = [false, false, false, false, false, false, false, false];
         this.currentTableIndex = 0;
         this.allAssetsLoaded = false;
         this.onAssetsLoaded = null;
@@ -79,8 +79,8 @@ export class Renderer {
     }
 
     setTableStyle(tableNum) {
-        // tableNum is 1-4, convert to 0-3 index
-        this.currentTableIndex = Math.max(0, Math.min(7, tableNum - 1));
+        // tableNum is 1-x, convert to 0-(x-1) index
+        this.currentTableIndex = Math.max(0, Math.min(this.tableImages.length - 1, tableNum - 1));
     }
 
     render(state) {

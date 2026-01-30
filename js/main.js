@@ -243,7 +243,12 @@ class PoolGame {
                 ? this.table.findValidKitchenPosition(this.game.balls, this.table.center.y)
                 : this.table.findValidCueBallPosition(this.game.balls, this.table.center.y);
             this.game.cueBall.setPosition(validPos.x, validPos.y);
+            // --- FIX START ---
             this.game.cueBall.pocketed = false;
+            this.game.cueBall.sinking = false; // <--- This is the key fix
+            this.game.cueBall.velocity.x = 0;  // Reset velocity
+            this.game.cueBall.velocity.y = 0;
+            // --- FIX END ---
         } else if (state === GameState.PLAYING) {
             this.input.setCanShoot(true);
             this.input.exitBallInHandMode();

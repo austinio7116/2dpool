@@ -525,7 +525,11 @@ setupContactListener() {
         const minSpin = 0.1;
 
         for (const ball of balls) {
-            if (ball.pocketed || ball.sinking) continue;
+            // FIX: If a ball is currently sinking, the turn is NOT over. 
+            // We must wait for the animation to finish and 'pocketed' to be set to true.
+            if (ball.sinking) return true; 
+
+            if (ball.pocketed) continue;
             const body = this.ballToBody.get(ball);
             if (!body) continue;
             if (!body.isAwake()) continue;

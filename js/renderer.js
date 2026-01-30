@@ -93,10 +93,10 @@ export class Renderer {
         }
 
         // DEBUG: Draw pocket detection circles (uncomment to visualize)
-        this.drawPocketDebug();
+        //this.drawPocketDebug();
 
         // DEBUG: Draw cushion collision boundaries (uncomment to visualize)
-        this.drawCushionDebug();
+        //this.drawCushionDebug();
 
         this.drawBalls(state.balls);
 

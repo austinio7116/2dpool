@@ -417,6 +417,17 @@ setupContactListener() {
                 this.world.destroyBody(this.ballToBody.get(ball));
                 this.ballToBody.delete(ball);
                 this.bodyToBall.delete(this.ballToBody.get(ball));
+
+                // --- FIX START ---
+                // Zero out ALL physics state so it doesn't "remember" velocity or spin
+                // when respotted later.
+                ball.velocity.x = 0;
+                ball.velocity.y = 0;
+                ball.spinZ = 0;      // Clear English/Side Spin
+                ball.spin.x = 0;     // Clear Top/Bottom Spin
+                ball.spin.y = 0;
+                ball.isSliding = false;
+                // --- FIX END ---
             }
         }
 

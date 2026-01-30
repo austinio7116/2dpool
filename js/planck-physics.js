@@ -19,14 +19,15 @@ export class PlanckPhysics {
         this.collisionEvents = [];
         this.speedMultiplier = 1.0;
         this.accumulator = 0;
+        this.tableStyle = 1; // Default table style (1-indexed)
 
         // Constants for the Slip Friction Model
         // Friction coefficient between ball and cloth (dynamic)
-        this.mu_slide = 0.05; 
+        this.mu_slide = 0.05;
         // Friction coefficient for rolling (much lower)
         this.mu_roll = 0.01;
         // Gravitational acceleration (scaled m/s^2)
-        this.g = 9.8; 
+        this.g = 9.8;
 
         this.world = planck.World({
             gravity: planck.Vec2(0, 0)
@@ -34,8 +35,26 @@ export class PlanckPhysics {
 
         this.ballToBody = new Map();
         this.bodyToBall = new Map();
+        this.railBodies = []; // Track rail bodies for recreation
 
         this.setupContactListener();
+        this.createTableBoundaries();
+    }
+
+    setTableStyle(tableNum) {
+        if (this.tableStyle === tableNum) return;
+        this.tableStyle = tableNum;
+        this.recreateTableBoundaries();
+    }
+
+    recreateTableBoundaries() {
+        // Destroy existing rail bodies
+        for (const body of this.railBodies) {
+            this.world.destroyBody(body);
+        }
+        this.railBodies = [];
+
+        // Recreate with new style
         this.createTableBoundaries();
     }
 
@@ -45,111 +64,212 @@ export class PlanckPhysics {
         const ballRadius = Constants.BALL_RADIUS;
         const gap = pocketRadius + ballRadius * 0.5;
 
+        // For curved pocket tables, corners need a larger gap
+        const useCurvedPockets = this.tableStyle === 7 || this.tableStyle === 8;
+        const cornerGap = useCurvedPockets ? gap + 3 : gap;
+
         // Create Rails
-        this.createRailSegment(b.left + gap, b.top, this.table.center.x - gap, b.top, 'top');
-        this.createRailSegment(this.table.center.x + gap, b.top, b.right - gap, b.top, 'top');
-        this.createRailSegment(b.left + gap, b.bottom, this.table.center.x - gap, b.bottom, 'bottom');
-        this.createRailSegment(this.table.center.x + gap, b.bottom, b.right - gap, b.bottom, 'bottom');
-        this.createRailSegment(b.left, b.top + gap, b.left, b.bottom - gap, 'left');
-        this.createRailSegment(b.right, b.top + gap, b.right, b.bottom - gap, 'right');
+        this.createRailSegment(b.left + cornerGap, b.top, this.table.center.x - gap, b.top, 'top');
+        this.createRailSegment(this.table.center.x + gap, b.top, b.right - cornerGap, b.top, 'top');
+        this.createRailSegment(b.left + cornerGap, b.bottom, this.table.center.x - gap, b.bottom, 'bottom');
+        this.createRailSegment(this.table.center.x + gap, b.bottom, b.right - cornerGap, b.bottom, 'bottom');
+        this.createRailSegment(b.left, b.top + cornerGap, b.left, b.bottom - cornerGap, 'left');
+        this.createRailSegment(b.right, b.top + cornerGap, b.right, b.bottom - cornerGap, 'right');
 
         this.createPocketEntrySegments();
     }
 
-    createPocketEntrySegments() {
-        const b = this.table.bounds;
-        const pocketRadius = Constants.POCKET_RADIUS;
-        const ballRadius = Constants.BALL_RADIUS;
-        const gap = pocketRadius + ballRadius * 0.5;
-        const segmentLength = 20; // Length of angled segments
+    createPocketEntrySegments() {
+        // Tables 7 (UK pub) and 8 (mini snooker) use curved pocket entries
+        const useCurvedPockets = this.tableStyle === 7 || this.tableStyle === 8;
 
-        // Angles in degrees (configurable)
-        const sidePocketAngle = 70; // Degrees from cushion line for side pockets
-        const cornerPocketAngle = 45; // Degrees from cushion line for corner pockets
+        if (useCurvedPockets) {
+            this.createCurvedPocketEntries();
+        } else {
+            this.createStraightPocketEntries();
+        }
+    }
 
-        // Convert to radians
-        const sideRad = sidePocketAngle * Math.PI / 180;
-        const cornerRad = cornerPocketAngle * Math.PI / 180;
+    createStraightPocketEntries() {
+        const b = this.table.bounds;
+        const pocketRadius = Constants.POCKET_RADIUS;
+        const ballRadius = Constants.BALL_RADIUS;
+        const gap = pocketRadius + ballRadius * 0.5;
+        const segmentLength = 20; // Length of angled segments
 
-        // Side pocket entry segments (top)
-        // Left side of top center pocket - angle goes up and right
-        this.createRailSegment(
-            this.table.center.x - gap, b.top,
-            this.table.center.x - gap + Math.cos(sideRad) * segmentLength, b.top - Math.sin(sideRad) * segmentLength,
-            'pocket'
-        );
-        // Right side of top center pocket - angle goes up and left
-        this.createRailSegment(
-            this.table.center.x + gap, b.top,
-            this.table.center.x + gap - Math.cos(sideRad) * segmentLength, b.top - Math.sin(sideRad) * segmentLength,
-            'pocket'
-        );
+        // Angles in degrees (configurable)
+        const sidePocketAngle = 70; // Degrees from cushion line for side pockets
+        const cornerPocketAngle = 45; // Degrees from cushion line for corner pockets
 
-        // Side pocket entry segments (bottom)
-        // Left side of bottom center pocket - angle goes down and right
-        this.createRailSegment(
-            this.table.center.x - gap, b.bottom,
-            this.table.center.x - gap + Math.cos(sideRad) * segmentLength, b.bottom + Math.sin(sideRad) * segmentLength,
-            'pocket'
-        );
-        // Right side of bottom center pocket - angle goes down and left
-        this.createRailSegment(
-            this.table.center.x + gap, b.bottom,
-            this.table.center.x + gap - Math.cos(sideRad) * segmentLength, b.bottom + Math.sin(sideRad) * segmentLength,
-            'pocket'
-        );
+        // Convert to radians
+        const sideRad = sidePocketAngle * Math.PI / 180;
+        const cornerRad = cornerPocketAngle * Math.PI / 180;
 
-        // Corner pocket entry segments
-        // Top-left corner
-        this.createRailSegment(
-            b.left + gap, b.top,
-            b.left + gap - Math.cos(cornerRad) * segmentLength, b.top - Math.sin(cornerRad) * segmentLength,
-            'pocket'
-        );
-        this.createRailSegment(
-            b.left, b.top + gap,
-            b.left - Math.sin(cornerRad) * segmentLength, b.top + gap - Math.cos(cornerRad) * segmentLength,
-            'pocket'
-        );
+        // Side pocket entry segments (top)
+        this.createRailSegment(
+            this.table.center.x - gap, b.top,
+            this.table.center.x - gap + Math.cos(sideRad) * segmentLength, b.top - Math.sin(sideRad) * segmentLength,
+            'pocket'
+        );
+        this.createRailSegment(
+            this.table.center.x + gap, b.top,
+            this.table.center.x + gap - Math.cos(sideRad) * segmentLength, b.top - Math.sin(sideRad) * segmentLength,
+            'pocket'
+        );
 
-        // Top-right corner
-        this.createRailSegment(
-            b.right - gap, b.top,
-            b.right - gap + Math.cos(cornerRad) * segmentLength, b.top - Math.sin(cornerRad) * segmentLength,
-            'pocket'
-        );
-        this.createRailSegment(
-            b.right, b.top + gap,
-            b.right + Math.sin(cornerRad) * segmentLength, b.top + gap - Math.cos(cornerRad) * segmentLength,
-            'pocket'
-        );
+        // Side pocket entry segments (bottom)
+        this.createRailSegment(
+            this.table.center.x - gap, b.bottom,
+            this.table.center.x - gap + Math.cos(sideRad) * segmentLength, b.bottom + Math.sin(sideRad) * segmentLength,
+            'pocket'
+        );
+        this.createRailSegment(
+            this.table.center.x + gap, b.bottom,
+            this.table.center.x + gap - Math.cos(sideRad) * segmentLength, b.bottom + Math.sin(sideRad) * segmentLength,
+            'pocket'
+        );
 
-        // Bottom-left corner
-        this.createRailSegment(
-            b.left + gap, b.bottom,
-            b.left + gap - Math.cos(cornerRad) * segmentLength, b.bottom + Math.sin(cornerRad) * segmentLength,
-            'pocket'
-        );
-        this.createRailSegment(
-            b.left, b.bottom - gap,
-            b.left - Math.sin(cornerRad) * segmentLength, b.bottom - gap + Math.cos(cornerRad) * segmentLength,
-            'pocket'
-        );
+        // Corner pocket entry segments
+        // Top-left corner
+        this.createRailSegment(
+            b.left + gap, b.top,
+            b.left + gap - Math.cos(cornerRad) * segmentLength, b.top - Math.sin(cornerRad) * segmentLength,
+            'pocket'
+        );
+        this.createRailSegment(
+            b.left, b.top + gap,
+            b.left - Math.sin(cornerRad) * segmentLength, b.top + gap - Math.cos(cornerRad) * segmentLength,
+            'pocket'
+        );
 
-        // Bottom-right corner
-        this.createRailSegment(
-            b.right - gap, b.bottom,
-            b.right - gap + Math.cos(cornerRad) * segmentLength, b.bottom + Math.sin(cornerRad) * segmentLength,
-            'pocket'
-        );
-        this.createRailSegment(
-            b.right, b.bottom - gap,
-            b.right + Math.sin(cornerRad) * segmentLength, b.bottom - gap + Math.cos(cornerRad) * segmentLength,
-            'pocket'
-        );
-    }
+        // Top-right corner
+        this.createRailSegment(
+            b.right - gap, b.top,
+            b.right - gap + Math.cos(cornerRad) * segmentLength, b.top - Math.sin(cornerRad) * segmentLength,
+            'pocket'
+        );
+        this.createRailSegment(
+            b.right, b.top + gap,
+            b.right + Math.sin(cornerRad) * segmentLength, b.top + gap - Math.cos(cornerRad) * segmentLength,
+            'pocket'
+        );
 
-    createRailSegment(x1, y1, x2, y2, railType) {
+        // Bottom-left corner
+        this.createRailSegment(
+            b.left + gap, b.bottom,
+            b.left + gap - Math.cos(cornerRad) * segmentLength, b.bottom + Math.sin(cornerRad) * segmentLength,
+            'pocket'
+        );
+        this.createRailSegment(
+            b.left, b.bottom - gap,
+            b.left - Math.sin(cornerRad) * segmentLength, b.bottom - gap + Math.cos(cornerRad) * segmentLength,
+            'pocket'
+        );
+
+        // Bottom-right corner
+        this.createRailSegment(
+            b.right - gap, b.bottom,
+            b.right - gap + Math.cos(cornerRad) * segmentLength, b.bottom + Math.sin(cornerRad) * segmentLength,
+            'pocket'
+        );
+        this.createRailSegment(
+            b.right, b.bottom - gap,
+            b.right + Math.sin(cornerRad) * segmentLength, b.bottom - gap + Math.cos(cornerRad) * segmentLength,
+            'pocket'
+        );
+    }
+
+    createCurvedPocketEntries() {
+        const b = this.table.bounds;
+        const pocketRadius = Constants.POCKET_RADIUS;
+        const ballRadius = Constants.BALL_RADIUS;
+        const gap = pocketRadius + ballRadius * 0.5;
+        const cornerGap = gap + 3;  // Corner gaps are larger for curved tables
+
+        // Curve parameters - different for corner vs middle pockets
+        // Corner pockets have gentler curves, middle pockets have tighter curves
+        const cornerCurveLength = 28;  // Length of curved segment for corners
+        const middleCurveLength = 22;  // Length of curved segment for middle pockets
+        const cornerCurveAmount = 0.4; // How much the corner curves bulge (multiplier)
+        const middleCurveAmount = 0.5; // Middle pockets curve amount
+
+        // Middle pocket entries (top) - curve outward (convex)
+        // Inner endpoints moved 3px towards center
+        this.createCurvedPocketEntry(
+            this.table.center.x - gap, b.top,
+            this.table.center.x - gap + middleCurveLength * 0.3 + 3, b.top - middleCurveLength,
+            middleCurveAmount, 8
+        );
+        this.createCurvedPocketEntry(
+            this.table.center.x + gap, b.top,
+            this.table.center.x + gap - middleCurveLength * 0.3 - 3, b.top - middleCurveLength,
+            -middleCurveAmount, 8
+        );
+
+        // Middle pocket entries (bottom)
+        this.createCurvedPocketEntry(
+            this.table.center.x - gap, b.bottom,
+            this.table.center.x - gap + middleCurveLength * 0.3 + 3, b.bottom + middleCurveLength,
+            -middleCurveAmount, 8
+        );
+        this.createCurvedPocketEntry(
+            this.table.center.x + gap, b.bottom,
+            this.table.center.x + gap - middleCurveLength * 0.3 - 3, b.bottom + middleCurveLength,
+            middleCurveAmount, 8
+        );
+
+        // Corner pocket entries - gentler curves (convex)
+        // Inner endpoints moved 3px towards pocket along rail direction
+        // Top-left corner
+        this.createCurvedPocketEntry(
+            b.left + cornerGap, b.top,
+            b.left + cornerGap - cornerCurveLength * 0.7 - 3, b.top - cornerCurveLength * 0.7,
+            -cornerCurveAmount, 6
+        );
+        this.createCurvedPocketEntry(
+            b.left, b.top + cornerGap,
+            b.left - cornerCurveLength * 0.7, b.top + cornerGap - cornerCurveLength * 0.7 - 3,
+            cornerCurveAmount, 6
+        );
+
+        // Top-right corner
+        this.createCurvedPocketEntry(
+            b.right - cornerGap, b.top,
+            b.right - cornerGap + cornerCurveLength * 0.7 + 3, b.top - cornerCurveLength * 0.7,
+            cornerCurveAmount, 6
+        );
+        this.createCurvedPocketEntry(
+            b.right, b.top + cornerGap,
+            b.right + cornerCurveLength * 0.7, b.top + cornerGap - cornerCurveLength * 0.7 - 3,
+            -cornerCurveAmount, 6
+        );
+
+        // Bottom-left corner
+        this.createCurvedPocketEntry(
+            b.left + cornerGap, b.bottom,
+            b.left + cornerGap - cornerCurveLength * 0.7 - 3, b.bottom + cornerCurveLength * 0.7,
+            cornerCurveAmount, 6
+        );
+        this.createCurvedPocketEntry(
+            b.left, b.bottom - cornerGap,
+            b.left - cornerCurveLength * 0.7, b.bottom - cornerGap + cornerCurveLength * 0.7 + 3,
+            -cornerCurveAmount, 6
+        );
+
+        // Bottom-right corner
+        this.createCurvedPocketEntry(
+            b.right - cornerGap, b.bottom,
+            b.right - cornerGap + cornerCurveLength * 0.7 + 3, b.bottom + cornerCurveLength * 0.7,
+            -cornerCurveAmount, 6
+        );
+        this.createCurvedPocketEntry(
+            b.right, b.bottom - cornerGap,
+            b.right + cornerCurveLength * 0.7, b.bottom - cornerGap + cornerCurveLength * 0.7 + 3,
+            cornerCurveAmount, 6
+        );
+    }
+
+    createRailSegment(x1, y1, x2, y2, railType) {
         const body = this.world.createBody({
             type: 'static',
             position: planck.Vec2(0, 0)
@@ -170,9 +290,53 @@ export class PlanckPhysics {
         });
 
         body.setUserData({ type: 'rail', railType: railType });
+        this.railBodies.push(body);
     }
 
-setupContactListener() {
+    // Create a curved pocket entry using multiple segments to approximate an arc
+    createCurvedPocketEntry(startX, startY, endX, endY, curveDirection, numSegments = 6) {
+        // curveDirection: positive curves one way, negative curves the other
+        const midX = (startX + endX) / 2;
+        const midY = (startY + endY) / 2;
+
+        // Calculate perpendicular direction for curve bulge
+        const dx = endX - startX;
+        const dy = endY - startY;
+        const len = Math.sqrt(dx * dx + dy * dy);
+
+        // Perpendicular vector (normalized)
+        const perpX = -dy / len;
+        const perpY = dx / len;
+
+        // Curve depth (how far the arc bulges)
+        const curveDepth = len * 0.4 * curveDirection;
+
+        // Generate points along a quadratic bezier curve
+        const points = [];
+        for (let i = 0; i <= numSegments; i++) {
+            const t = i / numSegments;
+            // Quadratic bezier: P = (1-t)²*P0 + 2*(1-t)*t*P1 + t²*P2
+            // Control point is at midpoint + perpendicular offset
+            const controlX = midX + perpX * curveDepth;
+            const controlY = midY + perpY * curveDepth;
+
+            const oneMinusT = 1 - t;
+            const x = oneMinusT * oneMinusT * startX + 2 * oneMinusT * t * controlX + t * t * endX;
+            const y = oneMinusT * oneMinusT * startY + 2 * oneMinusT * t * controlY + t * t * endY;
+            points.push({ x, y });
+        }
+
+        // Create edge segments between consecutive points
+        for (let i = 0; i < points.length - 1; i++) {
+            this.createRailSegment(
+                points[i].x, points[i].y,
+                points[i + 1].x, points[i + 1].y,
+                'pocket'
+            );
+        }
+    }
+
+    setupContactListener() {
         // We only need to track collisions for Game Logic (sounds, rules).
         // Physics (English/Throw) is now handled natively by Planck friction.
         this.world.on('begin-contact', (contact) => {
@@ -408,7 +572,7 @@ setupContactListener() {
         }
     }
 
-    update(balls, deltaTime = 16.67) {
+    update(balls, deltaTime = 16.67) {
         this.collisionEvents = [];
         
         // Clean up pocketed balls
@@ -470,7 +634,7 @@ setupContactListener() {
         return this.collisionEvents;
     }
 
-    handlePockets(balls) {
+    handlePockets(balls) {
         for (const ball of balls) {
             if (ball.pocketed || ball.sinking) continue;
 
@@ -556,162 +720,162 @@ setupContactListener() {
         return false;
     }
 
-    setSpeedMultiplier(multiplier) {
-        this.speedMultiplier = Math.max(0.1, Math.min(3.0, multiplier));
-    }
+    setSpeedMultiplier(multiplier) {
+        this.speedMultiplier = Math.max(0.1, Math.min(3.0, multiplier));
+    }
 
-    // Reset physics state for new game - destroys all ball bodies
-    reset() {
-        // Destroy all ball bodies
-        for (const [ball, body] of this.ballToBody) {
-            this.world.destroyBody(body);
-        }
-        this.ballToBody.clear();
-        this.bodyToBall.clear();
+    // Reset physics state for new game - destroys all ball bodies
+    reset() {
+        // Destroy all ball bodies
+        for (const [ball, body] of this.ballToBody) {
+            this.world.destroyBody(body);
+        }
+        this.ballToBody.clear();
+        this.bodyToBall.clear();
 
-        // Clear pending state
-        this.collisionEvents = [];
-        this.accumulator = 0;
-    }
+        // Clear pending state
+        this.collisionEvents = [];
+        this.accumulator = 0;
+    }
 
-    predictTrajectory(cueBall, direction, power, balls, maxSteps = 200) {
-        const trajectory = {
-            cuePath: [{ x: cueBall.position.x, y: cueBall.position.y }],
-            firstHit: null,
-            targetPath: []
-        };
+    predictTrajectory(cueBall, direction, power, balls, maxSteps = 200) {
+        const trajectory = {
+            cuePath: [{ x: cueBall.position.x, y: cueBall.position.y }],
+            firstHit: null,
+            targetPath: []
+        };
 
-        // Use geometric raycast for precise ghost ball positioning
-        const hitResult = this.findFirstBallHit(cueBall, direction, balls);
+        // Use geometric raycast for precise ghost ball positioning
+        const hitResult = this.findFirstBallHit(cueBall, direction, balls);
 
-        if (hitResult) {
-            trajectory.firstHit = {
-                position: hitResult.contactPoint,
-                targetBallNumber: hitResult.ball.number
-            };
+        if (hitResult) {
+            trajectory.firstHit = {
+                position: hitResult.contactPoint,
+                targetBallNumber: hitResult.ball.number
+            };
 
-            // Predict target ball path based on collision normal
-            const nx = hitResult.ball.position.x - hitResult.contactPoint.x;
-            const ny = hitResult.ball.position.y - hitResult.contactPoint.y;
-            const nLen = Math.sqrt(nx * nx + ny * ny);
-            const normalX = nx / nLen;
-            const normalY = ny / nLen;
+            // Predict target ball path based on collision normal
+            const nx = hitResult.ball.position.x - hitResult.contactPoint.x;
+            const ny = hitResult.ball.position.y - hitResult.contactPoint.y;
+            const nLen = Math.sqrt(nx * nx + ny * ny);
+            const normalX = nx / nLen;
+            const normalY = ny / nLen;
 
-            let tx = hitResult.ball.position.x;
-            let ty = hitResult.ball.position.y;
-            let tvx = normalX * power * 0.7;
-            let tvy = normalY * power * 0.7;
+            let tx = hitResult.ball.position.x;
+            let ty = hitResult.ball.position.y;
+            let tvx = normalX * power * 0.7;
+            let tvy = normalY * power * 0.7;
 
-            for (let t = 0; t < 50; t++) {
-                tx += tvx;
-                ty += tvy;
-                tvx *= 0.97;
-                tvy *= 0.97;
-                trajectory.targetPath.push({ x: tx, y: ty });
-                if (tvx * tvx + tvy * tvy < 0.5) break;
-            }
+            for (let t = 0; t < 50; t++) {
+                tx += tvx;
+                ty += tvy;
+                tvx *= 0.97;
+                tvy *= 0.97;
+                trajectory.targetPath.push({ x: tx, y: ty });
+                if (tvx * tvx + tvy * tvy < 0.5) break;
+            }
 
-            // Build cue path up to contact point
-            const dist = Math.sqrt(
-                (hitResult.contactPoint.x - cueBall.position.x) ** 2 +
-                (hitResult.contactPoint.y - cueBall.position.y) ** 2
-            );
-            const steps = Math.min(Math.ceil(dist / 5), 100);
-            for (let i = 1; i <= steps; i++) {
-                const t = i / steps;
-                trajectory.cuePath.push({
-                    x: cueBall.position.x + direction.x * dist * t,
-                    y: cueBall.position.y + direction.y * dist * t
-                });
-            }
-        } else {
-            // No ball hit - trace path with rail bounces
-            this.tracePathWithRails(cueBall, direction, power, trajectory, maxSteps);
-        }
+            // Build cue path up to contact point
+            const dist = Math.sqrt(
+                (hitResult.contactPoint.x - cueBall.position.x) ** 2 +
+                (hitResult.contactPoint.y - cueBall.position.y) ** 2
+            );
+            const steps = Math.min(Math.ceil(dist / 5), 100);
+            for (let i = 1; i <= steps; i++) {
+                const t = i / steps;
+                trajectory.cuePath.push({
+                    x: cueBall.position.x + direction.x * dist * t,
+                    y: cueBall.position.y + direction.y * dist * t
+                });
+            }
+        } else {
+            // No ball hit - trace path with rail bounces
+            this.tracePathWithRails(cueBall, direction, power, trajectory, maxSteps);
+        }
 
-        return trajectory;
-    }
+        return trajectory;
+    }
 
-    // Geometric raycast to find exact contact point with first ball hit
-    findFirstBallHit(cueBall, direction, balls) {
-        let closest = null;
-        let closestDist = Infinity;
-        const combinedRadius = cueBall.radius * 2; // Both balls same size
+    // Geometric raycast to find exact contact point with first ball hit
+    findFirstBallHit(cueBall, direction, balls) {
+        let closest = null;
+        let closestDist = Infinity;
+        const combinedRadius = cueBall.radius * 2; // Both balls same size
 
-        for (const ball of balls) {
-            if (ball.number === 0 || ball.pocketed) continue;
+        for (const ball of balls) {
+            if (ball.number === 0 || ball.pocketed) continue;
 
-            // Vector from cue ball to target ball
-            const toTargetX = ball.position.x - cueBall.position.x;
-            const toTargetY = ball.position.y - cueBall.position.y;
+            // Vector from cue ball to target ball
+            const toTargetX = ball.position.x - cueBall.position.x;
+            const toTargetY = ball.position.y - cueBall.position.y;
 
-            // Project target onto aim direction
-            const projection = toTargetX * direction.x + toTargetY * direction.y;
+            // Project target onto aim direction
+            const projection = toTargetX * direction.x + toTargetY * direction.y;
 
-            // Ball is behind us
-            if (projection < 0) continue;
+            // Ball is behind us
+            if (projection < 0) continue;
 
-            // Perpendicular distance from aim line to ball center
-            const perpX = toTargetX - projection * direction.x;
-            const perpY = toTargetY - projection * direction.y;
-            const perpDist = Math.sqrt(perpX * perpX + perpY * perpY);
+            // Perpendicular distance from aim line to ball center
+            const perpX = toTargetX - projection * direction.x;
+            const perpY = toTargetY - projection * direction.y;
+            const perpDist = Math.sqrt(perpX * perpX + perpY * perpY);
 
-            // Check if aim line passes close enough to hit this ball
-            if (perpDist < combinedRadius) {
-                // Calculate exact contact point
-                // Distance along aim line to contact point
-                const offset = Math.sqrt(combinedRadius * combinedRadius - perpDist * perpDist);
-                const contactDist = projection - offset;
+            // Check if aim line passes close enough to hit this ball
+            if (perpDist < combinedRadius) {
+                // Calculate exact contact point
+                // Distance along aim line to contact point
+                const offset = Math.sqrt(combinedRadius * combinedRadius - perpDist * perpDist);
+                const contactDist = projection - offset;
 
-                if (contactDist > 0 && contactDist < closestDist) {
-                    closestDist = contactDist;
-                    closest = {
-                        ball: ball,
-                        contactPoint: {
-                            x: cueBall.position.x + direction.x * contactDist,
-                            y: cueBall.position.y + direction.y * contactDist
-                        },
-                        distance: contactDist
-                    };
-                }
-            }
-        }
+                if (contactDist > 0 && contactDist < closestDist) {
+                    closestDist = contactDist;
+                    closest = {
+                        ball: ball,
+                        contactPoint: {
+                            x: cueBall.position.x + direction.x * contactDist,
+                            y: cueBall.position.y + direction.y * contactDist
+                        },
+                        distance: contactDist
+                    };
+                }
+            }
+        }
 
-        return closest;
-    }
+        return closest;
+    }
 
-    // Trace cue ball path including rail bounces when no ball is hit directly
-    tracePathWithRails(cueBall, direction, power, trajectory, maxSteps) {
-        const b = this.table.bounds;
-        const r = cueBall.radius;
+    // Trace cue ball path including rail bounces when no ball is hit directly
+    tracePathWithRails(cueBall, direction, power, trajectory, maxSteps) {
+        const b = this.table.bounds;
+        const r = cueBall.radius;
 
-        let px = cueBall.position.x;
-        let py = cueBall.position.y;
-        let vx = direction.x * power;
-        let vy = direction.y * power;
+        let px = cueBall.position.x;
+        let py = cueBall.position.y;
+        let vx = direction.x * power;
+        let vy = direction.y * power;
 
-        for (let step = 0; step < maxSteps; step++) {
-            px += vx * 0.3;
-            py += vy * 0.3;
+        for (let step = 0; step < maxSteps; step++) {
+            px += vx * 0.3;
+            py += vy * 0.3;
 
-            trajectory.cuePath.push({ x: px, y: py });
+            trajectory.cuePath.push({ x: px, y: py });
 
-            // Rail bounces
-            if (px - r < b.left || px + r > b.right) {
-                vx = -vx * 0.8;
-                px = Math.max(b.left + r, Math.min(b.right - r, px));
-            }
-            if (py - r < b.top || py + r > b.bottom) {
-                vy = -vy * 0.8;
-                py = Math.max(b.top + r, Math.min(b.bottom - r, py));
-            }
+            // Rail bounces
+            if (px - r < b.left || px + r > b.right) {
+                vx = -vx * 0.8;
+                px = Math.max(b.left + r, Math.min(b.right - r, px));
+            }
+            if (py - r < b.top || py + r > b.bottom) {
+                vy = -vy * 0.8;
+                py = Math.max(b.top + r, Math.min(b.bottom - r, py));
+            }
 
-            // Friction
-            vx *= 0.995;
-            vy *= 0.995;
+            // Friction
+            vx *= 0.995;
+            vy *= 0.995;
 
-            // Stop if slow enough
-            if (vx * vx + vy * vy < 0.1) break;
-        }
-    }
+            // Stop if slow enough
+            if (vx * vx + vy * vy < 0.1) break;
+        }
+    }
 }

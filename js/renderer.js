@@ -93,10 +93,10 @@ export class Renderer {
         }
 
         // DEBUG: Draw pocket detection circles (uncomment to visualize)
-        // this.drawPocketDebug();
+        this.drawPocketDebug();
 
         // DEBUG: Draw cushion collision boundaries (uncomment to visualize)
-        // this.drawCushionDebug();
+        this.drawCushionDebug();
 
         this.drawBalls(state.balls);
 
@@ -467,13 +467,10 @@ export class Renderer {
         const pocketRadius = Constants.POCKET_RADIUS;
         const ballRadius = Constants.BALL_RADIUS;
         const gap = pocketRadius + ballRadius * 0.5;
-        const segmentLength = 20;
 
-        // Angles (must match physics)
-        const sidePocketAngle = 70;
-        const cornerPocketAngle = 45;
-        const sideRad = sidePocketAngle * Math.PI / 180;
-        const cornerRad = cornerPocketAngle * Math.PI / 180;
+        // Check if using curved pockets (tables 7 and 8, which are indices 6 and 7)
+        const useCurvedPockets = this.currentTableIndex === 6 || this.currentTableIndex === 7;
+        const cornerGap = useCurvedPockets ? gap + 3 : gap;
 
         ctx.strokeStyle = '#ffff00';
         ctx.lineWidth = 3;
@@ -481,43 +478,84 @@ export class Renderer {
 
         // Top rail segments
         ctx.beginPath();
-        ctx.moveTo(b.left + gap, b.top);
+        ctx.moveTo(b.left + cornerGap, b.top);
         ctx.lineTo(this.table.center.x - gap, b.top);
         ctx.stroke();
 
         ctx.beginPath();
         ctx.moveTo(this.table.center.x + gap, b.top);
-        ctx.lineTo(b.right - gap, b.top);
+        ctx.lineTo(b.right - cornerGap, b.top);
         ctx.stroke();
 
         // Bottom rail segments
         ctx.beginPath();
-        ctx.moveTo(b.left + gap, b.bottom);
+        ctx.moveTo(b.left + cornerGap, b.bottom);
         ctx.lineTo(this.table.center.x - gap, b.bottom);
         ctx.stroke();
 
         ctx.beginPath();
         ctx.moveTo(this.table.center.x + gap, b.bottom);
-        ctx.lineTo(b.right - gap, b.bottom);
+        ctx.lineTo(b.right - cornerGap, b.bottom);
         ctx.stroke();
 
         // Left rail
         ctx.beginPath();
-        ctx.moveTo(b.left, b.top + gap);
-        ctx.lineTo(b.left, b.bottom - gap);
+        ctx.moveTo(b.left, b.top + cornerGap);
+        ctx.lineTo(b.left, b.bottom - cornerGap);
         ctx.stroke();
 
         // Right rail
         ctx.beginPath();
-        ctx.moveTo(b.right, b.top + gap);
-        ctx.lineTo(b.right, b.bottom - gap);
+        ctx.moveTo(b.right, b.top + cornerGap);
+        ctx.lineTo(b.right, b.bottom - cornerGap);
         ctx.stroke();
 
         ctx.setLineDash([]);
 
-        // Draw angled pocket entry segments (solid green for visibility)
+        // Draw pocket entry segments
         ctx.strokeStyle = '#00ff00';
         ctx.lineWidth = 3;
+
+        if (useCurvedPockets) {
+            this.drawCurvedPocketEntriesDebug(ctx, b, gap, cornerGap);
+        } else {
+            this.drawStraightPocketEntriesDebug(ctx, b, gap);
+        }
+
+        // Draw gap endpoints as circles
+        ctx.fillStyle = '#ffff00';
+        const endpoints = [
+            // Top rail gaps
+            { x: b.left + cornerGap, y: b.top },
+            { x: this.table.center.x - gap, y: b.top },
+            { x: this.table.center.x + gap, y: b.top },
+            { x: b.right - cornerGap, y: b.top },
+            // Bottom rail gaps
+            { x: b.left + cornerGap, y: b.bottom },
+            { x: this.table.center.x - gap, y: b.bottom },
+            { x: this.table.center.x + gap, y: b.bottom },
+            { x: b.right - cornerGap, y: b.bottom },
+            // Left rail gaps
+            { x: b.left, y: b.top + cornerGap },
+            { x: b.left, y: b.bottom - cornerGap },
+            // Right rail gaps
+            { x: b.right, y: b.top + cornerGap },
+            { x: b.right, y: b.bottom - cornerGap }
+        ];
+
+        for (const pt of endpoints) {
+            ctx.beginPath();
+            ctx.arc(pt.x, pt.y, 5, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    }
+
+    drawStraightPocketEntriesDebug(ctx, b, gap) {
+        const segmentLength = 20;
+        const sidePocketAngle = 70;
+        const cornerPocketAngle = 45;
+        const sideRad = sidePocketAngle * Math.PI / 180;
+        const cornerRad = cornerPocketAngle * Math.PI / 180;
 
         // Side pocket entries (top)
         ctx.beginPath();
@@ -581,33 +619,113 @@ export class Renderer {
         ctx.moveTo(b.right, b.bottom - gap);
         ctx.lineTo(b.right + Math.sin(cornerRad) * segmentLength, b.bottom - gap + Math.cos(cornerRad) * segmentLength);
         ctx.stroke();
+    }
 
-        // Draw gap endpoints as circles
-        ctx.fillStyle = '#ffff00';
-        const endpoints = [
-            // Top rail gaps
-            { x: b.left + gap, y: b.top },
-            { x: this.table.center.x - gap, y: b.top },
-            { x: this.table.center.x + gap, y: b.top },
-            { x: b.right - gap, y: b.top },
-            // Bottom rail gaps
-            { x: b.left + gap, y: b.bottom },
-            { x: this.table.center.x - gap, y: b.bottom },
-            { x: this.table.center.x + gap, y: b.bottom },
-            { x: b.right - gap, y: b.bottom },
-            // Left rail gaps
-            { x: b.left, y: b.top + gap },
-            { x: b.left, y: b.bottom - gap },
-            // Right rail gaps
-            { x: b.right, y: b.top + gap },
-            { x: b.right, y: b.bottom - gap }
-        ];
+    drawCurvedPocketEntriesDebug(ctx, b, gap, cornerGap) {
+        const cornerCurveLength = 28;
+        const middleCurveLength = 22;
+        const cornerCurveAmount = 0.4;
+        const middleCurveAmount = 0.5;
 
-        for (const pt of endpoints) {
+        // Helper to draw a curved segment (matching physics bezier)
+        const drawCurve = (startX, startY, endX, endY, curveDirection, numSegments = 8) => {
+            const midX = (startX + endX) / 2;
+            const midY = (startY + endY) / 2;
+            const dx = endX - startX;
+            const dy = endY - startY;
+            const len = Math.sqrt(dx * dx + dy * dy);
+            const perpX = -dy / len;
+            const perpY = dx / len;
+            const curveDepth = len * 0.4 * curveDirection;
+            const controlX = midX + perpX * curveDepth;
+            const controlY = midY + perpY * curveDepth;
+
             ctx.beginPath();
-            ctx.arc(pt.x, pt.y, 5, 0, Math.PI * 2);
-            ctx.fill();
-        }
+            ctx.moveTo(startX, startY);
+            for (let i = 1; i <= numSegments; i++) {
+                const t = i / numSegments;
+                const oneMinusT = 1 - t;
+                const x = oneMinusT * oneMinusT * startX + 2 * oneMinusT * t * controlX + t * t * endX;
+                const y = oneMinusT * oneMinusT * startY + 2 * oneMinusT * t * controlY + t * t * endY;
+                ctx.lineTo(x, y);
+            }
+            ctx.stroke();
+        };
+
+        // Middle pocket entries (top)
+        // Inner endpoints moved 3px towards center
+        drawCurve(
+            this.table.center.x - gap, b.top,
+            this.table.center.x - gap + middleCurveLength * 0.3 + 3, b.top - middleCurveLength,
+            middleCurveAmount, 8
+        );
+        drawCurve(
+            this.table.center.x + gap, b.top,
+            this.table.center.x + gap - middleCurveLength * 0.3 - 3, b.top - middleCurveLength,
+            -middleCurveAmount, 8
+        );
+
+        // Middle pocket entries (bottom)
+        drawCurve(
+            this.table.center.x - gap, b.bottom,
+            this.table.center.x - gap + middleCurveLength * 0.3 + 3, b.bottom + middleCurveLength,
+            -middleCurveAmount, 8
+        );
+        drawCurve(
+            this.table.center.x + gap, b.bottom,
+            this.table.center.x + gap - middleCurveLength * 0.3 - 3, b.bottom + middleCurveLength,
+            middleCurveAmount, 8
+        );
+
+        // Corner pocket entries
+        // Inner endpoints moved 3px towards pocket along rail direction
+        // Top-left
+        drawCurve(
+            b.left + cornerGap, b.top,
+            b.left + cornerGap - cornerCurveLength * 0.7 - 3, b.top - cornerCurveLength * 0.7,
+            -cornerCurveAmount, 6
+        );
+        drawCurve(
+            b.left, b.top + cornerGap,
+            b.left - cornerCurveLength * 0.7, b.top + cornerGap - cornerCurveLength * 0.7 - 3,
+            cornerCurveAmount, 6
+        );
+
+        // Top-right
+        drawCurve(
+            b.right - cornerGap, b.top,
+            b.right - cornerGap + cornerCurveLength * 0.7 + 3, b.top - cornerCurveLength * 0.7,
+            cornerCurveAmount, 6
+        );
+        drawCurve(
+            b.right, b.top + cornerGap,
+            b.right + cornerCurveLength * 0.7, b.top + cornerGap - cornerCurveLength * 0.7 - 3,
+            -cornerCurveAmount, 6
+        );
+
+        // Bottom-left
+        drawCurve(
+            b.left + cornerGap, b.bottom,
+            b.left + cornerGap - cornerCurveLength * 0.7 - 3, b.bottom + cornerCurveLength * 0.7,
+            cornerCurveAmount, 6
+        );
+        drawCurve(
+            b.left, b.bottom - cornerGap,
+            b.left - cornerCurveLength * 0.7, b.bottom - cornerGap + cornerCurveLength * 0.7 + 3,
+            -cornerCurveAmount, 6
+        );
+
+        // Bottom-right
+        drawCurve(
+            b.right - cornerGap, b.bottom,
+            b.right - cornerGap + cornerCurveLength * 0.7 + 3, b.bottom + cornerCurveLength * 0.7,
+            -cornerCurveAmount, 6
+        );
+        drawCurve(
+            b.right, b.bottom - cornerGap,
+            b.right + cornerCurveLength * 0.7, b.bottom - cornerGap + cornerCurveLength * 0.7 + 3,
+            cornerCurveAmount, 6
+        );
     }
 
     createWoodGradient(x, y, w, h) {

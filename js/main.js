@@ -79,7 +79,10 @@ class PoolGame {
             // 1. Update the visual style (Renderer)
             this.renderer.setTableStyle(tableNum);
 
-            // 2. Update the audio context (Audio)
+            // 2. Update the physics collision shapes (for curved vs straight pockets)
+            this.physics.setTableStyle(tableNum);
+
+            // 3. Update the audio context (Audio)
             // If tableNum is 8, set to snooker, otherwise default to pool
             if (tableNum === 8) {
                 this.audio.setTableType('snooker');

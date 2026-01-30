@@ -18,7 +18,7 @@ export class Table {
             left: this.padding,
             right: this.padding + this.width,
             top: this.padding,
-            bottom: this.padding + this.height
+            bottom: this.padding + this.height + 2  // Offset to align with table images
         };
 
         // Center of the table
@@ -51,28 +51,29 @@ export class Table {
         const pocketRadius = Constants.POCKET_RADIUS;
         const b = this.bounds;
 
-        // Corner pockets - positioned right at the corners
+        // Corner pockets - offset diagonally into the pocket holes
+        const cornerOffset = 5;
         // Top-left
         pockets.push({
-            position: Vec2.create(b.left, b.top),
+            position: Vec2.create(b.left - cornerOffset, b.top - cornerOffset),
             radius: pocketRadius,
             type: 'corner'
         });
         // Top-right
         pockets.push({
-            position: Vec2.create(b.right, b.top),
+            position: Vec2.create(b.right + cornerOffset, b.top - cornerOffset),
             radius: pocketRadius,
             type: 'corner'
         });
         // Bottom-left
         pockets.push({
-            position: Vec2.create(b.left, b.bottom),
+            position: Vec2.create(b.left - cornerOffset, b.bottom + cornerOffset),
             radius: pocketRadius,
             type: 'corner'
         });
         // Bottom-right
         pockets.push({
-            position: Vec2.create(b.right, b.bottom),
+            position: Vec2.create(b.right + cornerOffset, b.bottom + cornerOffset),
             radius: pocketRadius,
             type: 'corner'
         });

@@ -59,281 +59,234 @@ export class PlanckPhysics {
     }
 
     createTableBoundaries() {
-        const b = this.table.bounds;
-        const pocketRadius = Constants.POCKET_RADIUS;
-        const ballRadius = Constants.BALL_RADIUS;
-        const gap = pocketRadius + ballRadius * 0.5;
-
-        // For curved pocket tables, corners need a larger gap
-        const useCurvedPockets = this.tableStyle === 7 || this.tableStyle === 8;
-        const cornerGap = useCurvedPockets ? gap + 3 : gap;
-
-        // Create Rails
-        this.createRailSegment(b.left + cornerGap, b.top, this.table.center.x - gap, b.top, 'top');
-        this.createRailSegment(this.table.center.x + gap, b.top, b.right - cornerGap, b.top, 'top');
-        this.createRailSegment(b.left + cornerGap, b.bottom, this.table.center.x - gap, b.bottom, 'bottom');
-        this.createRailSegment(this.table.center.x + gap, b.bottom, b.right - cornerGap, b.bottom, 'bottom');
-        this.createRailSegment(b.left, b.top + cornerGap, b.left, b.bottom - cornerGap, 'left');
-        this.createRailSegment(b.right, b.top + cornerGap, b.right, b.bottom - cornerGap, 'right');
-
-        this.createPocketEntrySegments();
-    }
-
-    createPocketEntrySegments() {
-        // Tables 7 (UK pub) and 8 (mini snooker) use curved pocket entries
+        // Use ChainShape for continuous rail paths to prevent ghost collisions
         const useCurvedPockets = this.tableStyle === 7 || this.tableStyle === 8;
 
         if (useCurvedPockets) {
-            this.createCurvedPocketEntries();
+            this.createCurvedRailChains();
         } else {
-            this.createStraightPocketEntries();
+            this.createStraightRailChains();
         }
     }
 
-    createStraightPocketEntries() {
-        const b = this.table.bounds;
-        const pocketRadius = Constants.POCKET_RADIUS;
-        const ballRadius = Constants.BALL_RADIUS;
-        const gap = pocketRadius + ballRadius * 0.5;
-        const segmentLength = 20; // Length of angled segments
+    // Generate points for a bezier curve
+    generateCurvePoints(startX, startY, endX, endY, curveDirection, numSegments = 6) {
+        const midX = (startX + endX) / 2;
+        const midY = (startY + endY) / 2;
+        const dx = endX - startX;
+        const dy = endY - startY;
+        const len = Math.sqrt(dx * dx + dy * dy);
+        const perpX = -dy / len;
+        const perpY = dx / len;
+        const curveDepth = len * 0.4 * curveDirection;
+        const controlX = midX + perpX * curveDepth;
+        const controlY = midY + perpY * curveDepth;
 
-        // Angles in degrees (configurable)
-        const sidePocketAngle = 70; // Degrees from cushion line for side pockets
-        const cornerPocketAngle = 45; // Degrees from cushion line for corner pockets
-
-        // Convert to radians
-        const sideRad = sidePocketAngle * Math.PI / 180;
-        const cornerRad = cornerPocketAngle * Math.PI / 180;
-
-        // Side pocket entry segments (top)
-        this.createRailSegment(
-            this.table.center.x - gap, b.top,
-            this.table.center.x - gap + Math.cos(sideRad) * segmentLength, b.top - Math.sin(sideRad) * segmentLength,
-            'pocket'
-        );
-        this.createRailSegment(
-            this.table.center.x + gap, b.top,
-            this.table.center.x + gap - Math.cos(sideRad) * segmentLength, b.top - Math.sin(sideRad) * segmentLength,
-            'pocket'
-        );
-
-        // Side pocket entry segments (bottom)
-        this.createRailSegment(
-            this.table.center.x - gap, b.bottom,
-            this.table.center.x - gap + Math.cos(sideRad) * segmentLength, b.bottom + Math.sin(sideRad) * segmentLength,
-            'pocket'
-        );
-        this.createRailSegment(
-            this.table.center.x + gap, b.bottom,
-            this.table.center.x + gap - Math.cos(sideRad) * segmentLength, b.bottom + Math.sin(sideRad) * segmentLength,
-            'pocket'
-        );
-
-        // Corner pocket entry segments
-        // Top-left corner
-        this.createRailSegment(
-            b.left + gap, b.top,
-            b.left + gap - Math.cos(cornerRad) * segmentLength, b.top - Math.sin(cornerRad) * segmentLength,
-            'pocket'
-        );
-        this.createRailSegment(
-            b.left, b.top + gap,
-            b.left - Math.sin(cornerRad) * segmentLength, b.top + gap - Math.cos(cornerRad) * segmentLength,
-            'pocket'
-        );
-
-        // Top-right corner
-        this.createRailSegment(
-            b.right - gap, b.top,
-            b.right - gap + Math.cos(cornerRad) * segmentLength, b.top - Math.sin(cornerRad) * segmentLength,
-            'pocket'
-        );
-        this.createRailSegment(
-            b.right, b.top + gap,
-            b.right + Math.sin(cornerRad) * segmentLength, b.top + gap - Math.cos(cornerRad) * segmentLength,
-            'pocket'
-        );
-
-        // Bottom-left corner
-        this.createRailSegment(
-            b.left + gap, b.bottom,
-            b.left + gap - Math.cos(cornerRad) * segmentLength, b.bottom + Math.sin(cornerRad) * segmentLength,
-            'pocket'
-        );
-        this.createRailSegment(
-            b.left, b.bottom - gap,
-            b.left - Math.sin(cornerRad) * segmentLength, b.bottom - gap + Math.cos(cornerRad) * segmentLength,
-            'pocket'
-        );
-
-        // Bottom-right corner
-        this.createRailSegment(
-            b.right - gap, b.bottom,
-            b.right - gap + Math.cos(cornerRad) * segmentLength, b.bottom + Math.sin(cornerRad) * segmentLength,
-            'pocket'
-        );
-        this.createRailSegment(
-            b.right, b.bottom - gap,
-            b.right + Math.sin(cornerRad) * segmentLength, b.bottom - gap + Math.cos(cornerRad) * segmentLength,
-            'pocket'
-        );
+        const points = [];
+        for (let i = 0; i <= numSegments; i++) {
+            const t = i / numSegments;
+            const oneMinusT = 1 - t;
+            const x = oneMinusT * oneMinusT * startX + 2 * oneMinusT * t * controlX + t * t * endX;
+            const y = oneMinusT * oneMinusT * startY + 2 * oneMinusT * t * controlY + t * t * endY;
+            points.push({ x, y });
+        }
+        return points;
     }
 
-    createCurvedPocketEntries() {
-        const b = this.table.bounds;
-        const pocketRadius = Constants.POCKET_RADIUS;
-        const ballRadius = Constants.BALL_RADIUS;
-        const gap = pocketRadius + ballRadius * 0.5;
-        const cornerGap = gap + 3;  // Corner gaps are larger for curved tables
-
-        // Curve parameters - different for corner vs middle pockets
-        // Corner pockets have gentler curves, middle pockets have tighter curves
-        const cornerCurveLength = 28;  // Length of curved segment for corners
-        const middleCurveLength = 22;  // Length of curved segment for middle pockets
-        const cornerCurveAmount = 0.4; // How much the corner curves bulge (multiplier)
-        const middleCurveAmount = 0.5; // Middle pockets curve amount
-
-        // Middle pocket entries (top) - curve outward (convex)
-        // Inner endpoints moved 3px towards center
-        this.createCurvedPocketEntry(
-            this.table.center.x - gap, b.top,
-            this.table.center.x - gap + middleCurveLength * 0.3 + 3, b.top - middleCurveLength,
-            middleCurveAmount, 8
-        );
-        this.createCurvedPocketEntry(
-            this.table.center.x + gap, b.top,
-            this.table.center.x + gap - middleCurveLength * 0.3 - 3, b.top - middleCurveLength,
-            -middleCurveAmount, 8
-        );
-
-        // Middle pocket entries (bottom)
-        this.createCurvedPocketEntry(
-            this.table.center.x - gap, b.bottom,
-            this.table.center.x - gap + middleCurveLength * 0.3 + 3, b.bottom + middleCurveLength,
-            -middleCurveAmount, 8
-        );
-        this.createCurvedPocketEntry(
-            this.table.center.x + gap, b.bottom,
-            this.table.center.x + gap - middleCurveLength * 0.3 - 3, b.bottom + middleCurveLength,
-            middleCurveAmount, 8
-        );
-
-        // Corner pocket entries - gentler curves (convex)
-        // Inner endpoints moved 3px towards pocket along rail direction
-        // Top-left corner
-        this.createCurvedPocketEntry(
-            b.left + cornerGap, b.top,
-            b.left + cornerGap - cornerCurveLength * 0.7 - 3, b.top - cornerCurveLength * 0.7,
-            -cornerCurveAmount, 6
-        );
-        this.createCurvedPocketEntry(
-            b.left, b.top + cornerGap,
-            b.left - cornerCurveLength * 0.7, b.top + cornerGap - cornerCurveLength * 0.7 - 3,
-            cornerCurveAmount, 6
-        );
-
-        // Top-right corner
-        this.createCurvedPocketEntry(
-            b.right - cornerGap, b.top,
-            b.right - cornerGap + cornerCurveLength * 0.7 + 3, b.top - cornerCurveLength * 0.7,
-            cornerCurveAmount, 6
-        );
-        this.createCurvedPocketEntry(
-            b.right, b.top + cornerGap,
-            b.right + cornerCurveLength * 0.7, b.top + cornerGap - cornerCurveLength * 0.7 - 3,
-            -cornerCurveAmount, 6
-        );
-
-        // Bottom-left corner
-        this.createCurvedPocketEntry(
-            b.left + cornerGap, b.bottom,
-            b.left + cornerGap - cornerCurveLength * 0.7 - 3, b.bottom + cornerCurveLength * 0.7,
-            cornerCurveAmount, 6
-        );
-        this.createCurvedPocketEntry(
-            b.left, b.bottom - cornerGap,
-            b.left - cornerCurveLength * 0.7, b.bottom - cornerGap + cornerCurveLength * 0.7 + 3,
-            -cornerCurveAmount, 6
-        );
-
-        // Bottom-right corner
-        this.createCurvedPocketEntry(
-            b.right - cornerGap, b.bottom,
-            b.right - cornerGap + cornerCurveLength * 0.7 + 3, b.bottom + cornerCurveLength * 0.7,
-            -cornerCurveAmount, 6
-        );
-        this.createCurvedPocketEntry(
-            b.right, b.bottom - cornerGap,
-            b.right + cornerCurveLength * 0.7, b.bottom - cornerGap + cornerCurveLength * 0.7 + 3,
-            cornerCurveAmount, 6
-        );
-    }
-
-    createRailSegment(x1, y1, x2, y2, railType) {
+    // Create a chain shape from an array of points
+    createRailChain(points) {
         const body = this.world.createBody({
             type: 'static',
             position: planck.Vec2(0, 0)
         });
 
         const toM = (px) => px / SCALE;
+        const vertices = points.map(p => planck.Vec2(toM(p.x), toM(p.y)));
 
         body.createFixture({
-            shape: planck.Edge(
-                planck.Vec2(toM(x1), toM(y1)),
-                planck.Vec2(toM(x2), toM(y2))
-            ),
-            // INCREASED FRICTION:
-            // This enables the "Check Side" and "Running Side" effects natively.
-            // When a spinning ball hits this, the friction causes a tangential kick.
-            friction: 0.3, 
+            shape: planck.Chain(vertices, false),
+            friction: 0.3,
             restitution: Constants.RAIL_RESTITUTION
         });
 
-        body.setUserData({ type: 'rail', railType: railType });
+        body.setUserData({ type: 'rail', railType: 'chain' });
         this.railBodies.push(body);
     }
 
-    // Create a curved pocket entry using multiple segments to approximate an arc
-    createCurvedPocketEntry(startX, startY, endX, endY, curveDirection, numSegments = 6) {
-        // curveDirection: positive curves one way, negative curves the other
-        const midX = (startX + endX) / 2;
-        const midY = (startY + endY) / 2;
+    createStraightRailChains() {
+        const b = this.table.bounds;
+        const pocketRadius = Constants.POCKET_RADIUS;
+        const ballRadius = Constants.BALL_RADIUS;
+        const gap = pocketRadius + ballRadius * 0.5;
+        const segmentLength = 20;
 
-        // Calculate perpendicular direction for curve bulge
-        const dx = endX - startX;
-        const dy = endY - startY;
-        const len = Math.sqrt(dx * dx + dy * dy);
+        const sidePocketAngle = 70;
+        const cornerPocketAngle = 45;
+        const sideRad = sidePocketAngle * Math.PI / 180;
+        const cornerRad = cornerPocketAngle * Math.PI / 180;
 
-        // Perpendicular vector (normalized)
-        const perpX = -dy / len;
-        const perpY = dx / len;
+        // Chain 1: Top-left corner (horizontal) → Top rail left → Top middle pocket left
+        this.createRailChain([
+            { x: b.left + gap - Math.cos(cornerRad) * segmentLength, y: b.top - Math.sin(cornerRad) * segmentLength },
+            { x: b.left + gap, y: b.top },
+            { x: this.table.center.x - gap, y: b.top },
+            { x: this.table.center.x - gap + Math.cos(sideRad) * segmentLength, y: b.top - Math.sin(sideRad) * segmentLength }
+        ]);
 
-        // Curve depth (how far the arc bulges)
-        const curveDepth = len * 0.4 * curveDirection;
+        // Chain 2: Top middle pocket right → Top rail right → Top-right corner (horizontal)
+        this.createRailChain([
+            { x: this.table.center.x + gap - Math.cos(sideRad) * segmentLength, y: b.top - Math.sin(sideRad) * segmentLength },
+            { x: this.table.center.x + gap, y: b.top },
+            { x: b.right - gap, y: b.top },
+            { x: b.right - gap + Math.cos(cornerRad) * segmentLength, y: b.top - Math.sin(cornerRad) * segmentLength }
+        ]);
 
-        // Generate points along a quadratic bezier curve
-        const points = [];
-        for (let i = 0; i <= numSegments; i++) {
-            const t = i / numSegments;
-            // Quadratic bezier: P = (1-t)²*P0 + 2*(1-t)*t*P1 + t²*P2
-            // Control point is at midpoint + perpendicular offset
-            const controlX = midX + perpX * curveDepth;
-            const controlY = midY + perpY * curveDepth;
+        // Chain 3: Top-right corner (vertical) → Right rail → Bottom-right corner (vertical)
+        this.createRailChain([
+            { x: b.right + Math.sin(cornerRad) * segmentLength, y: b.top + gap - Math.cos(cornerRad) * segmentLength },
+            { x: b.right, y: b.top + gap },
+            { x: b.right, y: b.bottom - gap },
+            { x: b.right + Math.sin(cornerRad) * segmentLength, y: b.bottom - gap + Math.cos(cornerRad) * segmentLength }
+        ]);
 
-            const oneMinusT = 1 - t;
-            const x = oneMinusT * oneMinusT * startX + 2 * oneMinusT * t * controlX + t * t * endX;
-            const y = oneMinusT * oneMinusT * startY + 2 * oneMinusT * t * controlY + t * t * endY;
-            points.push({ x, y });
-        }
+        // Chain 4: Bottom-right corner (horizontal) → Bottom rail right → Bottom middle pocket right
+        this.createRailChain([
+            { x: b.right - gap + Math.cos(cornerRad) * segmentLength, y: b.bottom + Math.sin(cornerRad) * segmentLength },
+            { x: b.right - gap, y: b.bottom },
+            { x: this.table.center.x + gap, y: b.bottom },
+            { x: this.table.center.x + gap - Math.cos(sideRad) * segmentLength, y: b.bottom + Math.sin(sideRad) * segmentLength }
+        ]);
 
-        // Create edge segments between consecutive points
-        for (let i = 0; i < points.length - 1; i++) {
-            this.createRailSegment(
-                points[i].x, points[i].y,
-                points[i + 1].x, points[i + 1].y,
-                'pocket'
-            );
-        }
+        // Chain 5: Bottom middle pocket left → Bottom rail left → Bottom-left corner (horizontal)
+        this.createRailChain([
+            { x: this.table.center.x - gap + Math.cos(sideRad) * segmentLength, y: b.bottom + Math.sin(sideRad) * segmentLength },
+            { x: this.table.center.x - gap, y: b.bottom },
+            { x: b.left + gap, y: b.bottom },
+            { x: b.left + gap - Math.cos(cornerRad) * segmentLength, y: b.bottom + Math.sin(cornerRad) * segmentLength }
+        ]);
+
+        // Chain 6: Bottom-left corner (vertical) → Left rail → Top-left corner (vertical)
+        this.createRailChain([
+            { x: b.left - Math.sin(cornerRad) * segmentLength, y: b.bottom - gap + Math.cos(cornerRad) * segmentLength },
+            { x: b.left, y: b.bottom - gap },
+            { x: b.left, y: b.top + gap },
+            { x: b.left - Math.sin(cornerRad) * segmentLength, y: b.top + gap - Math.cos(cornerRad) * segmentLength }
+        ]);
+    }
+
+    createCurvedRailChains() {
+        const b = this.table.bounds;
+        const pocketRadius = Constants.POCKET_RADIUS;
+        const ballRadius = Constants.BALL_RADIUS;
+        const gap = pocketRadius + ballRadius * 0.5;
+        const cornerGap = gap + 3;
+
+        const cornerCurveLength = 28;
+        const middleCurveLength = 22;
+        const cornerCurveAmount = 0.4;
+        const middleCurveAmount = 0.5;
+
+        // Chain 1: Top-left corner (horizontal curve) → Top rail left → Top middle pocket left curve
+        let points = [];
+        let curve = this.generateCurvePoints(
+            b.left + cornerGap - cornerCurveLength * 0.7 - 3, b.top - cornerCurveLength * 0.7,
+            b.left + cornerGap, b.top,
+            cornerCurveAmount, 6
+        );
+        points.push(...curve);
+        points.push({ x: this.table.center.x - gap, y: b.top });
+        curve = this.generateCurvePoints(
+            this.table.center.x - gap, b.top,
+            this.table.center.x - gap + middleCurveLength * 0.3 + 3, b.top - middleCurveLength,
+            middleCurveAmount, 8
+        );
+        points.push(...curve.slice(1));
+        this.createRailChain(points);
+
+        // Chain 2: Top middle pocket right curve → Top rail right → Top-right corner (horizontal curve)
+        points = [];
+        curve = this.generateCurvePoints(
+            this.table.center.x + gap - middleCurveLength * 0.3 - 3, b.top - middleCurveLength,
+            this.table.center.x + gap, b.top,
+            middleCurveAmount, 8
+        );
+        points.push(...curve);
+        points.push({ x: b.right - cornerGap, y: b.top });
+        curve = this.generateCurvePoints(
+            b.right - cornerGap, b.top,
+            b.right - cornerGap + cornerCurveLength * 0.7 + 3, b.top - cornerCurveLength * 0.7,
+            cornerCurveAmount, 6
+        );
+        points.push(...curve.slice(1));
+        this.createRailChain(points);
+
+        // Chain 3: Top-right corner (vertical curve) → Right rail → Bottom-right corner (vertical curve)
+        points = [];
+        curve = this.generateCurvePoints(
+            b.right + cornerCurveLength * 0.7, b.top + cornerGap - cornerCurveLength * 0.7 - 3,
+            b.right, b.top + cornerGap,
+            cornerCurveAmount, 6
+        );
+        points.push(...curve);
+        points.push({ x: b.right, y: b.bottom - cornerGap });
+        curve = this.generateCurvePoints(
+            b.right, b.bottom - cornerGap,
+            b.right + cornerCurveLength * 0.7, b.bottom - cornerGap + cornerCurveLength * 0.7 + 3,
+            cornerCurveAmount, 6
+        );
+        points.push(...curve.slice(1));
+        this.createRailChain(points);
+
+        // Chain 4: Bottom-right corner (horizontal curve) → Bottom rail right → Bottom middle pocket right curve
+        points = [];
+        curve = this.generateCurvePoints(
+            b.right - cornerGap + cornerCurveLength * 0.7 + 3, b.bottom + cornerCurveLength * 0.7,
+            b.right - cornerGap, b.bottom,
+            cornerCurveAmount, 6
+        );
+        points.push(...curve);
+        points.push({ x: this.table.center.x + gap, y: b.bottom });
+        curve = this.generateCurvePoints(
+            this.table.center.x + gap, b.bottom,
+            this.table.center.x + gap - middleCurveLength * 0.3 - 3, b.bottom + middleCurveLength,
+            middleCurveAmount, 8
+        );
+        points.push(...curve.slice(1));
+        this.createRailChain(points);
+
+        // Chain 5: Bottom middle pocket left curve → Bottom rail left → Bottom-left corner (horizontal curve)
+        points = [];
+        curve = this.generateCurvePoints(
+            this.table.center.x - gap + middleCurveLength * 0.3 + 3, b.bottom + middleCurveLength,
+            this.table.center.x - gap, b.bottom,
+            middleCurveAmount, 8
+        );
+        points.push(...curve);
+        points.push({ x: b.left + cornerGap, y: b.bottom });
+        curve = this.generateCurvePoints(
+            b.left + cornerGap, b.bottom,
+            b.left + cornerGap - cornerCurveLength * 0.7 - 3, b.bottom + cornerCurveLength * 0.7,
+            cornerCurveAmount, 6
+        );
+        points.push(...curve.slice(1));
+        this.createRailChain(points);
+
+        // Chain 6: Bottom-left corner (vertical curve) → Left rail → Top-left corner (vertical curve)
+        points = [];
+        curve = this.generateCurvePoints(
+            b.left - cornerCurveLength * 0.7, b.bottom - cornerGap + cornerCurveLength * 0.7 + 3,
+            b.left, b.bottom - cornerGap,
+            cornerCurveAmount, 6
+        );
+        points.push(...curve);
+        points.push({ x: b.left, y: b.top + cornerGap });
+        curve = this.generateCurvePoints(
+            b.left, b.top + cornerGap,
+            b.left - cornerCurveLength * 0.7, b.top + cornerGap - cornerCurveLength * 0.7 - 3,
+            cornerCurveAmount, 6
+        );
+        points.push(...curve.slice(1));
+        this.createRailChain(points);
     }
 
     setupContactListener() {

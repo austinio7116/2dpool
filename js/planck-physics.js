@@ -228,7 +228,7 @@ setupContactListener() {
             // Native damping handles basic air resistance
             linearDamping: 1, 
             // Angular damping for the Z-axis (English decay)
-            angularDamping: 4 
+            angularDamping: 1 
         });
 
         body.setLinearVelocity(planck.Vec2(
@@ -240,7 +240,7 @@ setupContactListener() {
             shape: planck.Circle(ball.radius / SCALE),
             density: 1.0,
             // Friction enables "Throw" (spin transfer between balls) and English on rails
-            friction: 0.2, 
+            friction: 0.1, 
             restitution: Constants.RESTITUTION
         });
 

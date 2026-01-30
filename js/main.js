@@ -175,7 +175,7 @@ class PoolGame {
         // Let's model it as: Center hit = Sliding (0 spin). Top hit = Rolling. Bottom = Backspin.
         // Range -1 to 1.
         // The factor 2.5 determines max draw/follow speed relative to ball speed.
-        const spinFactor = spin.y * 10; 
+        const spinFactor = spin.y * 5; 
 
         cueBall.spin.x = rollingSpinX * spinFactor;
         cueBall.spin.y = rollingSpinY * spinFactor;

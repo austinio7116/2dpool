@@ -313,49 +313,65 @@ setupContactListener() {
         const omega = ball.spin; 
 
         // 1. Calculate Contact Point Velocity
-        // V_cp = V_cm + (Omega x R)
         const v_cp_x = v.x + omega.y * radius;
         const v_cp_y = v.y - omega.x * radius;
         const slipSpeed = Math.sqrt(v_cp_x * v_cp_x + v_cp_y * v_cp_y);
 
         // 2. Determine Friction Impulse
-        const isSlipping = slipSpeed > 0.05;
+        // TWEAK: Increased threshold from 0.05 to 0.15
+        // This forces more "slightly imperfect" rolls to be treated as pure rolling (drag only)
+        const isSlipping = slipSpeed > 0.15;
         
         if (isSlipping) {
-            // SLIDING (Draw/Follow/Curve)
-            const forceMag = this.mu_slide * body.getMass() * this.g;
+            // Dynamic Friction (Safe Zone Logic from previous step)
+            const slipThreshold = 2.5; 
+            let dynamicMu = 0.025;     
+
+            if (slipSpeed > slipThreshold) {
+                dynamicMu += (slipSpeed - slipThreshold) * 0.12;
+            }
+            dynamicMu = Math.min(dynamicMu, 0.35);
+
+            const forceMag = dynamicMu * body.getMass() * this.g;
             
-            // Normalized direction of slip
             const dirX = -v_cp_x / slipSpeed;
             const dirY = -v_cp_y / slipSpeed;
 
-            // Raw Friction Force
             let fx = dirX * forceMag;
             let fy = dirY * forceMag;
 
-            // --- MAGNUS SUPPRESSION FOR OBJECT BALLS ---
-            // If this is NOT the cue ball, we suppress the sideways (curve) component
+            // --- ENERGY FIX: PREVENT INFINITE ROLL ---
+            // Calculate if this force is trying to accelerate the ball
+            if (speed > 0.01) {
+                const dot = fx * (v.x/speed) + fy * (v.y/speed);
+                
+                // If dot > 0, the friction is pushing the ball forward (Topspin kick).
+                // We only want this if the slip is REAL (e.g. cue ball shot), 
+                // not a micro-artifact of rolling.
+                if (dot > 0) {
+                     // If slip is small (< 1.0 m/s), dampen the forward kick significantly.
+                     // This effectively kills the "Magical Acceleration" from micro-topspin.
+                     if (slipSpeed < 1.0) {
+                         fx *= 0.1;
+                         fy *= 0.1;
+                     }
+                }
+            }
+            // -----------------------------------------
+
+            // Suppress Magnus (Swerve) for object balls
             if (ball.number !== 0 && speed > 0.1) {
-                // Project force onto the velocity vector to get only the Braking/Accelerating component
-                // Unit vector of velocity
                 const vxNorm = v.x / speed;
                 const vyNorm = v.y / speed;
-                
-                // Dot product: How much of the friction is parallel to motion?
                 const dot = fx * vxNorm + fy * vyNorm;
-                
-                // Reconstruct force using ONLY the parallel component
-                // This preserves Draw/Follow physics (speeding up/slowing down)
-                // but eliminates Swerve (curving left/right)
                 fx = dot * vxNorm;
                 fy = dot * vyNorm;
             }
-            // -------------------------------------------
 
             body.applyForceToCenter(planck.Vec2(fx, fy), true);
 
             // Torque (Spin Decay)
-            const alpha = 5.0 * dt; 
+            const alpha = 2.5 * dt; 
 
             // Ideal rotation for pure roll
             const idealOmegaX = v.y / radius;
@@ -363,10 +379,12 @@ setupContactListener() {
             
             ball.spin.x = ball.spin.x * (1 - alpha) + idealOmegaX * alpha;
             ball.spin.y = ball.spin.y * (1 - alpha) + idealOmegaY * alpha;
+            
             ball.isSliding = true;
 
         } else {
-            // ROLLING
+            // ROLLING (Drag Only)
+            // This is where we want the ball to be 99% of the time!
             const dragMag = this.mu_roll * body.getMass() * this.g;
             
             if (speed > 0.01) {
@@ -374,8 +392,12 @@ setupContactListener() {
                 const dirY = -v.y / speed;
                 body.applyForceToCenter(planck.Vec2(dirX * dragMag, dirY * dragMag), true);
                 
-                ball.spin.x = v.y / radius;
-                ball.spin.y = -v.x / radius;
+                const idealOmegaX = v.y / radius;
+                const idealOmegaY = -v.x / radius;
+                const rollLockSpeed = 0.2;
+                
+                ball.spin.x = ball.spin.x * (1 - rollLockSpeed) + idealOmegaX * rollLockSpeed;
+                ball.spin.y = ball.spin.y * (1 - rollLockSpeed) + idealOmegaY * rollLockSpeed;
             } else {
                 body.setLinearVelocity(planck.Vec2(0,0));
                 body.setAngularVelocity(0);

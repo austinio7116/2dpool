@@ -361,10 +361,10 @@ export function positionSnookerBalls(balls, tableCenter, ballRadius) {
         }
     }
 
-    // Position 6 reds in small triangle behind pink
+    // Position 6 reds in small triangle behind pink (touching the pink ball)
     const redBalls = balls.filter(b => b.isRed);
     const pinkSpot = spots.pink;
-    const startX = tableCenter.x + pinkSpot.x + ballRadius * 3;
+    const startX = tableCenter.x + pinkSpot.x + ballRadius * 2;
     const spacing = ballRadius * 2 + 0.5;
 
     // Triangle: 1, 2, 3 rows (total 6 balls)
@@ -457,10 +457,10 @@ export function positionFullSnookerBalls(balls, tableCenter, ballRadius) {
         }
     }
 
-    // Position 15 reds in triangle behind pink (5 rows: 1, 2, 3, 4, 5 balls)
+    // Position 15 reds in triangle behind pink (touching the pink ball)
     const redBalls = balls.filter(b => b.isRed);
     const pinkSpot = spots.pink;
-    const startX = tableCenter.x + pinkSpot.x + ballRadius * 3;
+    const startX = tableCenter.x + pinkSpot.x + ballRadius * 2;
     const spacing = ballRadius * 2 + 0.5;
 
     // Triangle: 1, 2, 3, 4, 5 rows (total 15 balls)

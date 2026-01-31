@@ -1049,20 +1049,23 @@ export class Game {
 
         // 2. Try Highest Value Spots (Black -> Pink -> ... -> Yellow)
         // If own spot taken, place on highest value available spot
-        const spots = [
-            this.table.blackSpot,
-            this.table.pinkSpot,
-            this.table.blueSpot,
-            this.table.brownSpot,
-            this.table.greenSpot,
-            this.table.yellowSpot
-        ];
+        const snookerSpots = Constants.SNOOKER_SPOTS;
+        const tableCenter = this.table.center;
 
-        for (const spot of spots) {
-            // Ensure we define these spots in your table setup, or use hardcoded coordinates if needed
-            if (spot && this.isSpotAvailable(spot)) {
-                ball.setPosition(spot.x, spot.y);
-                return;
+        // Spots in order from highest to lowest value
+        const spotNames = ['black', 'pink', 'blue', 'brown', 'green', 'yellow'];
+
+        for (const name of spotNames) {
+            const relativeSpot = snookerSpots[name];
+            if (relativeSpot) {
+                const absoluteSpot = {
+                    x: tableCenter.x + relativeSpot.x,
+                    y: tableCenter.y + relativeSpot.y
+                };
+                if (this.isSpotAvailable(absoluteSpot)) {
+                    ball.setPosition(absoluteSpot.x, absoluteSpot.y);
+                    return;
+                }
             }
         }
 

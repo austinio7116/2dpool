@@ -106,11 +106,13 @@ export class Game {
         this.nextColorInSequence = 'yellow';
 
         // Create balls based on game mode
+        const tableConfig = Constants.TABLE_CONFIGS ? Constants.TABLE_CONFIGS[this.tableStyle] : null;
+        const tableBallRadius = (tableConfig && tableConfig.ballRadius) ? tableConfig.ballRadius : null;
+
         if (mode === GameMode.UK_EIGHT_BALL) {
             this.balls = createUKBallSet(this.ukColorScheme);
         } else if (mode === GameMode.SNOOKER) {
             // Check if using full-size snooker table (table style 9)
-            const tableConfig = Constants.TABLE_CONFIGS[this.tableStyle];
             if (tableConfig && tableConfig.isSnooker && tableConfig.redCount === 15) {
                 this.balls = createFullSnookerBallSet(tableConfig.ballRadius);
             } else {
@@ -119,6 +121,14 @@ export class Game {
         } else {
             this.balls = createBallSet();
         }
+
+        // Apply table-specific ball radius to all balls (for tables like full-size snooker)
+        if (tableBallRadius) {
+            for (const ball of this.balls) {
+                ball.radius = tableBallRadius;
+            }
+        }
+
         this.cueBall = this.balls.find(b => b.number === 0);
 
         // Rack balls based on game mode

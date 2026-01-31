@@ -35,6 +35,12 @@ class PoolGame {
         // Bind callbacks
         this.bindCallbacks();
 
+        // Apply the saved table selection
+        const savedTable = this.ui.getSelectedTable();
+        if (savedTable !== 1) {
+            this.ui.onTableChange(savedTable);
+        }
+
         // Wait for assets to load before showing the game
         this.waitForAssets();
     }
@@ -113,8 +119,40 @@ class PoolGame {
     startGame(mode, options = {}) {
         this.audio.init();
         this.physics.reset();  // Clear old ball bodies before creating new game
+
+        // Get the selected ball set from UI
+        const selectedBallSet = this.ui.getSelectedBallSet();
+
+        // For snooker mode, force snooker ball set
+        if (mode === GameMode.SNOOKER) {
+            // Snooker uses its own ball configuration
+        } else if (selectedBallSet && !selectedBallSet.isPredefined) {
+            // Custom ball set selected
+            options.customBallSet = selectedBallSet;
+        } else if (selectedBallSet) {
+            // Predefined ball set
+            if (selectedBallSet.id === 'uk-red-yellow') {
+                options.colorScheme = 'red-yellow';
+                if (mode === GameMode.EIGHT_BALL) {
+                    // Switch to UK 8-ball mode for UK ball sets
+                    mode = GameMode.UK_EIGHT_BALL;
+                }
+            } else if (selectedBallSet.id === 'uk-blue-yellow') {
+                options.colorScheme = 'blue-yellow';
+                if (mode === GameMode.EIGHT_BALL) {
+                    mode = GameMode.UK_EIGHT_BALL;
+                }
+            }
+        }
+
         this.game.startGame(mode, options);
         this.lastGameOptions = options;  // Store for play again
+        this.lastGameMode = mode; // Store mode for play again
+
+        // Apply custom ball colors if a custom set is selected
+        if (selectedBallSet && !selectedBallSet.isPredefined && mode !== GameMode.SNOOKER) {
+            this.applyCustomBallSet(selectedBallSet);
+        }
 
         this.input.setCueBall(this.game.cueBall);
         this.input.setCanShoot(true);
@@ -123,8 +161,30 @@ class PoolGame {
         this.ui.showGameHUD(mode);
     }
 
+    applyCustomBallSet(ballSet) {
+        if (!ballSet || !this.game.balls) return;
+
+        const ballSetManager = this.ui.ballSetManager;
+
+        for (const ball of this.game.balls) {
+            if (ball.isSnookerBall) continue; // Don't modify snooker balls
+
+            const config = ballSetManager.getBallConfig(ballSet, ball.number);
+            if (!config) continue;
+
+            ball.color = config.color;
+            ball.isStripe = config.isStripe;
+            ball.isUKBall = config.isUKBall && !ball.isEightBall;
+        }
+
+        // Clear ball renderer cache to regenerate with new colors
+        this.renderer.ballRenderer3D.clearCache();
+    }
+
     playAgain() {
-        this.startGame(this.game.mode, this.lastGameOptions || {});
+        // Use stored mode (which may have been modified from original selection)
+        const mode = this.lastGameMode || this.game.mode;
+        this.startGame(mode, this.lastGameOptions || {});
     }
 
     returnToMenu() {

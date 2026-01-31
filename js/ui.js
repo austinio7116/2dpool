@@ -593,22 +593,22 @@ export class UI {
 
         if (set.style === 'solid') {
             // Load solid mode values
-            if (this.colorGroup1) this.colorGroup1.value = set.colors?.group1 || '#CC0000';
-            if (this.colorGroup2) this.colorGroup2.value = set.colors?.group2 || '#FFD700';
-            if (this.color8Ball) this.color8Ball.value = set.colors?.eightBall || '#000000';
+            this.setColorValue(this.colorGroup1, set.colors?.group1 || '#CC0000');
+            this.setColorValue(this.colorGroup2, set.colors?.group2 || '#FFD700');
+            this.setColorValue(this.color8Ball, set.colors?.eightBall || '#000000');
             if (this.striped8BallCheckbox) this.striped8BallCheckbox.checked = set.options?.striped8Ball || false;
         } else {
             // Load stripe mode values
-            if (this.colorSolids) this.colorSolids.value = set.colors?.group1 || '#FFD700';
-            if (this.colorStripes) this.colorStripes.value = set.colors?.group2 || '#0000CD';
-            if (this.color8BallStripe) this.color8BallStripe.value = set.colors?.eightBall || '#000000';
-            if (this.colorStripeBg) this.colorStripeBg.value = set.options?.stripeBackgroundColor || '#FFFFFF';
+            this.setColorValue(this.colorSolids, set.colors?.group1 || '#FFD700');
+            this.setColorValue(this.colorStripes, set.colors?.group2 || '#0000CD');
+            this.setColorValue(this.color8BallStripe, set.colors?.eightBall || '#000000');
+            this.setColorValue(this.colorStripeBg, set.options?.stripeBackgroundColor || '#FFFFFF');
 
             // Load number styling
-            if (this.colorNumberCircle) this.colorNumberCircle.value = set.options?.numberCircleColor || '#FFFFFF';
-            if (this.colorNumberText) this.colorNumberText.value = set.options?.numberTextColor || '#000000';
+            this.setColorValue(this.colorNumberCircle, set.options?.numberCircleColor || '#FFFFFF');
+            this.setColorValue(this.colorNumberText, set.options?.numberTextColor || '#000000');
             if (this.numberBorderCheckbox) this.numberBorderCheckbox.checked = set.options?.numberBorder || false;
-            if (this.colorNumberBorder) this.colorNumberBorder.value = set.options?.numberBorderColor || '#000000';
+            this.setColorValue(this.colorNumberBorder, set.options?.numberBorderColor || '#000000');
             this.borderColorField?.classList.toggle('hidden', !set.options?.numberBorder);
 
             // Load advanced mode
@@ -622,7 +622,7 @@ export class UI {
                 document.querySelectorAll('#advanced-color-pickers input[type="color"]').forEach(input => {
                     const pairNum = parseInt(input.dataset.pair);
                     if (!isNaN(pairNum) && set.ballColors[pairNum]) {
-                        input.value = set.ballColors[pairNum];
+                        this.setColorValue(input, set.ballColors[pairNum]);
                     }
                 });
             } else {
@@ -656,16 +656,16 @@ export class UI {
         if (this.customSetNameInput) this.customSetNameInput.value = '';
 
         // Reset solid mode fields
-        if (this.colorGroup1) this.colorGroup1.value = '#CC0000';
-        if (this.colorGroup2) this.colorGroup2.value = '#FFD700';
-        if (this.color8Ball) this.color8Ball.value = '#000000';
+        this.setColorValue(this.colorGroup1, '#CC0000');
+        this.setColorValue(this.colorGroup2, '#FFD700');
+        this.setColorValue(this.color8Ball, '#000000');
         if (this.striped8BallCheckbox) this.striped8BallCheckbox.checked = false;
 
         // Reset stripe mode fields
-        if (this.colorSolids) this.colorSolids.value = '#FFD700';
-        if (this.colorStripes) this.colorStripes.value = '#0000CD';
-        if (this.color8BallStripe) this.color8BallStripe.value = '#000000';
-        if (this.colorStripeBg) this.colorStripeBg.value = '#FFFFFF';
+        this.setColorValue(this.colorSolids, '#FFD700');
+        this.setColorValue(this.colorStripes, '#0000CD');
+        this.setColorValue(this.color8BallStripe, '#000000');
+        this.setColorValue(this.colorStripeBg, '#FFFFFF');
 
         // Reset advanced mode
         if (this.advancedModeCheckbox) this.advancedModeCheckbox.checked = false;
@@ -681,15 +681,15 @@ export class UI {
         document.querySelectorAll('#advanced-color-pickers input[type="color"]').forEach(input => {
             const pairNum = input.dataset.pair;
             if (pairNum && defaultPairColors[pairNum]) {
-                input.value = defaultPairColors[pairNum];
+                this.setColorValue(input, defaultPairColors[pairNum]);
             }
         });
 
         // Reset number styling
-        if (this.colorNumberCircle) this.colorNumberCircle.value = '#FFFFFF';
-        if (this.colorNumberText) this.colorNumberText.value = '#000000';
+        this.setColorValue(this.colorNumberCircle, '#FFFFFF');
+        this.setColorValue(this.colorNumberText, '#000000');
         if (this.numberBorderCheckbox) this.numberBorderCheckbox.checked = false;
-        if (this.colorNumberBorder) this.colorNumberBorder.value = '#000000';
+        this.setColorValue(this.colorNumberBorder, '#000000');
         this.borderColorField?.classList.add('hidden');
 
         // Reset modal title and button text for create mode
@@ -952,6 +952,15 @@ export class UI {
         } catch (e) {
             console.warn('Failed to save selected ball set:', e);
         }
+    }
+
+    // Helper to set color picker value and ensure visual update (mobile fix)
+    setColorValue(element, value) {
+        if (!element) return;
+        const color = value || '#000000';
+        element.value = color;
+        // Force visual update on mobile by dispatching events
+        element.dispatchEvent(new Event('input', { bubbles: true }));
     }
 
     // Toggle fullscreen mode

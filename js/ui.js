@@ -36,6 +36,9 @@ export class UI {
         this.btnMainMenu = document.getElementById('btn-main-menu');
         this.btnRerack = document.getElementById('btn-rerack');
         this.btnExitFreeplay = document.getElementById('btn-exit-freeplay');
+        this.btnGameMenu = document.getElementById('btn-game-menu');
+        this.gameMenuDropdown = document.getElementById('game-menu-dropdown');
+        this.btnQuitGame = document.getElementById('btn-quit-game');
         this.soundToggle = document.getElementById('sound-toggle');
         this.speedSlider = document.getElementById('speed-slider');
         this.speedValue = document.getElementById('speed-value');
@@ -180,6 +183,28 @@ export class UI {
         this.btnExitFreeplay.addEventListener('click', () => {
             if (this.onMainMenu) {
                 this.onMainMenu();
+            }
+        });
+
+        // Game menu dropdown toggle
+        this.btnGameMenu.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.toggleGameMenu();
+        });
+
+        this.btnQuitGame.addEventListener('click', () => {
+            this.closeGameMenu();
+            if (this.onMainMenu) {
+                this.onMainMenu();
+            }
+        });
+
+        // Close dropdown when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!this.gameMenuDropdown.classList.contains('hidden') &&
+                !this.btnGameMenu.contains(e.target) &&
+                !this.gameMenuDropdown.contains(e.target)) {
+                this.closeGameMenu();
             }
         });
 
@@ -1049,8 +1074,26 @@ export class UI {
         }
     }
 
+    // Toggle game menu dropdown
+    toggleGameMenu() {
+        const isHidden = this.gameMenuDropdown.classList.contains('hidden');
+        if (isHidden) {
+            this.gameMenuDropdown.classList.remove('hidden');
+            this.btnGameMenu.classList.add('active');
+        } else {
+            this.closeGameMenu();
+        }
+    }
+
+    // Close game menu dropdown
+    closeGameMenu() {
+        this.gameMenuDropdown.classList.add('hidden');
+        this.btnGameMenu.classList.remove('active');
+    }
+
     // Show main menu
     showMainMenu() {
+        this.closeGameMenu();
         this.mainMenu.classList.remove('hidden');
         this.gameHud.classList.add('hidden');
         this.gameOverScreen.classList.add('hidden');

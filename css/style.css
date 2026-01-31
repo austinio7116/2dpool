@@ -807,6 +807,75 @@ body {
     pointer-events: auto;
 }
 
+/* Game menu in top-left corner during gameplay */
+.game-menu-container {
+    position: absolute;
+    top: 0px;
+    left: 80px;
+    z-index: 100;
+}
+
+.game-menu-btn {
+    width: 32px;
+    height: 32px;
+    background: rgba(0, 0, 0, 0.85);
+    border: 2px solid #4a4a6a;
+    border-radius: 6px;
+    color: #ccc;
+    font-size: 16px;
+    cursor: pointer;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    transition: all 0.2s ease;
+}
+
+.game-menu-btn:hover {
+    background: rgba(40, 40, 60, 0.9);
+    border-color: #6a6a8a;
+    color: #fff;
+}
+
+.game-menu-btn.active {
+    background: rgba(40, 40, 60, 0.95);
+    border-color: #ffd700;
+    color: #fff;
+}
+
+.game-menu-dropdown {
+    position: absolute;
+    top: 36px;
+    left: 0;
+    background: rgba(26, 26, 46, 0.95);
+    border: 2px solid #4a4a6a;
+    border-radius: 6px;
+    overflow: hidden;
+    min-width: 130px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+
+.game-menu-dropdown.hidden {
+    display: none;
+}
+
+.game-menu-item {
+    display: block;
+    width: 100%;
+    padding: 10px 15px;
+    background: none;
+    border: none;
+    color: #ccc;
+    font-size: 0.85rem;
+    text-align: left;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.game-menu-item:hover {
+    background: rgba(255, 215, 0, 0.15);
+    color: #ffd700;
+}
+
 #player-indicator {
     background: rgba(0, 0, 0, 0.85);
     color: #fff;
@@ -1149,7 +1218,26 @@ body {
     #player-indicator {
         padding: 4px 8px;
         font-size: 0.8rem;
-        margin-left: 70px;
+        margin-left: 50px;
+    }
+
+    .game-menu-container {
+        left: 70px;
+    }
+
+    .game-menu-btn {
+        width: 28px;
+        height: 28px;
+        font-size: 14px;
+    }
+
+    .game-menu-dropdown {
+        min-width: 110px;
+    }
+
+    .game-menu-item {
+        padding: 8px 12px;
+        font-size: 0.8rem;
     }
 
     .ball-group {

@@ -1230,25 +1230,64 @@ body {
 
     .creator-content {
         width: 95vw;
+        max-height: 85vh;
     }
 
-    .creator-layout {
-        grid-template-columns: 1fr;
-        gap: 12px;
+    /* New creator layout V2 mobile styles */
+    .creator-layout-v2 {
+        gap: 6px;
     }
 
-    .creator-preview {
-        order: -1;
+    .creator-row {
+        flex-direction: column;
+        gap: 8px;
+        align-items: stretch;
+    }
+
+    .creator-row .creator-field {
+        width: 100%;
+    }
+
+    .style-toggle {
+        width: 100%;
+    }
+
+    .creator-preview-row {
+        padding: 4px 6px;
     }
 
     .preview-balls {
-        grid-template-columns: repeat(8, 1fr);
         gap: 2px;
     }
 
     .preview-balls canvas {
-        width: 22px;
-        height: 22px;
+        width: 18px;
+        height: 18px;
+    }
+
+    .color-row {
+        gap: 6px;
+        justify-content: center;
+    }
+
+    .color-field input[type="color"] {
+        width: 32px;
+        height: 24px;
+    }
+
+    .color-field label {
+        font-size: 0.6rem;
+    }
+
+    .solid-options,
+    .stripe-options {
+        padding: 8px;
+        gap: 6px;
+    }
+
+    .number-style-row {
+        gap: 6px;
+        padding-top: 6px;
     }
 
     .ball-color-grid {
@@ -1263,6 +1302,30 @@ body {
 
     .ball-color label {
         font-size: 0.55rem;
+    }
+
+    .checkbox-label {
+        font-size: 0.7rem;
+    }
+
+    .creator-actions {
+        padding-top: 8px;
+    }
+
+    .cancel-btn,
+    .save-btn {
+        padding: 8px 16px;
+        font-size: 0.8rem;
+    }
+
+    /* Legacy creator layout (if still used) */
+    .creator-layout {
+        grid-template-columns: 1fr;
+        gap: 12px;
+    }
+
+    .creator-preview {
+        order: -1;
     }
 
     /* Snooker HUD mobile */

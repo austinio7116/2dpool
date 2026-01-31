@@ -254,11 +254,23 @@ export const Constants = {
 
     // Snooker color spot positions (relative to table center)
     SNOOKER_SPOTS: {
-        yellow: { x: -200, y: -60 },   // Left of D
-        green: { x: -200, y: 60 },     // Right of D
-        brown: { x: -200, y: 0 },      // Center of baulk line
+        yellow: { x: -260, y: 73 },   // Left of D
+        green: { x: -260, y: -73 },     // Right of D
+        brown: { x: -260, y: 0 },      // Center of baulk line
         blue: { x: 0, y: 0 },          // Center spot
-        pink: { x: 150, y: 0 },        // Between center and reds
-        black: { x: 280, y: 0 }        // Behind reds
+        pink: { x: 208, y: 0 },        // Between center and reds
+        black: { x: 340, y: 0 }        // Behind reds
+    },
+
+    // Table-specific configurations (for tables with non-standard ball/pocket sizes)
+    TABLE_CONFIGS: {
+        9: {  // Full-size snooker
+            ballRadius: 8,      // Smaller than standard 12px
+            pocketRadius: 18,   // Much tighter than standard 26px
+            useCurvedPockets: true,
+            isSnooker: true,
+            redCount: 15,
+            boundsOffset: { top: 17, bottom: 15, left: 20, right: 20}  // Move cushions/pockets outward
+        }
     }
 };

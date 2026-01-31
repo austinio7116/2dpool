@@ -31,6 +31,7 @@ export class Table {
         this.railWidth = 20;
 
         // Create pockets - must be at corners and sides
+        this.tableStyle = 1; // Default table style
         this.pockets = this.createPockets();
 
         // Diamond sight markers positions
@@ -46,10 +47,37 @@ export class Table {
         this.footSpot = Vec2.create(this.bounds.right - this.width / 4, this.center.y);
     }
 
+    setTableStyle(tableStyle) {
+        this.tableStyle = tableStyle;
+        this.pockets = this.createPockets();
+    }
+
     createPockets() {
         const pockets = [];
-        const pocketRadius = Constants.POCKET_RADIUS;
-        const b = this.bounds;
+        // Use table-specific pocket radius if available
+        const tableConfig = Constants.TABLE_CONFIGS ? Constants.TABLE_CONFIGS[this.tableStyle] : null;
+        const pocketRadius = (tableConfig && tableConfig.pocketRadius) ? tableConfig.pocketRadius : Constants.POCKET_RADIUS;
+        const offset = (tableConfig && tableConfig.boundsOffset) ? tableConfig.boundsOffset : null;
+
+        // Apply bounds offset for tables like full-size snooker
+        let b;
+        if (!offset) {
+            b = this.bounds;
+        } else if (typeof offset === 'number') {
+            b = {
+                left: this.bounds.left - offset,
+                right: this.bounds.right + offset,
+                top: this.bounds.top - offset,
+                bottom: this.bounds.bottom + offset
+            };
+        } else {
+            b = {
+                left: this.bounds.left - (offset.left || 0),
+                right: this.bounds.right + (offset.right || 0),
+                top: this.bounds.top - (offset.top || 0),
+                bottom: this.bounds.bottom + (offset.bottom || 0)
+            };
+        }
 
         // Corner pockets - offset diagonally into the pocket holes
         const cornerOffset = 5;
@@ -151,8 +179,14 @@ export class Table {
         return Vec2.add(rail.start, Vec2.multiply(v, t));
     }
 
+    getBallRadius() {
+        // Use table-specific ball radius if available
+        const tableConfig = Constants.TABLE_CONFIGS ? Constants.TABLE_CONFIGS[this.tableStyle] : null;
+        return (tableConfig && tableConfig.ballRadius) ? tableConfig.ballRadius : Constants.BALL_RADIUS;
+    }
+
     findValidKitchenPosition(balls, preferredY = null) {
-        const ballRadius = Constants.BALL_RADIUS;
+        const ballRadius = this.getBallRadius();
         const startX = this.kitchenLine - ballRadius * 2;
         const startY = preferredY || this.center.y;
 
@@ -176,7 +210,7 @@ export class Table {
 
     // Find valid cue ball position anywhere on table (for ball in hand)
     findValidCueBallPosition(balls, preferredY = null) {
-        const ballRadius = Constants.BALL_RADIUS;
+        const ballRadius = this.getBallRadius();
         const startX = this.center.x;
         const startY = preferredY || this.center.y;
 
@@ -203,7 +237,9 @@ export class Table {
         for (const ball of balls) {
             if (ball.pocketed || ball.number === 0) continue;
             const dist = Vec2.distance(Vec2.create(x, y), ball.position);
-            if (dist < radius * 2 + 1) {
+            // Use ball's actual radius for proper collision check
+            const checkRadius = ball.radius || radius;
+            if (dist < radius + checkRadius + 1) {
                 return false;
             }
         }

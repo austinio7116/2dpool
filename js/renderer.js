@@ -34,13 +34,13 @@ export class Renderer {
 
         // Load table images
         this.tableImages = [];
-        this.tableImagesLoaded = [false, false, false, false, false, false, false, false];
+        this.tableImagesLoaded = [false, false, false, false, false, false, false, false, false];
         this.currentTableIndex = 0;
         this.allAssetsLoaded = false;
         this.onAssetsLoaded = null;
 
         let loadedCount = 0;
-        const totalImages = 8;
+        const totalImages = 9;
 
         for (let i = 0; i < totalImages; i++) {
             const img = new Image();
@@ -65,7 +65,12 @@ export class Renderer {
                     }
                 }
             };
-            img.src = `assets/pooltable${i === 0 ? '' : i + 1}.png`;
+            // Table 9 uses fullsizesnooker.png
+            if (i === 8) {
+                img.src = 'assets/pooltable9.png';
+            } else {
+                img.src = `assets/pooltable${i === 0 ? '' : i + 1}.png`;
+            }
             this.tableImages.push(img);
         }
 
@@ -93,10 +98,10 @@ export class Renderer {
         }
 
         // DEBUG: Draw pocket detection circles (uncomment to visualize)
-        //this.drawPocketDebug();
+        // this.drawPocketDebug();
 
         // DEBUG: Draw cushion collision boundaries (uncomment to visualize)
-        //this.drawCushionDebug();
+        // this.drawCushionDebug();
 
         this.drawBalls(state.balls);
 
@@ -175,7 +180,8 @@ export class Renderer {
         const t = this.table;
         const b = t.bounds;
         const cushionWidth = 18;
-        const pocketRadius = Constants.POCKET_RADIUS;
+        // Use pocket radius from table pockets (which already uses table-specific config)
+        const pocketRadius = t.pockets[0]?.radius || Constants.POCKET_RADIUS;
 
         // Cushion color with gradient for 3D effect
         const cushionColor = '#1a8a4a';
@@ -304,7 +310,8 @@ export class Renderer {
         const ctx = this.ctx;
         const t = this.table;
         const b = t.bounds;
-        const pocketRadius = Constants.POCKET_RADIUS;
+        // Use pocket radius from table pockets (which already uses table-specific config)
+        const pocketRadius = t.pockets[0]?.radius || Constants.POCKET_RADIUS;
         const jawLength = pocketRadius * 1.2;
         const jawWidth = 12;
 
@@ -463,13 +470,35 @@ export class Renderer {
     // DEBUG: Temporary visualization of cushion collision boundaries
     drawCushionDebug() {
         const ctx = this.ctx;
-        const b = this.table.bounds;
-        const pocketRadius = Constants.POCKET_RADIUS;
-        const ballRadius = Constants.BALL_RADIUS;
+        // Use table-specific pocket/ball radius from table config
+        const tableConfig = Constants.TABLE_CONFIGS ? Constants.TABLE_CONFIGS[this.currentTableIndex + 1] : null; // currentTableIndex is 0-based
+        const pocketRadius = (tableConfig && tableConfig.pocketRadius) ? tableConfig.pocketRadius : Constants.POCKET_RADIUS;
+        const ballRadius = (tableConfig && tableConfig.ballRadius) ? tableConfig.ballRadius : Constants.BALL_RADIUS;
+        const offset = (tableConfig && tableConfig.boundsOffset) ? tableConfig.boundsOffset : null;
         const gap = pocketRadius + ballRadius * 0.5;
 
-        // Check if using curved pockets (tables 7 and 8, which are indices 6 and 7)
-        const useCurvedPockets = this.currentTableIndex === 6 || this.currentTableIndex === 7;
+        // Apply bounds offset
+        let b;
+        if (!offset) {
+            b = this.table.bounds;
+        } else if (typeof offset === 'number') {
+            b = {
+                left: this.table.bounds.left - offset,
+                right: this.table.bounds.right + offset,
+                top: this.table.bounds.top - offset,
+                bottom: this.table.bounds.bottom + offset
+            };
+        } else {
+            b = {
+                left: this.table.bounds.left - (offset.left || 0),
+                right: this.table.bounds.right + (offset.right || 0),
+                top: this.table.bounds.top - (offset.top || 0),
+                bottom: this.table.bounds.bottom + (offset.bottom || 0)
+            };
+        }
+
+        // Check if using curved pockets (tables 7, 8, and 9, which are indices 6, 7, and 8)
+        const useCurvedPockets = this.currentTableIndex === 6 || this.currentTableIndex === 7 || this.currentTableIndex === 8;
         const cornerGap = useCurvedPockets ? gap + 3 : gap;
 
         ctx.strokeStyle = '#ffff00';

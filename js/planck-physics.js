@@ -44,7 +44,40 @@ export class PlanckPhysics {
     setTableStyle(tableNum) {
         if (this.tableStyle === tableNum) return;
         this.tableStyle = tableNum;
+        this.tableConfig = Constants.TABLE_CONFIGS[tableNum] || null;
         this.recreateTableBoundaries();
+    }
+
+    getTableBallRadius() {
+        return this.tableConfig?.ballRadius || Constants.BALL_RADIUS;
+    }
+
+    getTablePocketRadius() {
+        return this.tableConfig?.pocketRadius || Constants.POCKET_RADIUS;
+    }
+
+    // Get adjusted bounds for tables with offset (like full-size snooker)
+    getAdjustedBounds() {
+        const b = this.table.bounds;
+        const offset = this.tableConfig?.boundsOffset;
+        if (!offset) {
+            return b;
+        }
+        // Support both number and object formats
+        if (typeof offset === 'number') {
+            return {
+                left: b.left - offset,
+                right: b.right + offset,
+                top: b.top - offset,
+                bottom: b.bottom + offset
+            };
+        }
+        return {
+            left: b.left - (offset.left || 0),
+            right: b.right + (offset.right || 0),
+            top: b.top - (offset.top || 0),
+            bottom: b.bottom + (offset.bottom || 0)
+        };
     }
 
     recreateTableBoundaries() {
@@ -60,7 +93,7 @@ export class PlanckPhysics {
 
     createTableBoundaries() {
         // Use ChainShape for continuous rail paths to prevent ghost collisions
-        const useCurvedPockets = this.tableStyle === 7 || this.tableStyle === 8;
+        const useCurvedPockets = this.tableStyle === 7 || this.tableStyle === 8 || this.tableStyle === 9;
 
         if (useCurvedPockets) {
             this.createCurvedRailChains();
@@ -114,9 +147,9 @@ export class PlanckPhysics {
     }
 
     createStraightRailChains() {
-        const b = this.table.bounds;
-        const pocketRadius = Constants.POCKET_RADIUS;
-        const ballRadius = Constants.BALL_RADIUS;
+        const b = this.getAdjustedBounds();
+        const pocketRadius = this.getTablePocketRadius();
+        const ballRadius = this.getTableBallRadius();
         const gap = pocketRadius + ballRadius * 0.5;
         const segmentLength = 20;
 
@@ -175,9 +208,9 @@ export class PlanckPhysics {
     }
 
     createCurvedRailChains() {
-        const b = this.table.bounds;
-        const pocketRadius = Constants.POCKET_RADIUS;
-        const ballRadius = Constants.BALL_RADIUS;
+        const b = this.getAdjustedBounds();
+        const pocketRadius = this.getTablePocketRadius();
+        const ballRadius = this.getTableBallRadius();
         const gap = pocketRadius + ballRadius * 0.5;
         const cornerGap = gap + 3;
 

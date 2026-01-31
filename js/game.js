@@ -1,7 +1,7 @@
 // Game logic - manages game state, rules, turns, and win conditions
 
 import { Vec2, Constants } from './utils.js';
-import { Ball, createBallSet, createUKBallSet, createSnookerBallSet, rackBalls, positionSnookerBalls, RackPatterns } from './ball.js';
+import { Ball, createBallSet, createUKBallSet, createSnookerBallSet, createFullSnookerBallSet, rackBalls, positionSnookerBalls, positionFullSnookerBalls, RackPatterns } from './ball.js';
 
 export const GameMode = {
     EIGHT_BALL: '8ball',
@@ -26,6 +26,7 @@ export class Game {
         // Game mode and state
         this.mode = null;
         this.state = GameState.MENU;
+        this.tableStyle = 1; // Track current table style for full snooker detection
 
         // Players
         this.currentPlayer = 1;
@@ -108,7 +109,13 @@ export class Game {
         if (mode === GameMode.UK_EIGHT_BALL) {
             this.balls = createUKBallSet(this.ukColorScheme);
         } else if (mode === GameMode.SNOOKER) {
-            this.balls = createSnookerBallSet();
+            // Check if using full-size snooker table (table style 9)
+            const tableConfig = Constants.TABLE_CONFIGS[this.tableStyle];
+            if (tableConfig && tableConfig.isSnooker && tableConfig.redCount === 15) {
+                this.balls = createFullSnookerBallSet(tableConfig.ballRadius);
+            } else {
+                this.balls = createSnookerBallSet();
+            }
         } else {
             this.balls = createBallSet();
         }
@@ -122,9 +129,16 @@ export class Game {
         }
     }
 
+    // Set the table style (called before startGame to configure ball/pocket sizes)
+    setTableStyle(tableStyle) {
+        this.tableStyle = tableStyle;
+    }
+
     rackBalls() {
         const center = this.table.center;
-        const ballRadius = Constants.BALL_RADIUS;
+        // Use table-specific ball radius if available
+        const tableConfig = Constants.TABLE_CONFIGS[this.tableStyle];
+        const ballRadius = tableConfig?.ballRadius || Constants.BALL_RADIUS;
 
         if (this.mode === GameMode.EIGHT_BALL) {
             rackBalls(this.balls, RackPatterns.eightBall, center, ballRadius);
@@ -136,7 +150,12 @@ export class Game {
         } else if (this.mode === GameMode.UK_EIGHT_BALL) {
             rackBalls(this.balls, RackPatterns.ukEightBall, center, ballRadius);
         } else if (this.mode === GameMode.SNOOKER) {
-            positionSnookerBalls(this.balls, center, ballRadius);
+            // Use full snooker positioning for table 9
+            if (tableConfig && tableConfig.isSnooker && tableConfig.redCount === 15) {
+                positionFullSnookerBalls(this.balls, center, ballRadius);
+            } else {
+                positionSnookerBalls(this.balls, center, ballRadius);
+            }
         } else {
             // Free play - standard 8-ball rack
             rackBalls(this.balls, RackPatterns.eightBall, center, ballRadius);
@@ -645,11 +664,12 @@ export class Game {
             return false;
         }
 
-        // Check for overlapping balls
+        // Check for overlapping balls - use actual ball radius
+        const checkRadius = this.cueBall.radius || Constants.BALL_RADIUS;
         for (const ball of this.balls) {
             if (ball === this.cueBall || ball.pocketed) continue;
             const dist = Vec2.distance(position, ball.position);
-            if (dist < Constants.BALL_RADIUS * 2 + 2) {
+            if (dist < checkRadius + ball.radius + 2) {
                 return false;
             }
         }
@@ -712,11 +732,12 @@ export class Game {
             return false;
         }
 
-        // Check ball overlap
+        // Check ball overlap - use actual ball radius (which may differ for full snooker)
+        const checkRadius = this.cueBall?.radius || Constants.BALL_RADIUS;
         for (const ball of this.balls) {
             if (ball === this.cueBall || ball.pocketed) continue;
             const dist = Vec2.distance(position, ball.position);
-            if (dist < Constants.BALL_RADIUS * 2 + 2) {
+            if (dist < checkRadius + ball.radius + 2) {
                 return false;
             }
         }

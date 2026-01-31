@@ -249,7 +249,7 @@ export class UI {
             // Will be updated with lowest ball info
         } else if (this.currentMode === GameMode.SNOOKER) {
             // Snooker shows turn info in main player indicator
-            text = `Player ${player}'s Turn - 6-Red Snooker`;
+            text = `Player ${player}'s Turn - Snooker`;
         }
 
         this.playerIndicator.textContent = text;

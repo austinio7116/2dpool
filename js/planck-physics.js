@@ -796,7 +796,7 @@ export class PlanckPhysics {
             // Add a small margin to account for discrete physics simulation differences.
             // Without this margin, shots predicted to barely hit may miss in actual physics
             // due to time stepping and force application between frames.
-            const collisionMargin = 2;
+            const collisionMargin = 0.5;
             const effectiveRadius = combinedRadius - collisionMargin;
 
             // Vector from cue ball to target ball

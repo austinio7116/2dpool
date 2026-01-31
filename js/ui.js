@@ -803,6 +803,26 @@ export class UI {
             }
         }
 
+        // NEW: Sync input backgrounds to their values
+        // This ensures the "button" color matches the selection while dragging
+        const colorInputs = [
+            this.colorGroup1, this.colorGroup2, this.color8Ball,
+            this.colorSolids, this.colorStripes, this.color8BallStripe, 
+            this.colorStripeBg, this.colorNumberCircle, this.colorNumberText, 
+            this.colorNumberBorder
+        ];
+
+        colorInputs.forEach(input => {
+            if (input && input.value) {
+                input.style.backgroundColor = input.value;
+            }
+        });
+
+        // Also handle advanced color pickers
+        document.querySelectorAll('#advanced-color-pickers input[type="color"]').forEach(input => {
+            input.style.backgroundColor = input.value;
+        });
+
         // Show all 16 balls (cue + 15 numbered) in creator preview
         const previewBalls = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
 
@@ -957,10 +977,29 @@ export class UI {
     // Helper to set color picker value and ensure visual update (mobile fix)
     setColorValue(element, value) {
         if (!element) return;
-        const color = value || '#000000';
+        
+        // Ensure we have a valid 6-digit hex code (Required for color inputs)
+        // If value is null/undefined, default to black
+        let color = value || '#000000';
+        
+        // Input type="color" requires strict 7-char hex (#RRGGBB). 
+        // If data is short hex (#RGB), convert it, otherwise the assignment fails silently.
+        if (color.length === 4) {
+            color = '#' + color[1] + color[1] + color[2] + color[2] + color[3] + color[3];
+        }
+
+        // 1. Set the internal value
         element.value = color;
-        // Force visual update on mobile by dispatching events
+        
+        // 2. Explicitly set the background color
+        // This fixes the "Customised Link" visual issue on mobile
+        element.style.backgroundColor = color;
+        
+        // 3. Dispatch BOTH input and change events
+        // 'input' updates your 3D preview
+        // 'change' ensures the browser/UI framework acknowledges the new state
         element.dispatchEvent(new Event('input', { bubbles: true }));
+        element.dispatchEvent(new Event('change', { bubbles: true }));
     }
 
     // Toggle fullscreen mode

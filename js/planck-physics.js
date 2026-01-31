@@ -786,10 +786,18 @@ export class PlanckPhysics {
     findFirstBallHit(cueBall, direction, balls) {
         let closest = null;
         let closestDist = Infinity;
-        const combinedRadius = cueBall.radius * 2; // Both balls same size
 
         for (const ball of balls) {
             if (ball.number === 0 || ball.pocketed) continue;
+
+            // Use actual radii of both balls (they may differ in some game modes)
+            const combinedRadius = cueBall.radius + ball.radius;
+
+            // Add a small margin to account for discrete physics simulation differences.
+            // Without this margin, shots predicted to barely hit may miss in actual physics
+            // due to time stepping and force application between frames.
+            const collisionMargin = 2;
+            const effectiveRadius = combinedRadius - collisionMargin;
 
             // Vector from cue ball to target ball
             const toTargetX = ball.position.x - cueBall.position.x;
@@ -807,8 +815,9 @@ export class PlanckPhysics {
             const perpDist = Math.sqrt(perpX * perpX + perpY * perpY);
 
             // Check if aim line passes close enough to hit this ball
-            if (perpDist < combinedRadius) {
-                // Calculate exact contact point
+            // Use effectiveRadius for determining if we show a hit (conservative)
+            if (perpDist < effectiveRadius) {
+                // Calculate exact contact point using actual combinedRadius
                 // Distance along aim line to contact point
                 const offset = Math.sqrt(combinedRadius * combinedRadius - perpDist * perpDist);
                 const contactDist = projection - offset;

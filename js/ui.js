@@ -1148,43 +1148,31 @@ export class UI {
         }
 
         this.ballGroups.innerHTML = '';
+        // APPLY LAYOUT CLASS: Moves container to top-right rail
+        this.ballGroups.className = 'ball-groups-8ball'; 
 
         if (!player1Group) {
-            // Keep container small and unobtrusive
-            this.ballGroups.innerHTML = '<div class="ball-group" style="padding: 2px 8px; font-size: 12px;"><span>Table Open</span></div>';
+            // Simple open table message
+            this.ballGroups.innerHTML = '<div class="ball-group"><span>Table Open</span></div>';
             return;
         }
 
-        // Helper to create player group element
         const createGroupDisplay = (playerNum, groupType, count, isActive) => {
             const container = document.createElement('div');
-            // Inline styles to ensure it stays compact within the rail
             container.className = `ball-group ${isActive ? 'active-turn' : ''}`;
-            container.style.display = 'flex';
-            container.style.alignItems = 'center';
-            container.style.padding = '2px 8px'; // Reduced padding
-            container.style.margin = '0 4px';
-            container.style.borderRadius = '4px';
-            container.style.background = 'rgba(0,0,0,0.5)';
             
             const repBallNum = groupType === 'solid' ? 1 : 9;
-            
-            // Reduced size to 22px to fit top rail better
             const canvas = this.renderBallPreviewCanvas(repBallNum, this.selectedBallSet, 22);
             
             if (canvas) {
-                canvas.style.marginRight = '6px';
                 container.appendChild(canvas);
             }
 
             const textSpan = document.createElement('span');
             textSpan.textContent = `P${playerNum}: ${count}`;
-            textSpan.style.fontSize = '13px'; // Slightly smaller font
             
             if (isActive) {
                 textSpan.style.color = '#ffd700';
-                textSpan.style.fontWeight = 'bold';
-                container.style.border = '1px solid rgba(255, 215, 0, 0.3)';
             }
 
             container.appendChild(textSpan);
@@ -1200,7 +1188,6 @@ export class UI {
         this.ballGroups.appendChild(p2El);
     }
 
-    // Update 9-ball display: Target ball + Remaining sequence
     // Update 9-ball display: Target ball + Remaining sequence
     update9BallHUD(lowestBall, remainingBalls) {
         if (this.currentMode !== GameMode.NINE_BALL) return;
@@ -1300,36 +1287,30 @@ export class UI {
         }
 
         this.ballGroups.innerHTML = '';
+        // APPLY LAYOUT CLASS: Moves container to top-right rail
+        this.ballGroups.className = 'ball-groups-8ball';
 
         if (!player1Group) {
             this.ballGroups.innerHTML = '<div class="ball-group"><span>Table Open</span></div>';
             return;
         }
 
-        // Helper to create player group element
         const createGroupDisplay = (playerNum, group, count, isActive) => {
             const container = document.createElement('div');
             container.className = `ball-group ${isActive ? 'active-turn' : ''}`;
 
-            // UK Balls: Group 1 is usually Red/Blue (Ball 1), Group 2 is Yellow (Ball 2 or 9 depending on set)
-            // In CustomBallSetManager, Group 1 is 1-7, Group 2 is 9-15.
             const repBallNum = group === 'group1' ? 1 : 9;
-
-            const canvas = this.renderBallPreviewCanvas(repBallNum, this.selectedBallSet, 28);
+            const canvas = this.renderBallPreviewCanvas(repBallNum, this.selectedBallSet, 22);
             
             if (canvas) {
-                canvas.style.marginRight = '8px';
                 container.appendChild(canvas);
             }
 
             const textSpan = document.createElement('span');
-            // Get nice name (Reds/Yellows etc)
-            const groupName = this.getUKGroupName(group, colorScheme);
             textSpan.textContent = `P${playerNum}: ${count}`;
 
             if (isActive) {
                 textSpan.style.color = '#ffd700';
-                textSpan.style.fontWeight = 'bold';
             }
 
             container.appendChild(textSpan);

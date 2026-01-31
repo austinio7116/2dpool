@@ -1076,7 +1076,7 @@ export class Game {
 
     isSpotAvailable(pos) {
         if (!pos) return false;
-        const margin = Constants.BALL_RADIUS * 2 + 0.5; // Slight buffer
+        const margin = Constants.BALL_RADIUS * 2 + 0.01; // Slight buffer
         for (const b of this.balls) {
             if (!b.pocketed && Vec2.distance(pos, b.position) < margin) {
                 return false;

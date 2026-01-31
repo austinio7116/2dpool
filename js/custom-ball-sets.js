@@ -344,7 +344,7 @@ export class CustomBallSetManager {
         if (ballSet.style === 'stripe') {
             // Stripe mode: show numbers on all numbered balls
             showNumber = ballNumber !== 0;
-        } else if (isEightBall && ballSet.options?.striped8Ball) {
+        } else if (isEightBall) {
             // Solid mode with striped 8-ball: show number on 8-ball
             showNumber = true;
         }

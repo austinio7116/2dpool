@@ -588,6 +588,9 @@ export class UI {
         this.editingSetId = set.id;
         this.hideBallModal();
 
+        // FIX: Show the modal FIRST, so the inputs are live in the DOM
+        this.creatorModal?.classList.remove('hidden');
+
         // Load the set's data into creator fields
         if (this.customSetNameInput) this.customSetNameInput.value = set.name || '';
 
@@ -641,8 +644,6 @@ export class UI {
         if (modalTitle) modalTitle.textContent = 'Edit Ball Set';
         const saveBtn = document.getElementById('btn-save-custom');
         if (saveBtn) saveBtn.textContent = 'Save Changes';
-
-        this.creatorModal?.classList.remove('hidden');
     }
 
     // Show custom ball set creator modal
@@ -651,6 +652,9 @@ export class UI {
 
         this.hideBallModal();
         this.editingSetId = null; // Not editing, creating new
+
+        // FIX: Show modal FIRST
+        this.creatorModal.classList.remove('hidden');
 
         // Reset creator fields
         if (this.customSetNameInput) this.customSetNameInput.value = '';
@@ -700,8 +704,6 @@ export class UI {
 
         this.setCreatorStyle('solid');
         this.updateCreatorPreview();
-
-        this.creatorModal.classList.remove('hidden');
     }
 
     // Hide creator modal
@@ -978,28 +980,34 @@ export class UI {
     setColorValue(element, value) {
         if (!element) return;
         
-        // Ensure we have a valid 6-digit hex code (Required for color inputs)
-        // If value is null/undefined, default to black
-        let color = value || '#000000';
+        // 1. Sanitize the value to ensure strict 7-character hex (#RRGGBB)
+        let safeColor = value || '#000000';
         
-        // Input type="color" requires strict 7-char hex (#RRGGBB). 
-        // If data is short hex (#RGB), convert it, otherwise the assignment fails silently.
-        if (color.length === 4) {
-            color = '#' + color[1] + color[1] + color[2] + color[2] + color[3] + color[3];
+        // Handle "rgb(r, g, b)" format
+        if (safeColor.startsWith('rgb')) {
+            const rgb = safeColor.match(/\d+/g);
+            if (rgb) {
+                safeColor = '#' + 
+                    parseInt(rgb[0]).toString(16).padStart(2, '0') +
+                    parseInt(rgb[1]).toString(16).padStart(2, '0') +
+                    parseInt(rgb[2]).toString(16).padStart(2, '0');
+            }
+        }
+        // Handle short hex "#F00" -> "#FF0000"
+        else if (safeColor.length === 4 && safeColor.startsWith('#')) {
+            safeColor = '#' + safeColor[1] + safeColor[1] + 
+                              safeColor[2] + safeColor[2] + 
+                              safeColor[3] + safeColor[3];
         }
 
-        // 1. Set the internal value
-        element.value = color;
+        // 2. Set the value
+        element.value = safeColor;
         
-        // 2. Explicitly set the background color
-        // This fixes the "Customised Link" visual issue on mobile
-        element.style.backgroundColor = color;
+        // 3. Force the visual update (important for your customized link UI)
+        element.style.backgroundColor = safeColor;
         
-        // 3. Dispatch BOTH input and change events
-        // 'input' updates your 3D preview
-        // 'change' ensures the browser/UI framework acknowledges the new state
+        // 4. Dispatch events to ensure other listeners (like your 3D preview) update
         element.dispatchEvent(new Event('input', { bubbles: true }));
-        element.dispatchEvent(new Event('change', { bubbles: true }));
     }
 
     // Toggle fullscreen mode

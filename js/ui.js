@@ -1006,27 +1006,38 @@ export class UI {
     toggleFullscreen() {
         const elem = document.documentElement;
 
-        if (!document.fullscreenElement && !document.webkitFullscreenElement) {
-            // Enter fullscreen
-            if (elem.requestFullscreen) {
-                elem.requestFullscreen();
-            } else if (elem.webkitRequestFullscreen) {
-                elem.webkitRequestFullscreen();
-            }
+        // Check if the API is supported at all
+        const isApiSupported = elem.requestFullscreen || elem.webkitRequestFullscreen;
 
-            // Lock orientation to landscape if supported
-            if (screen.orientation && screen.orientation.lock) {
-                screen.orientation.lock('landscape').catch(() => {
-                    // Orientation lock not supported or failed
-                });
+        if (isApiSupported) {
+            // STANDARD ANDROID / DESKTOP LOGIC
+            if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+                if (elem.requestFullscreen) {
+                    elem.requestFullscreen().catch(err => console.log(err));
+                } else if (elem.webkitRequestFullscreen) {
+                    elem.webkitRequestFullscreen();
+                }
+                
+                // Try to lock orientation (Android only)
+                if (screen.orientation && screen.orientation.lock) {
+                    try {
+                        screen.orientation.lock('landscape').catch(() => {});
+                    } catch (e) {}
+                }
+            } else {
+                if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                } else if (document.webkitExitFullscreen) {
+                    document.webkitExitFullscreen();
+                }
             }
         } else {
-            // Exit fullscreen
-            if (document.exitFullscreen) {
-                document.exitFullscreen();
-            } else if (document.webkitExitFullscreen) {
-                document.webkitExitFullscreen();
-            }
+            // IPHONE / UNSUPPORTED FALLBACK
+            // Toggle a CSS class on the body instead
+            document.body.classList.toggle('ios-fullscreen-fix');
+            
+            // Scroll to top to help hide address bar
+            window.scrollTo(0, 1);
         }
     }
 

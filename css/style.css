@@ -1444,3 +1444,17 @@ body {
 #touch-hint.fade-out {
     opacity: 0;
 }
+
+/* Forces the game to fill the screen on iPhone */
+.ios-fullscreen-fix {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100vw;
+    height: 100dvh; /* dvh = dynamic viewport height, handles the URL bar better */
+    z-index: 9999;
+    background-color: #000; /* Or your table felt color */
+    overflow: hidden;
+}

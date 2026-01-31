@@ -757,6 +757,11 @@ export class Game {
 
     // Get game state info for UI
     getGameInfo() {
+        // Filter out pocketed balls and the cue ball (0), then sort by number
+        const onTable = this.balls
+            .filter(b => !b.pocketed && b.number !== 0)
+            .map(b => b.number)
+            .sort((a, b) => a - b);
         const info = {
             mode: this.mode,
             state: this.state,
@@ -770,6 +775,8 @@ export class Game {
             gameOverReason: this.gameOverReason,
             lowestBall: this.lowestBall,
             remaining: this.getRemainingBalls(),
+            // NEW: Explicit array of ball numbers for the 9-Ball UI Rail
+            remainingBalls: onTable,
             // UK 8-ball specific
             ukColorScheme: this.ukColorScheme,
             shotsRemaining: this.shotsRemaining,

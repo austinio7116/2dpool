@@ -1066,6 +1066,12 @@ export class UI {
         this.gameOverScreen.classList.add('hidden');
         this.currentMode = mode;
 
+        // RESET: Clear mode-specific classes AND Styles
+        this.ballGroups.className = '';
+        this.ballGroups.style.cssText = ''; 
+        this.ballGroups.innerHTML = ''; // Clear previous content
+        this.last9BallState = null;
+
         if (mode === GameMode.FREE_PLAY) {
             this.freeplayControls.classList.remove('hidden');
             this.playerIndicator.textContent = 'Free Play';
@@ -1107,10 +1113,10 @@ export class UI {
         let text = `Player ${player}'s Turn`;
 
         if (this.currentMode === GameMode.EIGHT_BALL && group) {
-            text += ` (${group === 'solid' ? 'Solids' : 'Stripes'})`;
+            //text += ` (${group === 'solid' ? 'Solids' : 'Stripes'})`;
         } else if (this.currentMode === GameMode.UK_EIGHT_BALL && group && gameInfo) {
-            const colorName = this.getUKGroupName(group, gameInfo.ukColorScheme);
-            text += ` (${colorName})`;
+            //const colorName = this.getUKGroupName(group, gameInfo.ukColorScheme);
+            //text += ` (${colorName})`;
             // Show shots remaining if using two-shot rule
             if (gameInfo.shotsRemaining > 1) {
                 text += ` - ${gameInfo.shotsRemaining} shots`;
@@ -1119,7 +1125,7 @@ export class UI {
             // Will be updated with lowest ball info
         } else if (this.currentMode === GameMode.SNOOKER) {
             // Snooker shows turn info in main player indicator
-            text = `Player ${player}'s Turn - Snooker`;
+            text = `Player ${player}'s Turn`;
         }
 
         this.playerIndicator.textContent = text;
@@ -1134,8 +1140,8 @@ export class UI {
         }
     }
 
-    // Update ball groups display (8-ball)
-    updateBallGroups(player1Group, player2Group, remaining) {
+    // Update ball groups (8-ball)
+    updateBallGroups(player1Group, player2Group, remaining, currentPlayer) {
         if (this.currentMode !== GameMode.EIGHT_BALL) {
             this.ballGroups.innerHTML = '';
             return;
@@ -1144,43 +1150,151 @@ export class UI {
         this.ballGroups.innerHTML = '';
 
         if (!player1Group) {
-            // Groups not yet assigned
+            // Keep container small and unobtrusive
+            this.ballGroups.innerHTML = '<div class="ball-group" style="padding: 2px 8px; font-size: 12px;"><span>Table Open</span></div>';
             return;
         }
 
-        // Player 1 group
-        const p1Div = document.createElement('div');
-        p1Div.className = 'ball-group';
-        p1Div.innerHTML = `
-            <div class="mini-ball ${player1Group}"></div>
-            <span>P1: ${player1Group === 'solid' ? remaining.solids : remaining.stripes}</span>
-        `;
+        // Helper to create player group element
+        const createGroupDisplay = (playerNum, groupType, count, isActive) => {
+            const container = document.createElement('div');
+            // Inline styles to ensure it stays compact within the rail
+            container.className = `ball-group ${isActive ? 'active-turn' : ''}`;
+            container.style.display = 'flex';
+            container.style.alignItems = 'center';
+            container.style.padding = '2px 8px'; // Reduced padding
+            container.style.margin = '0 4px';
+            container.style.borderRadius = '4px';
+            container.style.background = 'rgba(0,0,0,0.5)';
+            
+            const repBallNum = groupType === 'solid' ? 1 : 9;
+            
+            // Reduced size to 22px to fit top rail better
+            const canvas = this.renderBallPreviewCanvas(repBallNum, this.selectedBallSet, 22);
+            
+            if (canvas) {
+                canvas.style.marginRight = '6px';
+                container.appendChild(canvas);
+            }
 
-        // Player 2 group
-        const p2Div = document.createElement('div');
-        p2Div.className = 'ball-group';
-        p2Div.innerHTML = `
-            <div class="mini-ball ${player2Group}"></div>
-            <span>P2: ${player2Group === 'solid' ? remaining.solids : remaining.stripes}</span>
-        `;
+            const textSpan = document.createElement('span');
+            textSpan.textContent = `P${playerNum}: ${count}`;
+            textSpan.style.fontSize = '13px'; // Slightly smaller font
+            
+            if (isActive) {
+                textSpan.style.color = '#ffd700';
+                textSpan.style.fontWeight = 'bold';
+                container.style.border = '1px solid rgba(255, 215, 0, 0.3)';
+            }
 
-        this.ballGroups.appendChild(p1Div);
-        this.ballGroups.appendChild(p2Div);
+            container.appendChild(textSpan);
+            return container;
+        };
+
+        const p1Count = player1Group === 'solid' ? remaining.solids : remaining.stripes;
+        const p1El = createGroupDisplay(1, player1Group, p1Count, currentPlayer === 1);
+        this.ballGroups.appendChild(p1El);
+
+        const p2Count = player2Group === 'solid' ? remaining.solids : remaining.stripes;
+        const p2El = createGroupDisplay(2, player2Group, p2Count, currentPlayer === 2);
+        this.ballGroups.appendChild(p2El);
     }
 
-    // Update 9-ball lowest ball indicator
-    updateLowestBall(lowestBall) {
+    // Update 9-ball display: Target ball + Remaining sequence
+    // Update 9-ball display: Target ball + Remaining sequence
+    update9BallHUD(lowestBall, remainingBalls) {
         if (this.currentMode !== GameMode.NINE_BALL) return;
 
-        this.ballGroups.innerHTML = `
-            <div class="ball-group">
-                <span>Target: ${lowestBall}-Ball</span>
-            </div>
-        `;
+        // 1. DATA PREPARATION
+        let onTable = [];
+        
+        // Strict check: Only populate if we have a valid array
+        if (remainingBalls && Array.isArray(remainingBalls) && remainingBalls.length > 0) {
+            onTable = [...remainingBalls].sort((a, b) => a - b);
+        } else {
+            // If data is missing, we prefer to show NOTHING in the rail rather than "ghost balls"
+            // We only assume the lowest ball exists
+            onTable = [lowestBall]; 
+        }
+
+        // Filter: The rail should show everything on the table EXCEPT the target ball
+        const railSequence = onTable.filter(b => b !== lowestBall);
+
+        // 2. STATE CHECK
+        const stateSignature = `9ball-${lowestBall}-${railSequence.join(',')}`;
+        if (this.last9BallState === stateSignature) return;
+        this.last9BallState = stateSignature;
+
+        // 3. LAYOUT & POSITIONING
+        this.ballGroups.innerHTML = '';
+        this.ballGroups.className = 'ball-groups-9ball';
+        
+        // --- POSITIONING FIX: Move to Right Quadrant ---
+        // 'left: 60%' places it to the right of the middle pocket (which is at 50%)
+        // This avoids both the Player Indicator (Left) and Middle Pocket (Center)
+        this.ballGroups.style.position = 'absolute';
+        this.ballGroups.style.top = '5px'; 
+        this.ballGroups.style.left = '60%'; 
+        this.ballGroups.style.right = 'auto';
+        this.ballGroups.style.transform = 'none'; // Remove centering transforms
+        
+        this.ballGroups.style.display = 'flex';
+        this.ballGroups.style.flexDirection = 'row';
+        this.ballGroups.style.alignItems = 'center';
+        this.ballGroups.style.width = 'auto';
+
+        // --- PART A: TARGET INDICATOR ---
+        const targetWrapper = document.createElement('div');
+        targetWrapper.style.display = 'flex';
+        targetWrapper.style.alignItems = 'center';
+        targetWrapper.style.padding = '2px 8px';
+        targetWrapper.style.background = 'rgba(0,0,0,0.6)';
+        targetWrapper.style.borderRadius = '12px';
+        targetWrapper.style.border = '1px solid rgba(255, 215, 0, 0.3)';
+        targetWrapper.style.marginRight = '8px';
+
+        const targetLabel = document.createElement('span');
+        targetLabel.textContent = 'TARGET';
+        targetLabel.style.fontSize = '10px';
+        targetLabel.style.color = '#ffd700';
+        targetLabel.style.fontWeight = 'bold';
+        targetLabel.style.marginRight = '6px';
+        targetLabel.style.letterSpacing = '0.5px';
+
+        // Target Ball Size 24px
+        const targetCanvas = this.renderBallPreviewCanvas(lowestBall, this.selectedBallSet, 24);
+        
+        targetWrapper.appendChild(targetLabel);
+        if (targetCanvas) {
+            targetCanvas.style.filter = 'drop-shadow(0 0 3px rgba(255, 215, 0, 0.4))';
+            targetWrapper.appendChild(targetCanvas);
+        }
+        this.ballGroups.appendChild(targetWrapper);
+
+        // --- PART B: THE RAIL ---
+        if (railSequence.length > 0) {
+            const railWrapper = document.createElement('div');
+            railWrapper.style.display = 'flex';
+            railWrapper.style.alignItems = 'center';
+            railWrapper.style.gap = '2px';
+            railWrapper.style.padding = '2px 6px';
+            railWrapper.style.background = 'rgba(0,0,0,0.3)';
+            railWrapper.style.borderRadius = '10px';
+
+            for (const ballNum of railSequence) {
+                // Rail Ball Size 16px
+                const smallCanvas = this.renderBallPreviewCanvas(ballNum, this.selectedBallSet, 16);
+                if (smallCanvas) {
+                    smallCanvas.style.opacity = '0.7';
+                    railWrapper.appendChild(smallCanvas);
+                }
+            }
+            this.ballGroups.appendChild(railWrapper);
+        }
     }
 
     // Update ball groups display for UK 8-ball
-    updateUKBallGroups(player1Group, player2Group, remaining, colorScheme) {
+    updateUKBallGroups(player1Group, player2Group, remaining, colorScheme, currentPlayer) {
         if (this.currentMode !== GameMode.UK_EIGHT_BALL) {
             return;
         }
@@ -1188,44 +1302,47 @@ export class UI {
         this.ballGroups.innerHTML = '';
 
         if (!player1Group) {
-            // Groups not yet assigned
+            this.ballGroups.innerHTML = '<div class="ball-group"><span>Table Open</span></div>';
             return;
         }
 
-        // Determine CSS class based on color scheme and group
-        const getColorClass = (group) => {
-            if (colorScheme === 'red-yellow') {
-                return group === 'group1' ? 'uk-red' : 'uk-yellow';
-            } else {
-                return group === 'group1' ? 'uk-blue' : 'uk-yellow';
+        // Helper to create player group element
+        const createGroupDisplay = (playerNum, group, count, isActive) => {
+            const container = document.createElement('div');
+            container.className = `ball-group ${isActive ? 'active-turn' : ''}`;
+
+            // UK Balls: Group 1 is usually Red/Blue (Ball 1), Group 2 is Yellow (Ball 2 or 9 depending on set)
+            // In CustomBallSetManager, Group 1 is 1-7, Group 2 is 9-15.
+            const repBallNum = group === 'group1' ? 1 : 9;
+
+            const canvas = this.renderBallPreviewCanvas(repBallNum, this.selectedBallSet, 28);
+            
+            if (canvas) {
+                canvas.style.marginRight = '8px';
+                container.appendChild(canvas);
             }
+
+            const textSpan = document.createElement('span');
+            // Get nice name (Reds/Yellows etc)
+            const groupName = this.getUKGroupName(group, colorScheme);
+            textSpan.textContent = `P${playerNum}: ${count}`;
+
+            if (isActive) {
+                textSpan.style.color = '#ffd700';
+                textSpan.style.fontWeight = 'bold';
+            }
+
+            container.appendChild(textSpan);
+            return container;
         };
 
-        const p1ColorClass = getColorClass(player1Group);
-        const p2ColorClass = getColorClass(player2Group);
-        const p1Name = this.getUKGroupName(player1Group, colorScheme);
-        const p2Name = this.getUKGroupName(player2Group, colorScheme);
         const p1Count = player1Group === 'group1' ? remaining.group1 : remaining.group2;
+        const p1El = createGroupDisplay(1, player1Group, p1Count, currentPlayer === 1);
+        this.ballGroups.appendChild(p1El);
+
         const p2Count = player2Group === 'group1' ? remaining.group1 : remaining.group2;
-
-        // Player 1 group
-        const p1Div = document.createElement('div');
-        p1Div.className = 'ball-group';
-        p1Div.innerHTML = `
-            <div class="mini-ball ${p1ColorClass}"></div>
-            <span>P1 (${p1Name}): ${p1Count}</span>
-        `;
-
-        // Player 2 group
-        const p2Div = document.createElement('div');
-        p2Div.className = 'ball-group';
-        p2Div.innerHTML = `
-            <div class="mini-ball ${p2ColorClass}"></div>
-            <span>P2 (${p2Name}): ${p2Count}</span>
-        `;
-
-        this.ballGroups.appendChild(p1Div);
-        this.ballGroups.appendChild(p2Div);
+        const p2El = createGroupDisplay(2, player2Group, p2Count, currentPlayer === 2);
+        this.ballGroups.appendChild(p2El);
     }
 
     // Show foul indicator
@@ -1282,17 +1399,20 @@ export class UI {
 
         // Update ball groups (8-ball US)
         if (info.mode === GameMode.EIGHT_BALL) {
-            this.updateBallGroups(info.player1Group, info.player2Group, info.remaining);
+            this.updateBallGroups(info.player1Group, info.player2Group, info.remaining, info.currentPlayer);
         }
 
         // Update ball groups (UK 8-ball)
         if (info.mode === GameMode.UK_EIGHT_BALL) {
-            this.updateUKBallGroups(info.player1Group, info.player2Group, info.remainingUK, info.ukColorScheme);
+            this.updateUKBallGroups(info.player1Group, info.player2Group, info.remainingUK, info.ukColorScheme, info.currentPlayer);
         }
 
-        // Update lowest ball (9-ball)
+        // --- 9-BALL LOGIC FIX ---
         if (info.mode === GameMode.NINE_BALL) {
-            this.updateLowestBall(info.lowestBall);
+            // CRITICAL: We prioritize info.remainingBalls (the array)
+            // If that is missing, we pass empty array [] to prevent the fallback loop from showing ghost balls
+            const remaining = Array.isArray(info.remainingBalls) ? info.remainingBalls : [];
+            this.update9BallHUD(info.lowestBall, remaining);
         }
 
         // Update snooker HUD
@@ -1302,15 +1422,11 @@ export class UI {
 
         // Ball in hand message
         if (info.state === GameState.BALL_IN_HAND) {
-            let message;
+            let message = 'Ball in hand - Click anywhere to place';
             if (info.isBreakShot) {
                 message = 'Place cue ball behind the line to break';
             } else if (info.mode === GameMode.UK_EIGHT_BALL) {
                 message = 'Place ball behind the line - 2 shots';
-            } else if (info.mode === GameMode.SNOOKER) {
-                message = 'Ball in hand - Click anywhere to place';
-            } else {
-                message = 'Ball in hand - Click anywhere to place';
             }
             this.showMessage(message);
         } else {

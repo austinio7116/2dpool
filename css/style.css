@@ -1458,3 +1458,60 @@ body {
     background-color: #000; /* Or your table felt color */
     overflow: hidden;
 }
+
+/* 9-Ball Specific HUD Styles */
+.target-ball-wrapper {
+    background: rgba(0, 0, 0, 0.4);
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 215, 0, 0.3);
+}
+
+.rail-wrapper {
+    /* Optional: background for the rail */
+    background: rgba(0, 0, 0, 0.2);
+    padding: 6px 10px;
+    border-radius: 20px;
+}
+
+/* Add a subtle pulse to the target ball */
+@keyframes target-pulse {
+    0% { transform: scale(1); filter: drop-shadow(0 0 2px rgba(255,215,0,0.3)); }
+    50% { transform: scale(1.05); filter: drop-shadow(0 0 6px rgba(255,215,0,0.6)); }
+    100% { transform: scale(1); filter: drop-shadow(0 0 2px rgba(255,215,0,0.3)); }
+}
+
+.target-ball-wrapper canvas {
+    animation: target-pulse 2s infinite ease-in-out;
+}
+
+.ball-group {
+    display: flex;
+    align-items: center; /* Vertically center the ball canvas with text */
+    justify-content: center;
+    padding: 5px 10px;
+    border-radius: 5px;
+    background: rgba(0,0,0,0.3); /* Slight background for readability */
+    margin: 0 5px;
+    transition: all 0.2s ease;
+}
+
+.ball-group.active-turn {
+    background: rgba(255, 215, 0, 0.2); /* Gold tint for active player */
+    border: 1px solid rgba(255, 215, 0, 0.5);
+    box-shadow: 0 0 10px rgba(255, 215, 0, 0.2);
+}
+
+/* 8-BALL SPECIFIC LAYOUT */
+/* Pins the HUD to the right of the middle pocket (same as 9-ball) */
+.ball-groups-8ball {
+    position: absolute;
+    top: 7px;
+    left: 60%;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 12px; /* Space between Player 1 and Player 2 */
+    pointer-events: auto;
+    z-index: 10;
+}

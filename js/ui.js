@@ -420,7 +420,8 @@ export class UI {
         if (!this.ballSetGrid) return;
 
         this.ballSetGrid.innerHTML = '';
-        const allSets = this.ballSetManager.getAllSets();
+        // Filter out snooker set - it's automatically used for snooker mode
+        const allSets = this.ballSetManager.getAllSets().filter(set => !set.isSnooker);
 
         for (const set of allSets) {
             const option = document.createElement('div');
@@ -651,7 +652,8 @@ export class UI {
             const savedId = localStorage.getItem('poolGame_selectedBallSet');
             if (savedId) {
                 const set = this.ballSetManager.getSet(savedId);
-                if (set) {
+                // Return the set if found and not snooker (snooker is auto-selected for snooker mode)
+                if (set && !set.isSnooker) {
                     return set;
                 }
             }

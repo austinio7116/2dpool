@@ -217,9 +217,44 @@ export class CustomBallSetManager {
     getBallConfig(ballSet, ballNumber) {
         if (!ballSet) return null;
 
+        const isCue = ballNumber === 0;
+
+        // Handle snooker ball sets
+        if (ballSet.isSnooker) {
+            let color;
+            if (isCue) {
+                color = ballSet.colors.cue || '#FFFEF0';
+            } else if (ballNumber >= 1 && ballNumber <= 15) {
+                // Red balls (1-6 for mini, 1-15 for full)
+                color = ballSet.colors.red || '#CC0000';
+            } else {
+                // Colored balls - map ball number to color name
+                // Mini snooker: 7=yellow, 8=green, 9=brown, 10=blue, 11=pink, 12=black
+                // Full snooker: 16=yellow, 17=green, 18=brown, 19=blue, 20=pink, 21=black
+                const colorMap = {
+                    7: 'yellow', 16: 'yellow',
+                    8: 'green', 17: 'green',
+                    9: 'brown', 18: 'brown',
+                    10: 'blue', 19: 'blue',
+                    11: 'pink', 20: 'pink',
+                    12: 'black', 21: 'black'
+                };
+                const colorName = colorMap[ballNumber];
+                color = colorName ? ballSet.colors[colorName] : '#CC0000';
+            }
+
+            return {
+                color: color,
+                isStripe: false,
+                isUKBall: false,
+                isSnookerBall: true,
+                showNumber: false
+            };
+        }
+
+        // Handle non-snooker ball sets
         const isGroup1 = ballNumber >= 1 && ballNumber <= 7;
         const isGroup2 = ballNumber >= 9 && ballNumber <= 15;
-        const isCue = ballNumber === 0;
         const isEightBall = ballNumber === 8;
 
         let color;
@@ -248,8 +283,8 @@ export class CustomBallSetManager {
             color: color,
             isStripe: ballSet.style === 'stripe' && isGroup2,
             isUKBall: ballSet.style === 'solid' && !ballSet.isSnooker,
-            isSnookerBall: ballSet.isSnooker || false,
-            showNumber: ballSet.options?.showNumbers !== false && !ballSet.isSnooker &&
+            isSnookerBall: false,
+            showNumber: ballSet.options?.showNumbers !== false &&
                        (ballSet.style === 'stripe' || isEightBall)
         };
     }
@@ -257,8 +292,9 @@ export class CustomBallSetManager {
     // Get representative balls for preview (6 balls)
     getPreviewBalls(ballSet) {
         if (ballSet.isSnooker) {
-            // Snooker preview: cue, red, yellow, green, blue, black
-            return [0, 1, 7, 8, 10, 12]; // Using snooker ball numbers
+            // Snooker preview: cue (0), red (1), yellow (7), green (8), blue (10), black (12)
+            // Using mini snooker ball numbers
+            return [0, 1, 7, 8, 10, 12];
         }
 
         // Standard preview: cue, 2 group1, 8-ball, 2 group2

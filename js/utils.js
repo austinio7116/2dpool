@@ -270,7 +270,7 @@ export const Constants = {
             useCurvedPockets: true,
             isSnooker: true,
             redCount: 15,
-            boundsOffset: { top: 17, bottom: 15, left: 20, right: 20}  // Move cushions/pockets outward
+            boundsOffset: { top: 18, bottom: 15, left: 22, right: 21}  // Move cushions/pockets outward
         }
     }
 };

@@ -19,6 +19,7 @@ class PoolGame {
         this.table = new Table();
         this.physics = new Physics(this.table);
         this.renderer = new Renderer(this.canvas, this.table);
+        this.renderer.setPhysics(this.physics);
         this.input = new Input(this.canvas);
         this.cue = new Cue();
         this.game = new Game(this.table);

@@ -212,12 +212,14 @@ export class PlanckPhysics {
         const pocketRadius = this.getTablePocketRadius();
         const ballRadius = this.getTableBallRadius();
         const gap = pocketRadius + ballRadius * 0.5;
-        const cornerGap = gap + 3;
+        const cornerGap = gap + 4;
+
+        const middleGap = gap + 7;
 
         const cornerCurveLength = 28;
         const middleCurveLength = 22;
-        const cornerCurveAmount = 0.4;
-        const middleCurveAmount = 0.5;
+        const cornerCurveAmount = 0.6;
+        const middleCurveAmount = 0.7;
 
         // Chain 1: Top-left corner (horizontal curve) → Top rail left → Top middle pocket left curve
         let points = [];
@@ -227,9 +229,9 @@ export class PlanckPhysics {
             cornerCurveAmount, 6
         );
         points.push(...curve);
-        points.push({ x: this.table.center.x - gap, y: b.top });
+        points.push({ x: this.table.center.x - middleGap, y: b.top });
         curve = this.generateCurvePoints(
-            this.table.center.x - gap, b.top,
+            this.table.center.x - middleGap, b.top,
             this.table.center.x - gap + middleCurveLength * 0.3 + 3, b.top - middleCurveLength,
             middleCurveAmount, 8
         );
@@ -240,7 +242,7 @@ export class PlanckPhysics {
         points = [];
         curve = this.generateCurvePoints(
             this.table.center.x + gap - middleCurveLength * 0.3 - 3, b.top - middleCurveLength,
-            this.table.center.x + gap, b.top,
+            this.table.center.x + middleGap, b.top,
             middleCurveAmount, 8
         );
         points.push(...curve);
@@ -278,9 +280,9 @@ export class PlanckPhysics {
             cornerCurveAmount, 6
         );
         points.push(...curve);
-        points.push({ x: this.table.center.x + gap, y: b.bottom });
+        points.push({ x: this.table.center.x + middleGap, y: b.bottom });
         curve = this.generateCurvePoints(
-            this.table.center.x + gap, b.bottom,
+            this.table.center.x + middleGap, b.bottom,
             this.table.center.x + gap - middleCurveLength * 0.3 - 3, b.bottom + middleCurveLength,
             middleCurveAmount, 8
         );
@@ -291,7 +293,7 @@ export class PlanckPhysics {
         points = [];
         curve = this.generateCurvePoints(
             this.table.center.x - gap + middleCurveLength * 0.3 + 3, b.bottom + middleCurveLength,
-            this.table.center.x - gap, b.bottom,
+            this.table.center.x - middleGap, b.bottom,
             middleCurveAmount, 8
         );
         points.push(...curve);

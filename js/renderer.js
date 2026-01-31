@@ -467,294 +467,77 @@ export class Renderer {
         }
     }
 
+    setPhysics(physics) {
+        this.physics = physics;
+    }
+
     // DEBUG: Temporary visualization of cushion collision boundaries
     drawCushionDebug() {
+        // Ensure physics engine is initialized
+        if (!this.physics || !this.physics.railBodies) return;
+
         const ctx = this.ctx;
-        // Use table-specific pocket/ball radius from table config
-        const tableConfig = Constants.TABLE_CONFIGS ? Constants.TABLE_CONFIGS[this.currentTableIndex + 1] : null; // currentTableIndex is 0-based
-        const pocketRadius = (tableConfig && tableConfig.pocketRadius) ? tableConfig.pocketRadius : Constants.POCKET_RADIUS;
-        const ballRadius = (tableConfig && tableConfig.ballRadius) ? tableConfig.ballRadius : Constants.BALL_RADIUS;
-        const offset = (tableConfig && tableConfig.boundsOffset) ? tableConfig.boundsOffset : null;
-        const gap = pocketRadius + ballRadius * 0.5;
+        const PHYSICS_SCALE = 100; // Must match SCALE in PlanckPhysics
 
-        // Apply bounds offset
-        let b;
-        if (!offset) {
-            b = this.table.bounds;
-        } else if (typeof offset === 'number') {
-            b = {
-                left: this.table.bounds.left - offset,
-                right: this.table.bounds.right + offset,
-                top: this.table.bounds.top - offset,
-                bottom: this.table.bounds.bottom + offset
-            };
-        } else {
-            b = {
-                left: this.table.bounds.left - (offset.left || 0),
-                right: this.table.bounds.right + (offset.right || 0),
-                top: this.table.bounds.top - (offset.top || 0),
-                bottom: this.table.bounds.bottom + (offset.bottom || 0)
-            };
-        }
+        ctx.save();
+        
+        // 1. Draw the Chain Lines
+        ctx.strokeStyle = '#00ff00'; // Bright Green
+        ctx.lineWidth = 1;           // Much thinner
+        ctx.setLineDash([]);         // Solid lines for physics boundaries
 
-        // Check if using curved pockets (tables 7, 8, and 9, which are indices 6, 7, and 8)
-        const useCurvedPockets = this.currentTableIndex === 6 || this.currentTableIndex === 7 || this.currentTableIndex === 8;
-        const cornerGap = useCurvedPockets ? gap + 3 : gap;
+        for (const body of this.physics.railBodies) {
+            let fixture = body.getFixtureList();
+            
+            // Iterate through all fixtures on the rail body
+            while (fixture) {
+                const shape = fixture.getShape();
+                const type = shape.getType();
 
-        ctx.strokeStyle = '#ffff00';
-        ctx.lineWidth = 3;
-        ctx.setLineDash([8, 4]);
-
-        // Top rail segments
-        ctx.beginPath();
-        ctx.moveTo(b.left + cornerGap, b.top);
-        ctx.lineTo(this.table.center.x - gap, b.top);
-        ctx.stroke();
-
-        ctx.beginPath();
-        ctx.moveTo(this.table.center.x + gap, b.top);
-        ctx.lineTo(b.right - cornerGap, b.top);
-        ctx.stroke();
-
-        // Bottom rail segments
-        ctx.beginPath();
-        ctx.moveTo(b.left + cornerGap, b.bottom);
-        ctx.lineTo(this.table.center.x - gap, b.bottom);
-        ctx.stroke();
-
-        ctx.beginPath();
-        ctx.moveTo(this.table.center.x + gap, b.bottom);
-        ctx.lineTo(b.right - cornerGap, b.bottom);
-        ctx.stroke();
-
-        // Left rail
-        ctx.beginPath();
-        ctx.moveTo(b.left, b.top + cornerGap);
-        ctx.lineTo(b.left, b.bottom - cornerGap);
-        ctx.stroke();
-
-        // Right rail
-        ctx.beginPath();
-        ctx.moveTo(b.right, b.top + cornerGap);
-        ctx.lineTo(b.right, b.bottom - cornerGap);
-        ctx.stroke();
-
-        ctx.setLineDash([]);
-
-        // Draw pocket entry segments
-        ctx.strokeStyle = '#00ff00';
-        ctx.lineWidth = 3;
-
-        if (useCurvedPockets) {
-            this.drawCurvedPocketEntriesDebug(ctx, b, gap, cornerGap);
-        } else {
-            this.drawStraightPocketEntriesDebug(ctx, b, gap);
-        }
-
-        // Draw gap endpoints as circles
-        ctx.fillStyle = '#ffff00';
-        const endpoints = [
-            // Top rail gaps
-            { x: b.left + cornerGap, y: b.top },
-            { x: this.table.center.x - gap, y: b.top },
-            { x: this.table.center.x + gap, y: b.top },
-            { x: b.right - cornerGap, y: b.top },
-            // Bottom rail gaps
-            { x: b.left + cornerGap, y: b.bottom },
-            { x: this.table.center.x - gap, y: b.bottom },
-            { x: this.table.center.x + gap, y: b.bottom },
-            { x: b.right - cornerGap, y: b.bottom },
-            // Left rail gaps
-            { x: b.left, y: b.top + cornerGap },
-            { x: b.left, y: b.bottom - cornerGap },
-            // Right rail gaps
-            { x: b.right, y: b.top + cornerGap },
-            { x: b.right, y: b.bottom - cornerGap }
-        ];
-
-        for (const pt of endpoints) {
-            ctx.beginPath();
-            ctx.arc(pt.x, pt.y, 5, 0, Math.PI * 2);
-            ctx.fill();
-        }
-    }
-
-    drawStraightPocketEntriesDebug(ctx, b, gap) {
-        const segmentLength = 20;
-        const sidePocketAngle = 70;
-        const cornerPocketAngle = 45;
-        const sideRad = sidePocketAngle * Math.PI / 180;
-        const cornerRad = cornerPocketAngle * Math.PI / 180;
-
-        // Side pocket entries (top)
-        ctx.beginPath();
-        ctx.moveTo(this.table.center.x - gap, b.top);
-        ctx.lineTo(this.table.center.x - gap + Math.cos(sideRad) * segmentLength, b.top - Math.sin(sideRad) * segmentLength);
-        ctx.stroke();
-
-        ctx.beginPath();
-        ctx.moveTo(this.table.center.x + gap, b.top);
-        ctx.lineTo(this.table.center.x + gap - Math.cos(sideRad) * segmentLength, b.top - Math.sin(sideRad) * segmentLength);
-        ctx.stroke();
-
-        // Side pocket entries (bottom)
-        ctx.beginPath();
-        ctx.moveTo(this.table.center.x - gap, b.bottom);
-        ctx.lineTo(this.table.center.x - gap + Math.cos(sideRad) * segmentLength, b.bottom + Math.sin(sideRad) * segmentLength);
-        ctx.stroke();
-
-        ctx.beginPath();
-        ctx.moveTo(this.table.center.x + gap, b.bottom);
-        ctx.lineTo(this.table.center.x + gap - Math.cos(sideRad) * segmentLength, b.bottom + Math.sin(sideRad) * segmentLength);
-        ctx.stroke();
-
-        // Corner pocket entries
-        // Top-left
-        ctx.beginPath();
-        ctx.moveTo(b.left + gap, b.top);
-        ctx.lineTo(b.left + gap - Math.cos(cornerRad) * segmentLength, b.top - Math.sin(cornerRad) * segmentLength);
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.moveTo(b.left, b.top + gap);
-        ctx.lineTo(b.left - Math.sin(cornerRad) * segmentLength, b.top + gap - Math.cos(cornerRad) * segmentLength);
-        ctx.stroke();
-
-        // Top-right
-        ctx.beginPath();
-        ctx.moveTo(b.right - gap, b.top);
-        ctx.lineTo(b.right - gap + Math.cos(cornerRad) * segmentLength, b.top - Math.sin(cornerRad) * segmentLength);
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.moveTo(b.right, b.top + gap);
-        ctx.lineTo(b.right + Math.sin(cornerRad) * segmentLength, b.top + gap - Math.cos(cornerRad) * segmentLength);
-        ctx.stroke();
-
-        // Bottom-left
-        ctx.beginPath();
-        ctx.moveTo(b.left + gap, b.bottom);
-        ctx.lineTo(b.left + gap - Math.cos(cornerRad) * segmentLength, b.bottom + Math.sin(cornerRad) * segmentLength);
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.moveTo(b.left, b.bottom - gap);
-        ctx.lineTo(b.left - Math.sin(cornerRad) * segmentLength, b.bottom - gap + Math.cos(cornerRad) * segmentLength);
-        ctx.stroke();
-
-        // Bottom-right
-        ctx.beginPath();
-        ctx.moveTo(b.right - gap, b.bottom);
-        ctx.lineTo(b.right - gap + Math.cos(cornerRad) * segmentLength, b.bottom + Math.sin(cornerRad) * segmentLength);
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.moveTo(b.right, b.bottom - gap);
-        ctx.lineTo(b.right + Math.sin(cornerRad) * segmentLength, b.bottom - gap + Math.cos(cornerRad) * segmentLength);
-        ctx.stroke();
-    }
-
-    drawCurvedPocketEntriesDebug(ctx, b, gap, cornerGap) {
-        const cornerCurveLength = 28;
-        const middleCurveLength = 22;
-        const cornerCurveAmount = 0.4;
-        const middleCurveAmount = 0.5;
-
-        // Helper to draw a curved segment (matching physics bezier)
-        const drawCurve = (startX, startY, endX, endY, curveDirection, numSegments = 8) => {
-            const midX = (startX + endX) / 2;
-            const midY = (startY + endY) / 2;
-            const dx = endX - startX;
-            const dy = endY - startY;
-            const len = Math.sqrt(dx * dx + dy * dy);
-            const perpX = -dy / len;
-            const perpY = dx / len;
-            const curveDepth = len * 0.4 * curveDirection;
-            const controlX = midX + perpX * curveDepth;
-            const controlY = midY + perpY * curveDepth;
-
-            ctx.beginPath();
-            ctx.moveTo(startX, startY);
-            for (let i = 1; i <= numSegments; i++) {
-                const t = i / numSegments;
-                const oneMinusT = 1 - t;
-                const x = oneMinusT * oneMinusT * startX + 2 * oneMinusT * t * controlX + t * t * endX;
-                const y = oneMinusT * oneMinusT * startY + 2 * oneMinusT * t * controlY + t * t * endY;
-                ctx.lineTo(x, y);
+                if (type === 'chain') {
+                    // Planck.js ChainShape stores vertices in m_vertices
+                    const vertices = shape.m_vertices;
+                    
+                    if (vertices && vertices.length > 0) {
+                        ctx.beginPath();
+                        
+                        // Transform physics coordinates (meters) back to screen pixels
+                        // Note: Rail bodies are static at 0,0, so vertices are world coords
+                        ctx.moveTo(vertices[0].x * PHYSICS_SCALE, vertices[0].y * PHYSICS_SCALE);
+                        
+                        for (let i = 1; i < vertices.length; i++) {
+                            ctx.lineTo(vertices[i].x * PHYSICS_SCALE, vertices[i].y * PHYSICS_SCALE);
+                        }
+                        
+                        ctx.stroke();
+                    }
+                }
+                fixture = fixture.getNext();
             }
-            ctx.stroke();
-        };
+        }
 
-        // Middle pocket entries (top)
-        // Inner endpoints moved 3px towards center
-        drawCurve(
-            this.table.center.x - gap, b.top,
-            this.table.center.x - gap + middleCurveLength * 0.3 + 3, b.top - middleCurveLength,
-            middleCurveAmount, 8
-        );
-        drawCurve(
-            this.table.center.x + gap, b.top,
-            this.table.center.x + gap - middleCurveLength * 0.3 - 3, b.top - middleCurveLength,
-            -middleCurveAmount, 8
-        );
+        // 2. Draw Vertices (Dots) to visualize curve resolution
+        ctx.fillStyle = '#ffff00'; // Yellow dots
+        
+        for (const body of this.physics.railBodies) {
+            let fixture = body.getFixtureList();
+            while (fixture) {
+                const shape = fixture.getShape();
+                if (shape.getType() === 'chain') {
+                    const vertices = shape.m_vertices;
+                    if (vertices) {
+                        for (const v of vertices) {
+                            ctx.beginPath();
+                            ctx.arc(v.x * PHYSICS_SCALE, v.y * PHYSICS_SCALE, 1.5, 0, Math.PI * 2);
+                            ctx.fill();
+                        }
+                    }
+                }
+                fixture = fixture.getNext();
+            }
+        }
 
-        // Middle pocket entries (bottom)
-        drawCurve(
-            this.table.center.x - gap, b.bottom,
-            this.table.center.x - gap + middleCurveLength * 0.3 + 3, b.bottom + middleCurveLength,
-            -middleCurveAmount, 8
-        );
-        drawCurve(
-            this.table.center.x + gap, b.bottom,
-            this.table.center.x + gap - middleCurveLength * 0.3 - 3, b.bottom + middleCurveLength,
-            middleCurveAmount, 8
-        );
-
-        // Corner pocket entries
-        // Inner endpoints moved 3px towards pocket along rail direction
-        // Top-left
-        drawCurve(
-            b.left + cornerGap, b.top,
-            b.left + cornerGap - cornerCurveLength * 0.7 - 3, b.top - cornerCurveLength * 0.7,
-            -cornerCurveAmount, 6
-        );
-        drawCurve(
-            b.left, b.top + cornerGap,
-            b.left - cornerCurveLength * 0.7, b.top + cornerGap - cornerCurveLength * 0.7 - 3,
-            cornerCurveAmount, 6
-        );
-
-        // Top-right
-        drawCurve(
-            b.right - cornerGap, b.top,
-            b.right - cornerGap + cornerCurveLength * 0.7 + 3, b.top - cornerCurveLength * 0.7,
-            cornerCurveAmount, 6
-        );
-        drawCurve(
-            b.right, b.top + cornerGap,
-            b.right + cornerCurveLength * 0.7, b.top + cornerGap - cornerCurveLength * 0.7 - 3,
-            -cornerCurveAmount, 6
-        );
-
-        // Bottom-left
-        drawCurve(
-            b.left + cornerGap, b.bottom,
-            b.left + cornerGap - cornerCurveLength * 0.7 - 3, b.bottom + cornerCurveLength * 0.7,
-            cornerCurveAmount, 6
-        );
-        drawCurve(
-            b.left, b.bottom - cornerGap,
-            b.left - cornerCurveLength * 0.7, b.bottom - cornerGap + cornerCurveLength * 0.7 + 3,
-            -cornerCurveAmount, 6
-        );
-
-        // Bottom-right
-        drawCurve(
-            b.right - cornerGap, b.bottom,
-            b.right - cornerGap + cornerCurveLength * 0.7 + 3, b.bottom + cornerCurveLength * 0.7,
-            -cornerCurveAmount, 6
-        );
-        drawCurve(
-            b.right, b.bottom - cornerGap,
-            b.right + cornerCurveLength * 0.7, b.bottom - cornerGap + cornerCurveLength * 0.7 + 3,
-            cornerCurveAmount, 6
-        );
+        ctx.restore();
     }
 
     createWoodGradient(x, y, w, h) {

@@ -175,6 +175,14 @@ class PoolGame {
             ball.color = config.color;
             ball.isStripe = config.isStripe;
             ball.isUKBall = config.isUKBall && !ball.isEightBall;
+            ball.showNumber = config.showNumber;
+
+            // Apply stripe and number styling options
+            ball.stripeBackgroundColor = config.stripeBackgroundColor || null;
+            ball.numberCircleColor = config.numberCircleColor || null;
+            ball.numberTextColor = config.numberTextColor || null;
+            ball.numberBorder = config.numberBorder || false;
+            ball.numberBorderColor = config.numberBorderColor || null;
         }
 
         // Clear ball renderer cache to regenerate with new colors
@@ -339,7 +347,7 @@ class PoolGame {
         }
     }
 
-    handleBallPocketed(ball) {
+    handleBallPocketed(_ball) {
         // Additional handling if needed
     }
 

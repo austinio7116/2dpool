@@ -87,7 +87,7 @@ export class BallRenderer3D {
     }
 
     // Render a single frame of the ball at a specific rotation
-    renderBallFrame(ballNumber, baseColor, isStripe, rotation, isUKBall = false, isEightBall = false, isSnookerBall = false) {
+    renderBallFrame(ballNumber, baseColor, isStripe, rotation, isUKBall = false, isEightBall = false, isSnookerBall = false, numberOptions = {}) {
         const size = this.resolution;
         const canvas = document.createElement('canvas');
         canvas.width = size;
@@ -97,6 +97,8 @@ export class BallRenderer3D {
         const data = imageData.data;
 
         const rgb = this.hexToRgb(baseColor);
+        const numberCircleRgb = this.hexToRgb(numberOptions.numberCircleColor || '#FFFFFF');
+        const stripeBackgroundRgb = this.hexToRgb(numberOptions.stripeBackgroundColor || '#FFFFFF');
         const radius = this.sphereRadius;
 
         // Stripe is a band around the equator - latitude based
@@ -109,6 +111,9 @@ export class BallRenderer3D {
         // Precompute rotation
         const cosR = Math.cos(rotation);
         const sinR = Math.sin(rotation);
+
+        // Determine if this ball should show a number
+        const showNumber = numberOptions.showNumber !== false && ballNumber !== 0 && (!isUKBall || isEightBall) && !isSnookerBall;
 
         for (let y = 0; y < size; y++) {
             for (let x = 0; x < size; x++) {
@@ -144,7 +149,7 @@ export class BallRenderer3D {
                     g = rgb.g;
                     b = rgb.b;
                 } else {
-                    // American balls and UK 8-ball have number spots
+                    // American balls, striped balls, and UK 8-ball have number spots
                     // Number spot is at the "front" of the ball in local coords (0, 0, 1)
                     // Calculate angular distance from number spot center
                     const dotProduct = localZ; // dot((localX,localY,localZ), (0,0,1))
@@ -159,19 +164,26 @@ export class BallRenderer3D {
                     const inStripe = latitude < stripeLatitude;
 
                     if (isStripe) {
-                        if (inNumberSpot && numberVisible) {
-                            r = g = b = 255;
+                        if (showNumber && inNumberSpot && numberVisible) {
+                            r = numberCircleRgb.r;
+                            g = numberCircleRgb.g;
+                            b = numberCircleRgb.b;
                         } else if (inStripe) {
                             r = rgb.r;
                             g = rgb.g;
                             b = rgb.b;
                         } else {
-                            r = g = b = 255;
+                            // Stripe background color (poles)
+                            r = stripeBackgroundRgb.r;
+                            g = stripeBackgroundRgb.g;
+                            b = stripeBackgroundRgb.b;
                         }
                     } else {
                         // Solid ball
-                        if (inNumberSpot && numberVisible) {
-                            r = g = b = 255;
+                        if (showNumber && inNumberSpot && numberVisible) {
+                            r = numberCircleRgb.r;
+                            g = numberCircleRgb.g;
+                            b = numberCircleRgb.b;
                         } else {
                             r = rgb.r;
                             g = rgb.g;
@@ -201,17 +213,15 @@ export class BallRenderer3D {
         ctx.putImageData(imageData, 0, 0);
 
         // Draw the number text on top of the number spot
-        // Skip for UK balls except 8-ball, and skip for snooker balls
-        const showNumber = ballNumber !== 0 && (!isUKBall || isEightBall) && !isSnookerBall;
         if (showNumber) {
-            this.drawNumber(ctx, ballNumber, size, rotation, radius);
+            this.drawNumber(ctx, ballNumber, size, rotation, radius, numberOptions);
         }
 
         return canvas;
     }
 
     // Draw the number at 3D rotated position
-    drawNumber(ctx, number, size, rotation, radius) {
+    drawNumber(ctx, number, size, rotation, radius, options = {}) {
         const centerX = size / 2;
         const centerY = size / 2;
 
@@ -229,10 +239,22 @@ export class BallRenderer3D {
             const scale = 0.4 + spotZ * 0.6;
             const fontSize = size * 0.42 * scale; // Readable numbers
             const alpha = Math.pow(spotZ, 0.5); // Fade near edges
+            const circleRadius = size * 0.22 * scale;
 
             ctx.save();
             ctx.globalAlpha = alpha;
-            ctx.fillStyle = '#000000';
+
+            // Draw border around number circle if enabled
+            if (options.numberBorder) {
+                ctx.strokeStyle = options.numberBorderColor || '#000000';
+                ctx.lineWidth = this.renderScale * 1.5;
+                ctx.beginPath();
+                ctx.arc(screenX, screenY, circleRadius + this.renderScale, 0, Math.PI * 2);
+                ctx.stroke();
+            }
+
+            // Draw number text
+            ctx.fillStyle = options.numberTextColor || '#000000';
             ctx.font = `bold ${fontSize}px Arial`;
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
@@ -311,6 +333,34 @@ export class BallRenderer3D {
         const isUKBall = ball.isUKBall || false;
         const isEightBall = ball.isEightBall || false;
         const isSnookerBall = ball.isSnookerBall || false;
+
+        // Check for custom rendering options
+        const hasCustomOptions = ball.numberCircleColor || ball.numberTextColor ||
+                                 ball.numberBorder || ball.stripeBackgroundColor ||
+                                 ball.showNumber === false;
+
+        // If ball has custom options, render fresh frame (bypass cache)
+        if (hasCustomOptions) {
+            const renderOptions = {
+                showNumber: ball.showNumber !== false,
+                stripeBackgroundColor: ball.stripeBackgroundColor,
+                numberCircleColor: ball.numberCircleColor,
+                numberTextColor: ball.numberTextColor,
+                numberBorder: ball.numberBorder,
+                numberBorderColor: ball.numberBorderColor
+            };
+
+            // UK balls (except 8-ball) and snooker balls - use fixed rotation
+            if ((isUKBall && !isEightBall) || isSnookerBall) {
+                return this.renderBallFrame(ball.number, baseColor, isStripe, 0, isUKBall, isEightBall, isSnookerBall, renderOptions);
+            }
+
+            // Map displayRoll to rotation
+            const rotation = ball.displayRoll;
+            return this.renderBallFrame(ball.number, baseColor, isStripe, rotation, isUKBall, isEightBall, isSnookerBall, renderOptions);
+        }
+
+        // Use cached frames for standard balls
         const frames = this.generateBallFrames(ball.number, baseColor, isStripe, isUKBall, isEightBall, isSnookerBall);
 
         // UK balls (except 8-ball) and snooker balls are solid color - use fixed frame so lighting stays consistent

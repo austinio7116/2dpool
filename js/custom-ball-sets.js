@@ -129,11 +129,23 @@ export class CustomBallSetManager {
             },
             options: {
                 hasStripes: setData.style === 'stripe',
-                showNumbers: setData.options?.showNumbers ?? true
+                showNumbers: setData.options?.showNumbers ?? (setData.style === 'stripe'),
+                striped8Ball: setData.options?.striped8Ball || false,
+                stripeBackgroundColor: setData.options?.stripeBackgroundColor || '#FFFFFF',
+                numberCircleColor: setData.options?.numberCircleColor || '#FFFFFF',
+                numberTextColor: setData.options?.numberTextColor || '#000000',
+                numberBorder: setData.options?.numberBorder || false,
+                numberBorderColor: setData.options?.numberBorderColor || '#000000'
             },
             isPredefined: false,
             createdAt: Date.now()
         };
+
+        // Advanced mode: individual ball colors
+        if (setData.advancedMode && setData.ballColors) {
+            newSet.advancedMode = true;
+            newSet.ballColors = { ...setData.ballColors };
+        }
 
         this.customSets.push(newSet);
         this.save();
@@ -145,13 +157,46 @@ export class CustomBallSetManager {
         const index = this.customSets.findIndex(set => set.id === id);
         if (index === -1) return null;
 
-        this.customSets[index] = {
-            ...this.customSets[index],
-            ...setData,
-            id: id // Preserve ID
+        const existingSet = this.customSets[index];
+
+        // Build the updated set
+        const updatedSet = {
+            id: id, // Preserve ID
+            name: setData.name || existingSet.name,
+            style: setData.style || existingSet.style,
+            colors: {
+                cue: '#FFFEF0',
+                group1: setData.colors?.group1 || '#CC0000',
+                group2: setData.colors?.group2 || '#FFD700',
+                eightBall: setData.colors?.eightBall || '#000000'
+            },
+            options: {
+                hasStripes: setData.style === 'stripe',
+                showNumbers: setData.options?.showNumbers ?? (setData.style === 'stripe'),
+                striped8Ball: setData.options?.striped8Ball || false,
+                stripeBackgroundColor: setData.options?.stripeBackgroundColor || '#FFFFFF',
+                numberCircleColor: setData.options?.numberCircleColor || '#FFFFFF',
+                numberTextColor: setData.options?.numberTextColor || '#000000',
+                numberBorder: setData.options?.numberBorder || false,
+                numberBorderColor: setData.options?.numberBorderColor || '#000000'
+            },
+            isPredefined: false,
+            createdAt: existingSet.createdAt,
+            updatedAt: Date.now()
         };
+
+        // Handle advanced mode
+        if (setData.advancedMode && setData.ballColors) {
+            updatedSet.advancedMode = true;
+            updatedSet.ballColors = { ...setData.ballColors };
+        } else {
+            updatedSet.advancedMode = false;
+            delete updatedSet.ballColors;
+        }
+
+        this.customSets[index] = updatedSet;
         this.save();
-        return this.customSets[index];
+        return updatedSet;
     }
 
     // Delete a custom set
@@ -258,7 +303,11 @@ export class CustomBallSetManager {
         const isEightBall = ballNumber === 8;
 
         let color;
-        if (isCue) {
+
+        // Advanced mode: use individual ball colors
+        if (ballSet.advancedMode && ballSet.ballColors && ballSet.ballColors[ballNumber]) {
+            color = ballSet.ballColors[ballNumber];
+        } else if (isCue) {
             color = ballSet.colors.cue || '#FFFEF0';
         } else if (isEightBall) {
             color = ballSet.colors.eightBall || '#000000';
@@ -269,7 +318,7 @@ export class CustomBallSetManager {
         }
 
         // For American set, use standard colors
-        if (ballSet.id === 'american' || color === null) {
+        if (ballSet.id === 'american' || color === null || color === undefined) {
             const standardColors = {
                 0: '#FFFEF0', 1: '#FFD700', 2: '#0000CD', 3: '#FF0000',
                 4: '#4B0082', 5: '#FF8C00', 6: '#006400', 7: '#800000',
@@ -279,13 +328,38 @@ export class CustomBallSetManager {
             color = standardColors[ballNumber];
         }
 
+        // Determine if this ball should be striped
+        let isStripe = ballSet.style === 'stripe' && isGroup2;
+        // Special case: striped 8-ball option for solid sets
+        if (isEightBall && ballSet.style === 'solid' && ballSet.options?.striped8Ball) {
+            isStripe = true;
+        }
+
+        // For solid style sets, balls are like UK balls (no number circle except for striped 8-ball)
+        const isSolidStyle = ballSet.style === 'solid' && !ballSet.advancedMode;
+        const isUKBall = isSolidStyle && !isStripe;
+
+        // Determine if number should be shown
+        let showNumber = false;
+        if (ballSet.style === 'stripe') {
+            // Stripe mode: show numbers on all numbered balls
+            showNumber = ballNumber !== 0;
+        } else if (isEightBall && ballSet.options?.striped8Ball) {
+            // Solid mode with striped 8-ball: show number on 8-ball
+            showNumber = true;
+        }
+
         return {
             color: color,
-            isStripe: ballSet.style === 'stripe' && isGroup2,
-            isUKBall: ballSet.style === 'solid' && !ballSet.isSnooker,
+            isStripe: isStripe,
+            isUKBall: isUKBall,
             isSnookerBall: false,
-            showNumber: ballSet.options?.showNumbers !== false &&
-                       (ballSet.style === 'stripe' || isEightBall)
+            showNumber: showNumber,
+            stripeBackgroundColor: ballSet.options?.stripeBackgroundColor || '#FFFFFF',
+            numberCircleColor: ballSet.options?.numberCircleColor || '#FFFFFF',
+            numberTextColor: ballSet.options?.numberTextColor || '#000000',
+            numberBorder: ballSet.options?.numberBorder || false,
+            numberBorderColor: ballSet.options?.numberBorderColor || '#000000'
         };
     }
 

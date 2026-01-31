@@ -58,14 +58,33 @@ export class UI {
 
         // Creator elements
         this.customSetNameInput = document.getElementById('custom-set-name');
+        this.styleSolidBtn = document.getElementById('style-solid');
+        this.styleStripeBtn = document.getElementById('style-stripe');
+        this.creatorPreviewBalls = document.getElementById('creator-preview-balls');
+
+        // Solid mode elements
+        this.solidOptions = document.getElementById('solid-options');
         this.colorGroup1 = document.getElementById('color-group1');
         this.colorGroup2 = document.getElementById('color-group2');
         this.color8Ball = document.getElementById('color-8ball');
-        this.styleSolidBtn = document.getElementById('style-solid');
-        this.styleStripeBtn = document.getElementById('style-stripe');
-        this.stripeOptions = document.getElementById('stripe-options');
-        this.showNumbersCheckbox = document.getElementById('show-numbers');
-        this.creatorPreviewBalls = document.getElementById('creator-preview-balls');
+        this.striped8BallCheckbox = document.getElementById('striped-8ball');
+
+        // Stripe mode elements
+        this.stripeModeOptions = document.getElementById('stripe-mode-options');
+        this.simpleColorPickers = document.getElementById('simple-color-pickers');
+        this.colorSolids = document.getElementById('color-solids');
+        this.colorStripes = document.getElementById('color-stripes');
+        this.color8BallStripe = document.getElementById('color-8ball-stripe');
+        this.colorStripeBg = document.getElementById('color-stripe-bg');
+
+        // Advanced mode elements (stripe mode only)
+        this.advancedModeCheckbox = document.getElementById('advanced-mode');
+        this.advancedColorPickers = document.getElementById('advanced-color-pickers');
+        this.colorNumberCircle = document.getElementById('color-number-circle');
+        this.colorNumberText = document.getElementById('color-number-text');
+        this.numberBorderCheckbox = document.getElementById('number-border');
+        this.borderColorField = document.getElementById('border-color-field');
+        this.colorNumberBorder = document.getElementById('color-number-border');
 
         // Callbacks
         this.onGameStart = null;
@@ -87,6 +106,7 @@ export class UI {
         this.selectedTable = this.loadSelectedTable();
         this.selectedBallSet = this.loadSelectedBallSet();
         this.creatorStyle = 'solid';
+        this.editingSetId = null; // Track which set is being edited
 
         // Table names
         this.tableNames = [
@@ -243,11 +263,36 @@ export class UI {
             this.setCreatorStyle('stripe');
         });
 
-        // Color picker changes
+        // Solid mode color picker changes
         this.colorGroup1?.addEventListener('input', () => this.updateCreatorPreview());
         this.colorGroup2?.addEventListener('input', () => this.updateCreatorPreview());
         this.color8Ball?.addEventListener('input', () => this.updateCreatorPreview());
-        this.showNumbersCheckbox?.addEventListener('change', () => this.updateCreatorPreview());
+        this.striped8BallCheckbox?.addEventListener('change', () => this.updateCreatorPreview());
+
+        // Stripe mode color picker changes
+        this.colorSolids?.addEventListener('input', () => this.updateCreatorPreview());
+        this.colorStripes?.addEventListener('input', () => this.updateCreatorPreview());
+        this.color8BallStripe?.addEventListener('input', () => this.updateCreatorPreview());
+        this.colorStripeBg?.addEventListener('input', () => this.updateCreatorPreview());
+
+        // Advanced mode toggle (stripe mode only)
+        this.advancedModeCheckbox?.addEventListener('change', () => {
+            this.toggleAdvancedMode(this.advancedModeCheckbox.checked);
+        });
+
+        // Advanced ball color pickers (paired)
+        document.querySelectorAll('#advanced-color-pickers input[type="color"]').forEach(input => {
+            input.addEventListener('input', () => this.updateCreatorPreview());
+        });
+
+        // Number styling options
+        this.colorNumberCircle?.addEventListener('input', () => this.updateCreatorPreview());
+        this.colorNumberText?.addEventListener('input', () => this.updateCreatorPreview());
+        this.numberBorderCheckbox?.addEventListener('change', () => {
+            this.borderColorField?.classList.toggle('hidden', !this.numberBorderCheckbox.checked);
+            this.updateCreatorPreview();
+        });
+        this.colorNumberBorder?.addEventListener('input', () => this.updateCreatorPreview());
 
         // Close modals on backdrop click
         this.tableModal?.addEventListener('click', (e) => {
@@ -337,6 +382,16 @@ export class UI {
         canvas.width = size;
         canvas.height = size;
 
+        // Render options including number styling
+        const renderOptions = {
+            showNumber: config.showNumber,
+            stripeBackgroundColor: config.stripeBackgroundColor,
+            numberCircleColor: config.numberCircleColor,
+            numberTextColor: config.numberTextColor,
+            numberBorder: config.numberBorder,
+            numberBorderColor: config.numberBorderColor
+        };
+
         const frame = this.ballRenderer.renderBallFrame(
             ballNumber,
             config.color,
@@ -344,7 +399,8 @@ export class UI {
             0, // rotation = 0 for static preview
             config.isUKBall,
             ballNumber === 8,
-            config.isSnookerBall
+            config.isSnookerBall,
+            renderOptions
         );
 
         const ctx = canvas.getContext('2d');
@@ -449,8 +505,21 @@ export class UI {
             nameDiv.textContent = set.name;
             option.appendChild(nameDiv);
 
-            // Add delete button for custom sets
+            // Add edit and delete buttons for custom sets
             if (!set.isPredefined) {
+                const buttonContainer = document.createElement('div');
+                buttonContainer.className = 'set-buttons';
+
+                const editBtn = document.createElement('button');
+                editBtn.className = 'edit-set';
+                editBtn.textContent = '\u270E'; // Pencil icon
+                editBtn.title = 'Edit set';
+                editBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    this.editCustomBallSet(set);
+                });
+                buttonContainer.appendChild(editBtn);
+
                 const deleteBtn = document.createElement('button');
                 deleteBtn.className = 'delete-set';
                 deleteBtn.textContent = '\u00D7';
@@ -459,7 +528,9 @@ export class UI {
                     e.stopPropagation();
                     this.deleteCustomBallSet(set.id);
                 });
-                option.appendChild(deleteBtn);
+                buttonContainer.appendChild(deleteBtn);
+
+                option.appendChild(buttonContainer);
             }
 
             option.addEventListener('click', () => {
@@ -512,18 +583,120 @@ export class UI {
         this.populateBallSetGrid();
     }
 
+    // Edit a custom ball set
+    editCustomBallSet(set) {
+        this.editingSetId = set.id;
+        this.hideBallModal();
+
+        // Load the set's data into creator fields
+        if (this.customSetNameInput) this.customSetNameInput.value = set.name || '';
+
+        if (set.style === 'solid') {
+            // Load solid mode values
+            if (this.colorGroup1) this.colorGroup1.value = set.colors?.group1 || '#CC0000';
+            if (this.colorGroup2) this.colorGroup2.value = set.colors?.group2 || '#FFD700';
+            if (this.color8Ball) this.color8Ball.value = set.colors?.eightBall || '#000000';
+            if (this.striped8BallCheckbox) this.striped8BallCheckbox.checked = set.options?.striped8Ball || false;
+        } else {
+            // Load stripe mode values
+            if (this.colorSolids) this.colorSolids.value = set.colors?.group1 || '#FFD700';
+            if (this.colorStripes) this.colorStripes.value = set.colors?.group2 || '#0000CD';
+            if (this.color8BallStripe) this.color8BallStripe.value = set.colors?.eightBall || '#000000';
+            if (this.colorStripeBg) this.colorStripeBg.value = set.options?.stripeBackgroundColor || '#FFFFFF';
+
+            // Load number styling
+            if (this.colorNumberCircle) this.colorNumberCircle.value = set.options?.numberCircleColor || '#FFFFFF';
+            if (this.colorNumberText) this.colorNumberText.value = set.options?.numberTextColor || '#000000';
+            if (this.numberBorderCheckbox) this.numberBorderCheckbox.checked = set.options?.numberBorder || false;
+            if (this.colorNumberBorder) this.colorNumberBorder.value = set.options?.numberBorderColor || '#000000';
+            this.borderColorField?.classList.toggle('hidden', !set.options?.numberBorder);
+
+            // Load advanced mode
+            if (set.advancedMode && set.ballColors) {
+                if (this.advancedModeCheckbox) this.advancedModeCheckbox.checked = true;
+                this.creatorAdvancedMode = true;
+                this.simpleColorPickers?.classList.add('hidden');
+                this.advancedColorPickers?.classList.remove('hidden');
+
+                // Load individual ball colors
+                document.querySelectorAll('#advanced-color-pickers input[type="color"]').forEach(input => {
+                    const pairNum = parseInt(input.dataset.pair);
+                    if (!isNaN(pairNum) && set.ballColors[pairNum]) {
+                        input.value = set.ballColors[pairNum];
+                    }
+                });
+            } else {
+                if (this.advancedModeCheckbox) this.advancedModeCheckbox.checked = false;
+                this.creatorAdvancedMode = false;
+                this.simpleColorPickers?.classList.remove('hidden');
+                this.advancedColorPickers?.classList.add('hidden');
+            }
+        }
+
+        this.setCreatorStyle(set.style || 'solid');
+        this.updateCreatorPreview();
+
+        // Update modal title and button text
+        const modalTitle = this.creatorModal?.querySelector('.modal-header h2');
+        if (modalTitle) modalTitle.textContent = 'Edit Ball Set';
+        const saveBtn = document.getElementById('btn-save-custom');
+        if (saveBtn) saveBtn.textContent = 'Save Changes';
+
+        this.creatorModal?.classList.remove('hidden');
+    }
+
     // Show custom ball set creator modal
     showCreatorModal() {
         if (!this.creatorModal) return;
 
         this.hideBallModal();
+        this.editingSetId = null; // Not editing, creating new
 
         // Reset creator fields
         if (this.customSetNameInput) this.customSetNameInput.value = '';
+
+        // Reset solid mode fields
         if (this.colorGroup1) this.colorGroup1.value = '#CC0000';
         if (this.colorGroup2) this.colorGroup2.value = '#FFD700';
         if (this.color8Ball) this.color8Ball.value = '#000000';
-        if (this.showNumbersCheckbox) this.showNumbersCheckbox.checked = true;
+        if (this.striped8BallCheckbox) this.striped8BallCheckbox.checked = false;
+
+        // Reset stripe mode fields
+        if (this.colorSolids) this.colorSolids.value = '#FFD700';
+        if (this.colorStripes) this.colorStripes.value = '#0000CD';
+        if (this.color8BallStripe) this.color8BallStripe.value = '#000000';
+        if (this.colorStripeBg) this.colorStripeBg.value = '#FFFFFF';
+
+        // Reset advanced mode
+        if (this.advancedModeCheckbox) this.advancedModeCheckbox.checked = false;
+        this.creatorAdvancedMode = false;
+        this.simpleColorPickers?.classList.remove('hidden');
+        this.advancedColorPickers?.classList.add('hidden');
+
+        // Reset advanced ball colors to defaults (paired: 1&9, 2&10, etc.)
+        const defaultPairColors = {
+            1: '#FFD700', 2: '#0000CD', 3: '#FF0000', 4: '#4B0082',
+            5: '#FF8C00', 6: '#006400', 7: '#800000', 8: '#000000'
+        };
+        document.querySelectorAll('#advanced-color-pickers input[type="color"]').forEach(input => {
+            const pairNum = input.dataset.pair;
+            if (pairNum && defaultPairColors[pairNum]) {
+                input.value = defaultPairColors[pairNum];
+            }
+        });
+
+        // Reset number styling
+        if (this.colorNumberCircle) this.colorNumberCircle.value = '#FFFFFF';
+        if (this.colorNumberText) this.colorNumberText.value = '#000000';
+        if (this.numberBorderCheckbox) this.numberBorderCheckbox.checked = false;
+        if (this.colorNumberBorder) this.colorNumberBorder.value = '#000000';
+        this.borderColorField?.classList.add('hidden');
+
+        // Reset modal title and button text for create mode
+        const modalTitle = this.creatorModal.querySelector('.modal-header h2');
+        if (modalTitle) modalTitle.textContent = 'Create Custom Ball Set';
+        const saveBtn = document.getElementById('btn-save-custom');
+        if (saveBtn) saveBtn.textContent = 'Save Ball Set';
 
         this.setCreatorStyle('solid');
         this.updateCreatorPreview();
@@ -545,9 +718,19 @@ export class UI {
         this.styleSolidBtn?.classList.toggle('active', style === 'solid');
         this.styleStripeBtn?.classList.toggle('active', style === 'stripe');
 
-        if (this.stripeOptions) {
-            this.stripeOptions.style.display = style === 'stripe' ? 'block' : 'none';
-        }
+        // Toggle solid/stripe options visibility
+        this.solidOptions?.classList.toggle('hidden', style !== 'solid');
+        this.stripeModeOptions?.classList.toggle('hidden', style !== 'stripe');
+
+        this.updateCreatorPreview();
+    }
+
+    // Toggle advanced mode
+    toggleAdvancedMode(enabled) {
+        this.creatorAdvancedMode = enabled;
+
+        this.simpleColorPickers?.classList.toggle('hidden', enabled);
+        this.advancedColorPickers?.classList.toggle('hidden', !enabled);
 
         this.updateCreatorPreview();
     }
@@ -558,27 +741,73 @@ export class UI {
 
         this.creatorPreviewBalls.innerHTML = '';
 
-        // Create a temporary ball set config for preview
-        const tempSet = {
-            id: 'preview',
-            style: this.creatorStyle,
-            colors: {
-                cue: '#FFFEF0',
-                group1: this.colorGroup1?.value || '#CC0000',
-                group2: this.colorGroup2?.value || '#FFD700',
-                eightBall: this.color8Ball?.value || '#000000'
-            },
-            options: {
-                hasStripes: this.creatorStyle === 'stripe',
-                showNumbers: this.showNumbersCheckbox?.checked ?? true
-            }
-        };
+        // Create a temporary ball set config for preview based on current mode
+        let tempSet;
 
-        // Show more balls in creator preview
-        const previewBalls = [0, 1, 2, 3, 8, 9, 10, 11];
+        if (this.creatorStyle === 'solid') {
+            // Solid mode: group colors, no numbers (except possibly striped 8-ball)
+            tempSet = {
+                id: 'preview',
+                style: 'solid',
+                colors: {
+                    cue: '#FFFEF0',
+                    group1: this.colorGroup1?.value || '#CC0000',
+                    group2: this.colorGroup2?.value || '#FFD700',
+                    eightBall: this.color8Ball?.value || '#000000'
+                },
+                options: {
+                    hasStripes: false,
+                    showNumbers: false,  // Solid balls have no numbers
+                    striped8Ball: this.striped8BallCheckbox?.checked || false
+                }
+            };
+        } else {
+            // Stripe mode: solids/stripes colors with numbers
+            tempSet = {
+                id: 'preview',
+                style: 'stripe',
+                colors: {
+                    cue: '#FFFEF0',
+                    group1: this.colorSolids?.value || '#FFD700',
+                    group2: this.colorStripes?.value || '#0000CD',
+                    eightBall: this.color8BallStripe?.value || '#000000'
+                },
+                options: {
+                    hasStripes: true,
+                    showNumbers: true,
+                    stripeBackgroundColor: this.colorStripeBg?.value || '#FFFFFF',
+                    numberCircleColor: this.colorNumberCircle?.value || '#FFFFFF',
+                    numberTextColor: this.colorNumberText?.value || '#000000',
+                    numberBorder: this.numberBorderCheckbox?.checked || false,
+                    numberBorderColor: this.colorNumberBorder?.value || '#000000'
+                }
+            };
+
+            // Advanced mode: collect paired ball colors
+            if (this.creatorAdvancedMode) {
+                tempSet.advancedMode = true;
+                tempSet.ballColors = {};
+                document.querySelectorAll('#advanced-color-pickers input[type="color"]').forEach(input => {
+                    const pairNum = parseInt(input.dataset.pair);
+                    if (!isNaN(pairNum)) {
+                        if (pairNum === 8) {
+                            // 8-ball is unique
+                            tempSet.ballColors[8] = input.value;
+                        } else {
+                            // Paired balls: 1&9, 2&10, 3&11, 4&12, 5&13, 6&14, 7&15
+                            tempSet.ballColors[pairNum] = input.value;
+                            tempSet.ballColors[pairNum + 8] = input.value;
+                        }
+                    }
+                });
+            }
+        }
+
+        // Show all 16 balls (cue + 15 numbered) in creator preview
+        const previewBalls = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
 
         for (const ballNum of previewBalls) {
-            const canvas = this.renderBallPreviewCanvas(ballNum, tempSet, 36);
+            const canvas = this.renderBallPreviewCanvas(ballNum, tempSet, 22);
             if (canvas) {
                 this.creatorPreviewBalls.appendChild(canvas);
             }
@@ -589,24 +818,77 @@ export class UI {
     saveCustomBallSet() {
         const name = this.customSetNameInput?.value?.trim() || 'Custom Set';
 
-        const newSet = this.ballSetManager.create({
-            name: name,
-            style: this.creatorStyle,
-            colors: {
-                group1: this.colorGroup1?.value || '#CC0000',
-                group2: this.colorGroup2?.value || '#FFD700',
-                eightBall: this.color8Ball?.value || '#000000'
-            },
-            options: {
-                showNumbers: this.showNumbersCheckbox?.checked ?? true
-            }
-        });
+        let setData;
 
-        // Select the new set and save to localStorage
-        this.selectedBallSet = newSet;
-        this.saveSelectedBallSet(newSet.id);
+        if (this.creatorStyle === 'solid') {
+            // Solid mode: group colors, no numbers
+            setData = {
+                name: name,
+                style: 'solid',
+                colors: {
+                    group1: this.colorGroup1?.value || '#CC0000',
+                    group2: this.colorGroup2?.value || '#FFD700',
+                    eightBall: this.color8Ball?.value || '#000000'
+                },
+                options: {
+                    showNumbers: false,
+                    striped8Ball: this.striped8BallCheckbox?.checked || false
+                }
+            };
+        } else {
+            // Stripe mode: solids/stripes with numbers
+            setData = {
+                name: name,
+                style: 'stripe',
+                colors: {
+                    group1: this.colorSolids?.value || '#FFD700',
+                    group2: this.colorStripes?.value || '#0000CD',
+                    eightBall: this.color8BallStripe?.value || '#000000'
+                },
+                options: {
+                    showNumbers: true,
+                    stripeBackgroundColor: this.colorStripeBg?.value || '#FFFFFF',
+                    numberCircleColor: this.colorNumberCircle?.value || '#FFFFFF',
+                    numberTextColor: this.colorNumberText?.value || '#000000',
+                    numberBorder: this.numberBorderCheckbox?.checked || false,
+                    numberBorderColor: this.colorNumberBorder?.value || '#000000'
+                }
+            };
+
+            // Advanced mode: collect paired ball colors
+            if (this.creatorAdvancedMode) {
+                setData.advancedMode = true;
+                setData.ballColors = {};
+                document.querySelectorAll('#advanced-color-pickers input[type="color"]').forEach(input => {
+                    const pairNum = parseInt(input.dataset.pair);
+                    if (!isNaN(pairNum)) {
+                        if (pairNum === 8) {
+                            setData.ballColors[8] = input.value;
+                        } else {
+                            // Paired: 1&9, 2&10, etc.
+                            setData.ballColors[pairNum] = input.value;
+                            setData.ballColors[pairNum + 8] = input.value;
+                        }
+                    }
+                });
+            }
+        }
+
+        let savedSet;
+        if (this.editingSetId) {
+            // Update existing set
+            savedSet = this.ballSetManager.update(this.editingSetId, setData);
+        } else {
+            // Create new set
+            savedSet = this.ballSetManager.create(setData);
+        }
+
+        // Select the saved set and save to localStorage
+        this.selectedBallSet = savedSet;
+        this.saveSelectedBallSet(savedSet.id);
         this.updateBallSetPreview();
 
+        this.editingSetId = null;
         this.hideCreatorModal();
         this.showBallModal();
     }

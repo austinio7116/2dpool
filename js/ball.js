@@ -17,7 +17,17 @@ export class Ball {
         this.isSolid = number >= 1 && number <= 7;
         this.isStripe = number >= 9 && number <= 15;
         this.isEightBall = number === 8;
+        this.isUKBall = false;
+        this.isSnookerBall = false;
         this.color = Constants.BALL_COLORS[number];
+
+        // Custom styling (for custom ball sets)
+        this.showNumber = true;  // Whether to show number on ball
+        this.stripeBackgroundColor = null;  // Custom stripe background color
+        this.numberCircleColor = null;
+        this.numberTextColor = null;
+        this.numberBorder = false;
+        this.numberBorderColor = null;
         
         // VISUALS
         this.rotation = 0; // Legacy 2D rotation (can map to Z-spin)

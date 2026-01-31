@@ -117,20 +117,28 @@
                         <h2>Create Custom Ball Set</h2>
                         <button class="modal-close" id="close-creator-modal">&times;</button>
                     </div>
-                    <div class="creator-layout">
-                        <div class="creator-controls">
-                            <div class="creator-field">
+                    <div class="creator-layout-v2">
+                        <div class="creator-row">
+                            <div class="creator-field name-field">
                                 <label for="custom-set-name">Set Name</label>
                                 <input type="text" id="custom-set-name" placeholder="My Custom Set" maxlength="20">
                             </div>
                             <div class="creator-field">
                                 <label>Style</label>
                                 <div class="style-toggle">
-                                    <button class="style-btn active" data-style="solid" id="style-solid">Solid Colors</button>
+                                    <button class="style-btn active" data-style="solid" id="style-solid">Solid</button>
                                     <button class="style-btn" data-style="stripe" id="style-stripe">Spots & Stripes</button>
                                 </div>
                             </div>
-                            <div class="color-pickers">
+                        </div>
+
+                        <div class="creator-preview-row">
+                            <div class="preview-balls" id="creator-preview-balls"></div>
+                        </div>
+
+                        <!-- Solid mode options -->
+                        <div class="solid-options" id="solid-options">
+                            <div class="color-row">
                                 <div class="color-field">
                                     <label for="color-group1">Group 1 (1-7)</label>
                                     <input type="color" id="color-group1" value="#CC0000">
@@ -144,16 +152,65 @@
                                     <input type="color" id="color-8ball" value="#000000">
                                 </div>
                             </div>
-                            <div class="creator-options" id="stripe-options" style="display:none">
-                                <label>
-                                    <input type="checkbox" id="show-numbers" checked>
-                                    Show Numbers
-                                </label>
-                            </div>
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="striped-8ball">
+                                Striped 8-Ball
+                            </label>
                         </div>
-                        <div class="creator-preview">
-                            <div class="preview-label">Preview</div>
-                            <div class="preview-balls" id="creator-preview-balls"></div>
+
+                        <!-- Stripe mode options -->
+                        <div class="stripe-options hidden" id="stripe-mode-options">
+                            <div class="color-row" id="simple-color-pickers">
+                                <div class="color-field">
+                                    <label for="color-solids">Solids (1-7)</label>
+                                    <input type="color" id="color-solids" value="#FFD700">
+                                </div>
+                                <div class="color-field">
+                                    <label for="color-stripes">Stripes (9-15)</label>
+                                    <input type="color" id="color-stripes" value="#0000CD">
+                                </div>
+                                <div class="color-field">
+                                    <label for="color-8ball-stripe">8-Ball</label>
+                                    <input type="color" id="color-8ball-stripe" value="#000000">
+                                </div>
+                                <div class="color-field">
+                                    <label for="color-stripe-bg">Stripe Background</label>
+                                    <input type="color" id="color-stripe-bg" value="#FFFFFF">
+                                </div>
+                            </div>
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="advanced-mode">
+                                Individual Ball Colors
+                            </label>
+                            <div class="advanced-color-pickers hidden" id="advanced-color-pickers">
+                                <div class="ball-color-grid">
+                                    <div class="color-field ball-color"><label>1 & 9</label><input type="color" data-pair="1" value="#FFD700"></div>
+                                    <div class="color-field ball-color"><label>2 & 10</label><input type="color" data-pair="2" value="#0000CD"></div>
+                                    <div class="color-field ball-color"><label>3 & 11</label><input type="color" data-pair="3" value="#FF0000"></div>
+                                    <div class="color-field ball-color"><label>4 & 12</label><input type="color" data-pair="4" value="#4B0082"></div>
+                                    <div class="color-field ball-color"><label>5 & 13</label><input type="color" data-pair="5" value="#FF8C00"></div>
+                                    <div class="color-field ball-color"><label>6 & 14</label><input type="color" data-pair="6" value="#006400"></div>
+                                    <div class="color-field ball-color"><label>7 & 15</label><input type="color" data-pair="7" value="#800000"></div>
+                                    <div class="color-field ball-color"><label>8</label><input type="color" data-pair="8" value="#000000"></div>
+                                </div>
+                            </div>
+                            <div class="number-style-row">
+                                <div class="color-field">
+                                    <label for="color-number-circle">Number Circle</label>
+                                    <input type="color" id="color-number-circle" value="#FFFFFF">
+                                </div>
+                                <div class="color-field">
+                                    <label for="color-number-text">Number Text</label>
+                                    <input type="color" id="color-number-text" value="#000000">
+                                </div>
+                                <label class="checkbox-label border-checkbox">
+                                    <input type="checkbox" id="number-border">
+                                    Border
+                                </label>
+                                <div class="color-field border-color-field hidden" id="border-color-field">
+                                    <input type="color" id="color-number-border" value="#000000">
+                                </div>
+                            </div>
                         </div>
                     </div>
                     <div class="creator-actions">

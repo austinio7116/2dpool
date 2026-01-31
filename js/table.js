@@ -49,6 +49,41 @@ export class Table {
 
     setTableStyle(tableStyle) {
         this.tableStyle = tableStyle;
+        this.spots = Constants.TABLE_CONFIGS ? Constants.TABLE_CONFIGS[tableStyle]?.spotlocations : Constants.SNOOKER_SPOTS;
+
+        // Check for table-specific width override
+        const tableConfig = Constants.TABLE_CONFIGS ? Constants.TABLE_CONFIGS[tableStyle] : null;
+        const newWidth = (tableConfig && tableConfig.tableWidth) ? tableConfig.tableWidth : Constants.TABLE_WIDTH;
+        this.sp
+
+        // If width changed, recalculate all dimensions
+        if (this.width !== newWidth) {
+            this.width = newWidth;
+            this.canvasWidth = this.width + this.padding * 2;
+
+            // Recalculate bounds
+            this.bounds = {
+                left: this.padding,
+                right: this.padding + this.width,
+                top: this.padding,
+                bottom: this.padding + this.height + 2
+            };
+
+            // Recalculate center
+            this.center = Vec2.create(
+                this.padding + this.width / 2,
+                this.padding + this.height / 2
+            );
+
+            // Recalculate kitchen line and spots
+            this.kitchenLine = this.bounds.left + this.width / 4;
+            this.headSpot = Vec2.create(this.kitchenLine, this.center.y);
+            this.footSpot = Vec2.create(this.bounds.right - this.width / 4, this.center.y);
+
+            // Recalculate diamonds
+            this.diamonds = this.createDiamonds();
+        }
+
         this.pockets = this.createPockets();
     }
 
@@ -108,7 +143,7 @@ export class Table {
 
         // Side pockets - offset into the cushions
         const sidePocketRadius = pocketRadius * 0.9;
-        const sideOffset = 20; // Move pocket centers back into cushions
+        const sideOffset = 15; // Move pocket centers back into cushions
         pockets.push({
             position: Vec2.create(this.center.x, b.top - sideOffset),
             radius: sidePocketRadius,

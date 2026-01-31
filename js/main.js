@@ -83,19 +83,22 @@ class PoolGame {
         this.ui.onSoundToggle = (enabled) => this.audio.setEnabled(enabled);
         this.ui.onSpeedChange = (speed) => this.physics.setSpeedMultiplier(speed);
         this.ui.onTableChange = (tableNum) => {
-            // 1. Update the visual style (Renderer)
-            this.renderer.setTableStyle(tableNum);
-
-            // 2. Update table pocket sizes (for tighter snooker pockets)
+            // 1. Update table dimensions first (for tighter snooker pockets and wider tables)
             this.table.setTableStyle(tableNum);
 
-            // 3. Update the physics collision shapes (for curved vs straight pockets)
+            // 2. Update the visual style (Renderer) - also resizes canvas if needed
+            this.renderer.setTableStyle(tableNum);
+
+            // 3. Update input canvas size to match new table dimensions
+            this.input.setCanvasSize(this.table.canvasWidth, this.table.canvasHeight);
+
+            // 4. Update the physics collision shapes (for curved vs straight pockets)
             this.physics.setTableStyle(tableNum);
 
-            // 4. Update game for table-specific ball sets
+            // 5. Update game for table-specific ball sets
             this.game.setTableStyle(tableNum);
 
-            // 5. Update the audio context (Audio)
+            // 6. Update the audio context (Audio)
             // If tableNum is 8 or 9, set to snooker, otherwise default to pool
             if (tableNum === 8 || tableNum === 9) {
                 this.audio.setTableType('snooker');

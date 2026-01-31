@@ -355,8 +355,7 @@ export function createSnookerBallSet() {
 }
 
 // Position snooker balls on table
-export function positionSnookerBalls(balls, tableCenter, ballRadius) {
-    const spots = Constants.SNOOKER_SPOTS;
+export function positionSnookerBalls(balls, tableCenter, ballRadius, spots) {
 
     // Position colored balls on their spots
     const colorMap = { 7: 'yellow', 8: 'green', 9: 'brown', 10: 'blue', 11: 'pink', 12: 'black' };
@@ -451,8 +450,7 @@ export function createFullSnookerBallSet(ballRadius = 8) {
 }
 
 // Position 15-red full snooker balls on table
-export function positionFullSnookerBalls(balls, tableCenter, ballRadius) {
-    const spots = Constants.SNOOKER_SPOTS;
+export function positionFullSnookerBalls(balls, tableCenter, ballRadius, spots) {
 
     // Position colored balls on their spots (numbers 16-21)
     const colorMap = { 16: 'yellow', 17: 'green', 18: 'brown', 19: 'blue', 20: 'pink', 21: 'black' };

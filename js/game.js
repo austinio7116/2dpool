@@ -162,9 +162,9 @@ export class Game {
         } else if (this.mode === GameMode.SNOOKER) {
             // Use full snooker positioning for table 9
             if (tableConfig && tableConfig.isSnooker && tableConfig.redCount === 15) {
-                positionFullSnookerBalls(this.balls, center, ballRadius);
+                positionFullSnookerBalls(this.balls, center, ballRadius, tableConfig.spotlocations);
             } else {
-                positionSnookerBalls(this.balls, center, ballRadius);
+                positionSnookerBalls(this.balls, center, ballRadius, tableConfig.spotlocations);
             }
         } else {
             // Free play - standard 8-ball rack
@@ -1056,7 +1056,7 @@ export class Game {
 
         // 2. Try Highest Value Spots (Black -> Pink -> ... -> Yellow)
         // If own spot taken, place on highest value available spot
-        const snookerSpots = Constants.SNOOKER_SPOTS;
+        const snookerSpots = this.table.spots;
         const tableCenter = this.table.center;
 
         // Spots in order from highest to lowest value

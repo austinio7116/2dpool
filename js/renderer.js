@@ -86,6 +86,12 @@ export class Renderer {
     setTableStyle(tableNum) {
         // tableNum is 1-x, convert to 0-(x-1) index
         this.currentTableIndex = Math.max(0, Math.min(this.tableImages.length - 1, tableNum - 1));
+
+        // Update canvas size if table dimensions changed
+        if (this.canvas.width !== this.table.canvasWidth || this.canvas.height !== this.table.canvasHeight) {
+            this.canvas.width = this.table.canvasWidth;
+            this.canvas.height = this.table.canvasHeight;
+        }
     }
 
     render(state) {

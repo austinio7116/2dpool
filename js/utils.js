@@ -252,25 +252,36 @@ export const Constants = {
         black: 7
     },
 
-    // Snooker color spot positions (relative to table center)
-    SNOOKER_SPOTS: {
-        yellow: { x: -260, y: 73 },   // Left of D
-        green: { x: -260, y: -73 },     // Right of D
-        brown: { x: -260, y: 0 },      // Center of baulk line
-        blue: { x: 0, y: 0 },          // Center spot
-        pink: { x: 208, y: 0 },        // Between center and reds
-        black: { x: 340, y: 0 }        // Behind reds
-    },
-
     // Table-specific configurations (for tables with non-standard ball/pocket sizes)
     TABLE_CONFIGS: {
+        8: {  // Full-size snooker
+            spotlocations: {
+                yellow: { x: -260, y: 73 },   // Left of D
+                green: { x: -260, y: -73 },     // Right of D
+                brown: { x: -260, y: 0 },      // Center of baulk line
+                blue: { x: 0, y: 0 },          // Center spot
+                pink: { x: 208, y: 0 },        // Between center and reds
+                black: { x: 340, y: 0 }        // Behind reds
+            },
+            useCurvedPockets: true,
+            isSnooker: true,
+        },
         9: {  // Full-size snooker
             ballRadius: 8,      // Smaller than standard 12px
             pocketRadius: 18,   // Much tighter than standard 26px
             useCurvedPockets: true,
             isSnooker: true,
             redCount: 15,
-            boundsOffset: { top: 18, bottom: 15, left: 22, right: 21}  // Move cushions/pockets outward
+            tableWidth: 1000,   // Wider aspect ratio to match snooker table image
+            boundsOffset: { top: 18, bottom: 15, left: 13, right: 12},  // Move cushions/pockets outward
+            spotlocations: {
+                yellow: { x: -314, y: 73 },   // Left of D
+                green: { x: -314, y: -73 },     // Right of D
+                brown: { x: -314, y: 0 },      // Center of baulk line
+                blue: { x: 0, y: 0 },          // Center spot
+                pink: { x: 250, y: 0 },        // Between center and reds
+                black: { x: 418, y: 0 }        // Behind reds
+            }
         }
     }
 };

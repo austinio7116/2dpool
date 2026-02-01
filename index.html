@@ -42,6 +42,14 @@
             </div>
         </div>
 
+        <!-- AI thinking indicator -->
+        <div id="ai-thinking" class="ai-thinking-overlay hidden">
+            <div class="ai-thinking-content">
+                <div class="ai-thinking-spinner"></div>
+                <span>AI is thinking...</span>
+            </div>
+        </div>
+
         <div id="ui-overlay">
             <div id="main-menu" class="menu menu-compact">
                 <h1>2D Pool</h1>
@@ -76,6 +84,17 @@
                                 <option value="3">Best of 3</option>
                                 <option value="5">Best of 5</option>
                                 <option value="7">Best of 7</option>
+                            </select>
+                        </div>
+                        <div class="ai-options-row">
+                            <label class="ai-toggle">
+                                <input type="checkbox" id="ai-enabled">
+                                <span>vs AI</span>
+                            </label>
+                            <select id="ai-difficulty" class="ai-difficulty-select hidden">
+                                <option value="easy">Easy</option>
+                                <option value="medium" selected>Medium</option>
+                                <option value="hard">Hard</option>
                             </select>
                         </div>
                         <div class="game-mode-buttons">

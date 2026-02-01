@@ -2189,6 +2189,108 @@ body {
 }
 
 /* ============================================
+   AI OPPONENT OPTIONS
+   ============================================ */
+
+.ai-options-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    margin-bottom: 6px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid #3a3a5a;
+}
+
+.ai-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    font-size: 0.8rem;
+    color: #ccc;
+}
+
+.ai-toggle input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+    accent-color: #ffd700;
+}
+
+.ai-toggle span {
+    user-select: none;
+}
+
+.ai-toggle:hover span {
+    color: #fff;
+}
+
+.ai-difficulty-select {
+    flex: 1;
+    padding: 5px 8px;
+    border-radius: 4px;
+    border: 1px solid #4a4a6a;
+    background: #2a2a4a;
+    color: #fff;
+    font-size: 0.75rem;
+    cursor: pointer;
+}
+
+.ai-difficulty-select:focus {
+    outline: none;
+    border-color: #ffd700;
+}
+
+.ai-difficulty-select.hidden {
+    display: none;
+}
+
+/* AI Thinking Overlay */
+.ai-thinking-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    pointer-events: none;
+    z-index: 500;
+}
+
+.ai-thinking-overlay.hidden {
+    display: none !important;
+}
+
+.ai-thinking-content {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: rgba(26, 26, 46, 0.9);
+    padding: 12px 20px;
+    border-radius: 8px;
+    border: 2px solid #4a4a6a;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+}
+
+.ai-thinking-content span {
+    color: #ffd700;
+    font-size: 0.9rem;
+    font-weight: 500;
+}
+
+.ai-thinking-spinner {
+    width: 20px;
+    height: 20px;
+    border: 3px solid rgba(255, 215, 0, 0.2);
+    border-top-color: #ffd700;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+/* ============================================
    FRAME SCORE DISPLAY (Game Over Screen)
    ============================================ */
 
@@ -2310,6 +2412,42 @@ body {
     #match-format {
         padding: 4px 6px;
         font-size: 0.7rem;
+    }
+
+    /* AI options mobile */
+    .ai-options-row {
+        gap: 6px;
+        margin-bottom: 4px;
+        padding-bottom: 4px;
+    }
+
+    .ai-toggle {
+        font-size: 0.7rem;
+        gap: 4px;
+    }
+
+    .ai-toggle input[type="checkbox"] {
+        width: 14px;
+        height: 14px;
+    }
+
+    .ai-difficulty-select {
+        padding: 4px 6px;
+        font-size: 0.65rem;
+    }
+
+    .ai-thinking-content {
+        padding: 8px 14px;
+        gap: 8px;
+    }
+
+    .ai-thinking-content span {
+        font-size: 0.8rem;
+    }
+
+    .ai-thinking-spinner {
+        width: 16px;
+        height: 16px;
     }
 
     .frame-score-display {

@@ -8,6 +8,7 @@ import { Cue } from './cue.js';
 import { Game, GameMode, GameState } from './game.js';
 import { UI } from './ui.js';
 import { Audio } from './audio.js';
+import { AI } from './ai.js';
 import { Vec2 } from './utils.js';
 
 class PoolGame {
@@ -25,6 +26,7 @@ class PoolGame {
         this.game = new Game(this.table);
         this.ui = new UI();
         this.audio = new Audio();
+        this.ai = new AI();
 
         // Set canvas size for input positioning
         this.input.setCanvasSize(this.table.canvasWidth, this.table.canvasHeight);
@@ -134,6 +136,12 @@ class PoolGame {
         // Menu callbacks
         this.ui.onBallsUpright = () => this.animateBallsUpright();
         this.ui.onConcedeFrame = () => this.concedeFrame();
+
+        // AI callbacks
+        this.ai.onShot = (direction, power, spin) => this.executeShot(direction, power, spin);
+        this.ai.onBallPlacement = (position) => this.placeCueBall(position);
+        this.ai.onThinkingStart = () => this.ui.showAIThinking();
+        this.ai.onThinkingEnd = () => this.ui.hideAIThinking();
     }
 
     async startGame(mode, options = {}) {
@@ -185,6 +193,18 @@ class PoolGame {
             await this.applyCustomBallSet(selectedBallSet);
         }
 
+        // Setup AI if enabled (not for Free Play mode)
+        const aiEnabled = this.ui.getAIEnabled() && mode !== GameMode.FREE_PLAY;
+        this.ai.setEnabled(aiEnabled);
+        this.ai.setDifficulty(this.ui.getAIDifficulty());
+        this.ai.setGameReferences(this.game, this.table);
+
+        // Randomize who breaks when AI is enabled
+        if (aiEnabled && !options.resumeMatch) {
+            const breakingPlayer = AI.randomizeBreak();
+            this.game.currentPlayer = breakingPlayer;
+        }
+
         this.input.setCueBall(this.game.cueBall);
         this.input.setCanShoot(true);
         this.input.resetSpin();
@@ -193,6 +213,12 @@ class PoolGame {
 
         // Hide loading spinner after everything is ready
         if (loadingOverlay) loadingOverlay.classList.add('hidden');
+
+        // If AI breaks first, trigger AI turn
+        if (aiEnabled && this.game.currentPlayer === 2) {
+            this.input.setCanShoot(false);
+            setTimeout(() => this.ai.takeTurn(), 500);
+        }
     }
 
     async applyCustomBallSet(ballSet) {
@@ -390,32 +416,49 @@ class PoolGame {
     handleStateChange(state) {
         this.ui.updateFromGameInfo(this.game.getGameInfo());
 
+        // Check if it's AI's turn
+        const isAITurn = this.ai.enabled && this.game.currentPlayer === 2;
+
         if (state === GameState.BALL_IN_HAND) {
             // Break shot: always kitchen only (behind the baulk line)
             // UK 8-ball fouls: kitchen only
             // Other fouls: ball in hand anywhere
             const kitchenOnly = this.game.isBreakShot || this.game.mode === GameMode.UK_EIGHT_BALL;
-            this.input.enterBallInHandMode(this.game.cueBall, (pos) => {
-                return this.game.canPlaceCueBall(pos, kitchenOnly);
-            });
 
             const validPos = kitchenOnly
                 ? this.table.findValidKitchenPosition(this.game.balls, this.table.center.y)
                 : this.table.findValidCueBallPosition(this.game.balls, this.table.center.y);
             this.game.cueBall.setPosition(validPos.x, validPos.y);
-            // --- FIX START ---
             this.game.cueBall.pocketed = false;
-            this.game.cueBall.sinking = false; // <--- This is the key fix
-            this.game.cueBall.velocity.x = 0;  // Reset velocity
+            this.game.cueBall.sinking = false;
+            this.game.cueBall.velocity.x = 0;
             this.game.cueBall.velocity.y = 0;
-            // --- FIX END ---
+
+            if (isAITurn) {
+                // AI handles ball placement
+                this.input.setCanShoot(false);
+                setTimeout(() => this.ai.takeTurn(), 300);
+            } else {
+                // Human player places ball
+                this.input.enterBallInHandMode(this.game.cueBall, (pos) => {
+                    return this.game.canPlaceCueBall(pos, kitchenOnly);
+                });
+            }
         } else if (state === GameState.PLAYING) {
-            this.input.setCanShoot(true);
             this.input.exitBallInHandMode();
 
             // Auto-save match after each turn
             if (this.game.mode !== GameMode.FREE_PLAY) {
                 this.saveMatch();
+            }
+
+            if (isAITurn) {
+                // AI's turn to shoot
+                this.input.setCanShoot(false);
+                setTimeout(() => this.ai.takeTurn(), 300);
+            } else {
+                // Human player's turn
+                this.input.setCanShoot(true);
             }
         }
     }
@@ -463,9 +506,22 @@ class PoolGame {
         // Sync new balls to physics
         this.physics.syncBallsToPlanck(this.game.balls);
 
+        // Randomize who breaks for new frame when AI is enabled
+        if (this.ai.enabled) {
+            const breakingPlayer = AI.randomizeBreak();
+            this.game.currentPlayer = breakingPlayer;
+        }
+
         this.input.setCueBall(this.game.cueBall);
-        this.input.setCanShoot(true);
         this.input.resetSpin();
+
+        // Check if AI breaks this frame
+        const isAITurn = this.ai.enabled && this.game.currentPlayer === 2;
+        if (isAITurn) {
+            this.input.setCanShoot(false);
+        } else {
+            this.input.setCanShoot(true);
+        }
 
         // Hide game over screen and show HUD
         this.ui.gameOverScreen.classList.add('hidden');
@@ -477,6 +533,11 @@ class PoolGame {
         // Save match state
         if (this.game.match.bestOf > 1) {
             this.saveMatch();
+        }
+
+        // Trigger AI turn if AI breaks
+        if (isAITurn) {
+            setTimeout(() => this.ai.takeTurn(), 500);
         }
     }
 
@@ -566,12 +627,29 @@ class PoolGame {
         this.lastGameOptions = options;
         this.lastGameMode = savedData.gameMode;
 
+        // Setup AI if enabled (not for Free Play mode)
+        const aiEnabled = this.ui.getAIEnabled() && savedData.gameMode !== GameMode.FREE_PLAY;
+        this.ai.setEnabled(aiEnabled);
+        this.ai.setDifficulty(this.ui.getAIDifficulty());
+        this.ai.setGameReferences(this.game, this.table);
+
         this.input.setCueBall(this.game.cueBall);
-        this.input.setCanShoot(true);
         this.input.resetSpin();
+
+        // Check if it's AI's turn after resume
+        if (aiEnabled && this.game.currentPlayer === 2) {
+            this.input.setCanShoot(false);
+        } else {
+            this.input.setCanShoot(true);
+        }
 
         this.ui.showGameHUD(savedData.gameMode, this.game.getMatchInfo());
         this.ui.updateFromGameInfo(this.game.getGameInfo());
+
+        // Trigger AI turn if needed
+        if (aiEnabled && this.game.currentPlayer === 2) {
+            setTimeout(() => this.ai.takeTurn(), 500);
+        }
     }
 
     gameLoop(currentTime) {

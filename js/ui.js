@@ -80,6 +80,11 @@ export class UI {
         this.btnFullscreen = document.getElementById('btn-fullscreen');
         this.ukColorScheme = document.getElementById('uk-color-scheme');
 
+        // AI elements
+        this.aiEnabledCheckbox = document.getElementById('ai-enabled');
+        this.aiDifficultySelect = document.getElementById('ai-difficulty');
+        this.aiThinkingOverlay = document.getElementById('ai-thinking');
+
         // Modal elements
         this.tableModal = document.getElementById('table-modal');
         this.ballModal = document.getElementById('ball-modal');
@@ -201,6 +206,10 @@ export class UI {
         this.editingSetId = null; // Track which set is being edited
         this.editingTableId = null; // Track which table is being edited
 
+        // AI state - load from localStorage
+        this.aiEnabled = this.loadAIEnabled();
+        this.aiDifficulty = this.loadAIDifficulty();
+
         // Table names
         this.tableNames = [
             'Classic Green', 'Blue Felt', 'Red Felt', 'Tournament',
@@ -213,6 +222,7 @@ export class UI {
         // Initialize modals and previews
         this.initializeModals();
         this.initializeTableGrid();
+        this.initializeAIOptions();
         this.updateTablePreview();
         this.updateBallSetPreview();
 
@@ -2352,7 +2362,8 @@ export class UI {
 
         // Update turn indicator
         if (this.hudTurnIndicator) {
-            this.hudTurnIndicator.textContent = `Player ${gameInfo.currentPlayer}'s Turn`;
+            const playerName = (gameInfo.currentPlayer === 2 && this.aiEnabled) ? 'AI' : `Player ${gameInfo.currentPlayer}`;
+            this.hudTurnIndicator.textContent = `${playerName}'s Turn`;
         }
 
         // Show/hide two-shot badge for UK 8-ball
@@ -2498,17 +2509,22 @@ export class UI {
         this.freeplayControls.classList.add('hidden');
         if (this.snookerHud) this.snookerHud.classList.add('hidden');
 
+        // Helper function to get player name (AI for player 2 if AI enabled)
+        const getPlayerName = (player) => {
+            return (player === 2 && this.aiEnabled) ? 'AI' : `Player ${player}`;
+        };
+
         // Update winner text
         if (matchInfo && matchInfo.matchComplete) {
             // Match is complete - show match winner
-            this.winnerText.textContent = `Player ${matchInfo.matchWinner} Wins the Match!`;
+            this.winnerText.textContent = `${getPlayerName(matchInfo.matchWinner)} Wins the Match!`;
             this.winnerText.style.color = '#ffd700';
         } else if (winner) {
             // Single frame or multi-frame in progress
             if (matchInfo && matchInfo.bestOf > 1) {
-                this.winnerText.textContent = `Player ${winner} Wins the Frame!`;
+                this.winnerText.textContent = `${getPlayerName(winner)} Wins the Frame!`;
             } else {
-                this.winnerText.textContent = `Player ${winner} Wins!`;
+                this.winnerText.textContent = `${getPlayerName(winner)} Wins!`;
             }
             this.winnerText.style.color = '#ffd700';
         } else {
@@ -2795,6 +2811,107 @@ export class UI {
             alert('Failed to import table: ' + e.message);
         } finally {
             event.target.value = '';
+        }
+    }
+
+    // ============================================
+    // AI OPPONENT METHODS
+    // ============================================
+
+    // Initialize AI options UI
+    initializeAIOptions() {
+        // Set initial checkbox state
+        if (this.aiEnabledCheckbox) {
+            this.aiEnabledCheckbox.checked = this.aiEnabled;
+        }
+
+        // Set initial difficulty state
+        if (this.aiDifficultySelect) {
+            this.aiDifficultySelect.value = this.aiDifficulty;
+            // Show/hide difficulty based on AI enabled state
+            this.aiDifficultySelect.classList.toggle('hidden', !this.aiEnabled);
+        }
+
+        // Bind AI toggle event
+        this.aiEnabledCheckbox?.addEventListener('change', () => {
+            this.aiEnabled = this.aiEnabledCheckbox.checked;
+            this.saveAIEnabled(this.aiEnabled);
+
+            // Show/hide difficulty dropdown
+            if (this.aiDifficultySelect) {
+                this.aiDifficultySelect.classList.toggle('hidden', !this.aiEnabled);
+            }
+        });
+
+        // Bind AI difficulty change event
+        this.aiDifficultySelect?.addEventListener('change', () => {
+            this.aiDifficulty = this.aiDifficultySelect.value;
+            this.saveAIDifficulty(this.aiDifficulty);
+        });
+    }
+
+    // Get AI enabled state
+    getAIEnabled() {
+        return this.aiEnabled;
+    }
+
+    // Get AI difficulty
+    getAIDifficulty() {
+        return this.aiDifficulty;
+    }
+
+    // Load AI enabled from localStorage
+    loadAIEnabled() {
+        try {
+            const saved = localStorage.getItem('poolGame_aiEnabled');
+            return saved === 'true';
+        } catch (e) {
+            return false;
+        }
+    }
+
+    // Save AI enabled to localStorage
+    saveAIEnabled(enabled) {
+        try {
+            localStorage.setItem('poolGame_aiEnabled', enabled.toString());
+        } catch (e) {
+            console.warn('Failed to save AI enabled state:', e);
+        }
+    }
+
+    // Load AI difficulty from localStorage
+    loadAIDifficulty() {
+        try {
+            const saved = localStorage.getItem('poolGame_aiDifficulty');
+            if (saved && ['easy', 'medium', 'hard'].includes(saved)) {
+                return saved;
+            }
+        } catch (e) {
+            // Ignore
+        }
+        return 'medium';
+    }
+
+    // Save AI difficulty to localStorage
+    saveAIDifficulty(difficulty) {
+        try {
+            localStorage.setItem('poolGame_aiDifficulty', difficulty);
+        } catch (e) {
+            console.warn('Failed to save AI difficulty:', e);
+        }
+    }
+
+    // Show AI thinking indicator
+    showAIThinking() {
+        if (this.aiThinkingOverlay) {
+            this.aiThinkingOverlay.classList.remove('hidden');
+        }
+    }
+
+    // Hide AI thinking indicator
+    hideAIThinking() {
+        if (this.aiThinkingOverlay) {
+            this.aiThinkingOverlay.classList.add('hidden');
         }
     }
 }

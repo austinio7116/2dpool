@@ -384,6 +384,87 @@ body {
 .table-option .table-label {
     font-size: 0.7rem;
     color: #ccc;
+    flex: 1;
+}
+
+.table-option .table-label-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-top: 5px;
+}
+
+.table-option .table-menu-container {
+    position: relative;
+}
+
+.table-option .table-menu-btn {
+    background: rgba(80, 80, 100, 0.8);
+    border: 1px solid rgba(120, 120, 160, 0.5);
+    color: #ccc;
+    width: 20px;
+    height: 20px;
+    border-radius: 4px;
+    font-size: 1rem;
+    cursor: pointer;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    line-height: 1;
+}
+
+.table-option .table-menu-btn:hover {
+    background: rgba(100, 100, 140, 0.9);
+    border-color: rgba(150, 150, 200, 0.8);
+    color: #ffd700;
+}
+
+.table-option .table-menu-dropdown {
+    position: absolute;
+    right: 0;
+    top: 24px;
+    background: rgba(40, 40, 60, 0.98);
+    border: 1px solid rgba(120, 120, 160, 0.6);
+    border-radius: 6px;
+    min-width: 100px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+    z-index: 100;
+    overflow: hidden;
+}
+
+.table-option .table-menu-dropdown.hidden {
+    display: none;
+}
+
+.table-option .menu-option {
+    display: block;
+    width: 100%;
+    background: transparent;
+    border: none;
+    color: #ccc;
+    padding: 8px 12px;
+    font-size: 0.75rem;
+    cursor: pointer;
+    text-align: left;
+    transition: all 0.15s;
+    border-bottom: 1px solid rgba(80, 80, 100, 0.5);
+}
+
+.table-option .menu-option:last-child {
+    border-bottom: none;
+}
+
+.table-option .menu-option:hover {
+    background: rgba(80, 80, 120, 0.8);
+    color: #fff;
+}
+
+.table-option .menu-option.delete-option:hover {
+    background: rgba(200, 0, 0, 0.8);
+    color: #fff;
 }
 
 .table-option.custom-table {
@@ -1451,6 +1532,21 @@ body {
 
     .table-option .table-label {
         font-size: 0.6rem;
+    }
+
+    .table-option .table-menu-btn {
+        width: 24px;
+        height: 24px;
+        font-size: 1.1rem;
+    }
+
+    .table-option .table-menu-dropdown {
+        min-width: 90px;
+    }
+
+    .table-option .menu-option {
+        padding: 10px 12px;
+        font-size: 0.8rem;
     }
 
     .ball-set-grid {

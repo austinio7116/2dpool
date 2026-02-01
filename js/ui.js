@@ -501,37 +501,62 @@ export class UI {
                 brightness: table.brightness
             });
 
+            // Label and menu container (for alignment)
+            const labelRow = document.createElement('div');
+            labelRow.className = 'table-label-row';
+
             const labelDiv = document.createElement('div');
             labelDiv.className = 'table-label';
             labelDiv.textContent = table.name;
+            labelRow.appendChild(labelDiv);
 
-            // Add edit and delete buttons for custom tables
-            const buttonContainer = document.createElement('div');
-            buttonContainer.className = 'set-buttons';
+            // Add ellipsis menu for custom tables
+            const menuContainer = document.createElement('div');
+            menuContainer.className = 'table-menu-container';
 
-            const editBtn = document.createElement('button');
-            editBtn.className = 'edit-set';
-            editBtn.textContent = '\u270E';
-            editBtn.title = 'Edit table';
-            editBtn.addEventListener('click', (e) => {
+            const menuBtn = document.createElement('button');
+            menuBtn.className = 'table-menu-btn';
+            menuBtn.innerHTML = '&#8942;'; // Vertical ellipsis
+            menuBtn.title = 'Options';
+            menuBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
+                // Toggle this menu and close others
+                const allMenus = this.tableGrid.querySelectorAll('.table-menu-dropdown');
+                allMenus.forEach(m => {
+                    if (m !== dropdown) m.classList.add('hidden');
+                });
+                dropdown.classList.toggle('hidden');
+            });
+            menuContainer.appendChild(menuBtn);
+
+            const dropdown = document.createElement('div');
+            dropdown.className = 'table-menu-dropdown hidden';
+
+            const editOption = document.createElement('button');
+            editOption.className = 'menu-option';
+            editOption.textContent = 'Edit';
+            editOption.addEventListener('click', (e) => {
+                e.stopPropagation();
+                dropdown.classList.add('hidden');
                 this.editCustomTable(table);
             });
-            buttonContainer.appendChild(editBtn);
+            dropdown.appendChild(editOption);
 
-            const deleteBtn = document.createElement('button');
-            deleteBtn.className = 'delete-set';
-            deleteBtn.textContent = '\u00D7';
-            deleteBtn.title = 'Delete table';
-            deleteBtn.addEventListener('click', (e) => {
+            const deleteOption = document.createElement('button');
+            deleteOption.className = 'menu-option delete-option';
+            deleteOption.textContent = 'Delete';
+            deleteOption.addEventListener('click', (e) => {
                 e.stopPropagation();
+                dropdown.classList.add('hidden');
                 this.deleteCustomTable(table.id);
             });
-            buttonContainer.appendChild(deleteBtn);
+            dropdown.appendChild(deleteOption);
+
+            menuContainer.appendChild(dropdown);
+            labelRow.appendChild(menuContainer);
 
             option.appendChild(previewCanvas);
-            option.appendChild(labelDiv);
-            option.appendChild(buttonContainer);
+            option.appendChild(labelRow);
 
             option.addEventListener('click', () => {
                 this.selectTable(table.id);
@@ -539,6 +564,14 @@ export class UI {
 
             this.tableGrid.appendChild(option);
         }
+
+        // Close dropdowns when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.table-menu-container')) {
+                const allMenus = this.tableGrid?.querySelectorAll('.table-menu-dropdown');
+                allMenus?.forEach(m => m.classList.add('hidden'));
+            }
+        });
     }
 
     // Initialize modals

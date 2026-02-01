@@ -1302,61 +1302,6 @@ body {
         padding: 8px 12px;
     }
 
-    .menu-grid {
-        gap: 8px;
-        grid-template-columns: 1fr;
-        grid-template-rows: auto auto auto;
-    }
-
-    .game-mode-card {
-        grid-row: auto;
-    }
-
-    .selector-card {
-        padding: 8px;
-        gap: 6px;
-    }
-
-    .card-label {
-        font-size: 0.65rem;
-    }
-
-    .card-preview {
-        width: 100%;
-    }
-
-    .ball-preview {
-        padding: 8px 4px;
-        gap: 3px;
-    }
-
-    .ball-preview canvas {
-        width: 20px;
-        height: 20px;
-    }
-
-    .card-footer {
-        gap: 6px;
-    }
-
-    .card-name {
-        font-size: 0.75rem;
-    }
-
-    .card-btn {
-        padding: 4px 12px;
-        font-size: 0.65rem;
-    }
-
-    .mode-btn {
-        padding: 6px 8px;
-        font-size: 0.7rem;
-    }
-
-    .game-mode-buttons {
-        gap: 3px;
-    }
-
     .menu-btn {
         padding: 10px 25px;
         font-size: 0.95rem;

@@ -376,8 +376,8 @@ class PoolGame {
             this.input.setCanShoot(true);
             this.input.exitBallInHandMode();
 
-            // Auto-save match after each turn (only for multi-frame matches)
-            if (this.game.match.bestOf > 1 && this.game.mode !== GameMode.FREE_PLAY) {
+            // Auto-save match after each turn
+            if (this.game.mode !== GameMode.FREE_PLAY) {
                 this.saveMatch();
             }
         }

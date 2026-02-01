@@ -1847,7 +1847,7 @@ export class UI {
             const saved = localStorage.getItem('poolGame_savedMatch');
             if (saved) {
                 const data = JSON.parse(saved);
-                if (data && data.version === 1 && data.bestOf > 1) {
+                if (data && data.version === 1) {
                     // Show resume button with match info
                     if (this.btnResumeMatch) {
                         this.btnResumeMatch.classList.remove('hidden');

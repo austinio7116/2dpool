@@ -38,9 +38,12 @@ export class UI {
         this.hudPlayer2 = document.getElementById('hud-player-2');
         this.p1BallGroup = document.getElementById('p1-ball-group');
         this.p2BallGroup = document.getElementById('p2-ball-group');
+        this.p1PointScore = document.getElementById('p1-point-score');
+        this.p2PointScore = document.getElementById('p2-point-score');
         this.hudScores = document.getElementById('hud-scores');
         this.p1Frames = document.getElementById('p1-frames');
         this.p2Frames = document.getElementById('p2-frames');
+        this.scoreBestof = document.getElementById('score-bestof');
 
         // Match format elements
         this.matchFormatSelect = document.getElementById('match-format');
@@ -1198,9 +1201,20 @@ export class UI {
             if (this.p1BallGroup) this.p1BallGroup.innerHTML = '';
             if (this.p2BallGroup) this.p2BallGroup.innerHTML = '';
 
-            // Reset frame scores
+            // Reset point scores (hidden by default)
+            if (this.p1PointScore) {
+                this.p1PointScore.textContent = '0';
+                this.p1PointScore.style.display = 'none';
+            }
+            if (this.p2PointScore) {
+                this.p2PointScore.textContent = '0';
+                this.p2PointScore.style.display = 'none';
+            }
+
+            // Reset frame scores and bestOf
             if (this.p1Frames) this.p1Frames.textContent = matchInfo?.player1Frames || '0';
             if (this.p2Frames) this.p2Frames.textContent = matchInfo?.player2Frames || '0';
+            if (this.scoreBestof) this.scoreBestof.textContent = `(${matchInfo?.bestOf || 1})`;
         }
 
         // Hide/show players panel based on mode
@@ -1691,14 +1705,30 @@ export class UI {
             this.hudPlayer2.classList.toggle('active', gameInfo.currentPlayer === 2);
         }
 
-        // Update frame scores (or point scores for Snooker)
+        // Update scores display
         if (matchInfo && this.hudScores) {
+            // Update bestOf display in center
+            if (this.scoreBestof) {
+                this.scoreBestof.textContent = `(${matchInfo.bestOf})`;
+            }
+
             if (gameInfo.mode === GameMode.SNOOKER) {
-                // Show point scores for Snooker
-                if (this.p1Frames) this.p1Frames.textContent = gameInfo.player1Score || 0;
-                if (this.p2Frames) this.p2Frames.textContent = gameInfo.player2Score || 0;
+                // Snooker: show point scores next to players, frame scores in middle
+                if (this.p1PointScore) {
+                    this.p1PointScore.textContent = gameInfo.player1Score || 0;
+                    this.p1PointScore.style.display = 'inline';
+                }
+                if (this.p2PointScore) {
+                    this.p2PointScore.textContent = gameInfo.player2Score || 0;
+                    this.p2PointScore.style.display = 'inline';
+                }
+                // Show frame scores in middle
+                if (this.p1Frames) this.p1Frames.textContent = matchInfo.player1Frames;
+                if (this.p2Frames) this.p2Frames.textContent = matchInfo.player2Frames;
             } else {
-                // Show frame scores
+                // Other modes: hide point scores, show frame scores in middle
+                if (this.p1PointScore) this.p1PointScore.style.display = 'none';
+                if (this.p2PointScore) this.p2PointScore.style.display = 'none';
                 if (this.p1Frames) this.p1Frames.textContent = matchInfo.player1Frames;
                 if (this.p2Frames) this.p2Frames.textContent = matchInfo.player2Frames;
             }

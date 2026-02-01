@@ -1715,6 +1715,13 @@ body {
     height: 14px;
 }
 
+.player-point-score {
+    color: #ffd700;
+    font-size: 0.8rem;
+    font-weight: bold;
+    display: none; /* Hidden by default, shown for snooker */
+}
+
 .hud-scores {
     font-size: 0.95rem;
     font-weight: bold;
@@ -1725,8 +1732,10 @@ body {
     gap: 4px;
 }
 
-.score-sep {
+.score-bestof {
     color: #666;
+    font-size: 0.7rem;
+    font-weight: normal;
 }
 
 /* Hide scores panel in free play */
@@ -1854,6 +1863,10 @@ body {
         gap: 3px;
     }
 
+    .score-bestof {
+        font-size: 0.6rem;
+    }
+
     .hud-player .player-name {
         font-size: 0.6rem;
     }
@@ -1861,6 +1874,10 @@ body {
     .player-ball-group canvas {
         width: 12px;
         height: 12px;
+    }
+
+    .player-point-score {
+        font-size: 0.65rem;
     }
 
     .hud-badge {

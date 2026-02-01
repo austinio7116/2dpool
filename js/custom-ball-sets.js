@@ -363,7 +363,7 @@ export class CustomBallSetManager {
         };
     }
 
-    // Get representative balls for preview (6 balls)
+    // Get representative balls for preview (12 balls for standard, 6 for snooker)
     getPreviewBalls(ballSet) {
         if (ballSet.isSnooker) {
             // Snooker preview: cue (0), red (1), yellow (7), green (8), blue (10), black (12)
@@ -371,7 +371,7 @@ export class CustomBallSetManager {
             return [0, 1, 7, 8, 10, 12];
         }
 
-        // Standard preview: cue, 2 group1, 8-ball, 2 group2
-        return [0, 1, 3, 8, 9, 11];
+        // Standard preview: cue (0), all low balls (1-7), 8-ball, and high balls (9, 11, 13, 15)
+        return [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 15];
     }
 }

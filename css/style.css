@@ -441,53 +441,90 @@ body {
 .ball-set-option .set-name {
     font-size: 0.75rem;
     color: #ccc;
+    flex: 1;
 }
 
 .ball-set-option.custom-set {
     position: relative;
 }
 
-.ball-set-option .set-buttons {
-    position: absolute;
-    top: 4px;
-    right: 4px;
+.ball-set-option .set-name-row {
     display: flex;
-    gap: 3px;
-    opacity: 0;
-    transition: opacity 0.2s;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
 }
 
-.ball-set-option.custom-set:hover .set-buttons {
-    opacity: 1;
+.ball-set-option .set-menu-container {
+    position: relative;
 }
 
-.ball-set-option .edit-set,
-.ball-set-option .delete-set {
-    background: rgba(80, 80, 100, 0.9);
-    border: none;
-    color: #fff;
-    width: 18px;
-    height: 18px;
-    border-radius: 50%;
-    font-size: 0.65rem;
+.ball-set-option .set-menu-btn {
+    background: rgba(80, 80, 100, 0.8);
+    border: 1px solid rgba(120, 120, 160, 0.5);
+    color: #ccc;
+    width: 20px;
+    height: 20px;
+    border-radius: 4px;
+    font-size: 1rem;
     cursor: pointer;
-    line-height: 1;
     padding: 0;
     display: flex;
     align-items: center;
     justify-content: center;
+    transition: all 0.2s;
+    line-height: 1;
 }
 
-.ball-set-option .edit-set:hover {
-    background: rgba(100, 100, 180, 0.9);
+.ball-set-option .set-menu-btn:hover {
+    background: rgba(100, 100, 140, 0.9);
+    border-color: rgba(150, 150, 200, 0.8);
+    color: #ffd700;
 }
 
-.ball-set-option .delete-set {
-    background: rgba(200, 0, 0, 0.7);
+.ball-set-option .set-menu-dropdown {
+    position: absolute;
+    right: 0;
+    top: 24px;
+    background: rgba(40, 40, 60, 0.98);
+    border: 1px solid rgba(120, 120, 160, 0.6);
+    border-radius: 6px;
+    min-width: 100px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+    z-index: 100;
+    overflow: hidden;
 }
 
-.ball-set-option .delete-set:hover {
-    background: rgba(255, 0, 0, 0.9);
+.ball-set-option .set-menu-dropdown.hidden {
+    display: none;
+}
+
+.ball-set-option .menu-option {
+    display: block;
+    width: 100%;
+    background: transparent;
+    border: none;
+    color: #ccc;
+    padding: 8px 12px;
+    font-size: 0.75rem;
+    cursor: pointer;
+    text-align: left;
+    transition: all 0.15s;
+    border-bottom: 1px solid rgba(80, 80, 100, 0.5);
+}
+
+.ball-set-option .menu-option:last-child {
+    border-bottom: none;
+}
+
+.ball-set-option .menu-option:hover {
+    background: rgba(80, 80, 120, 0.8);
+    color: #fff;
+}
+
+.ball-set-option .menu-option.delete-option:hover {
+    background: rgba(200, 0, 0, 0.8);
+    color: #fff;
 }
 
 .create-custom-btn {
@@ -1432,6 +1469,21 @@ body {
 
     .ball-set-option .set-name {
         font-size: 0.65rem;
+    }
+
+    .ball-set-option .set-menu-btn {
+        width: 24px;
+        height: 24px;
+        font-size: 1.1rem;
+    }
+
+    .ball-set-option .set-menu-dropdown {
+        min-width: 90px;
+    }
+
+    .ball-set-option .menu-option {
+        padding: 10px 12px;
+        font-size: 0.8rem;
     }
 
     .create-custom-btn {

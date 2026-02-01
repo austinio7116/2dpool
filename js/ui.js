@@ -728,38 +728,63 @@ export class UI {
 
             option.appendChild(previewDiv);
 
+            // Name and menu container (for alignment)
+            const nameRow = document.createElement('div');
+            nameRow.className = 'set-name-row';
+
             const nameDiv = document.createElement('div');
             nameDiv.className = 'set-name';
             nameDiv.textContent = set.name;
-            option.appendChild(nameDiv);
+            nameRow.appendChild(nameDiv);
 
-            // Add edit and delete buttons for custom sets
+            // Add ellipsis menu for custom sets
             if (!set.isPredefined) {
-                const buttonContainer = document.createElement('div');
-                buttonContainer.className = 'set-buttons';
+                const menuContainer = document.createElement('div');
+                menuContainer.className = 'set-menu-container';
 
-                const editBtn = document.createElement('button');
-                editBtn.className = 'edit-set';
-                editBtn.textContent = '\u270E'; // Pencil icon
-                editBtn.title = 'Edit set';
-                editBtn.addEventListener('click', (e) => {
+                const menuBtn = document.createElement('button');
+                menuBtn.className = 'set-menu-btn';
+                menuBtn.innerHTML = '&#8942;'; // Vertical ellipsis
+                menuBtn.title = 'Options';
+                menuBtn.addEventListener('click', (e) => {
                     e.stopPropagation();
+                    // Toggle this menu and close others
+                    const allMenus = this.ballSetGrid.querySelectorAll('.set-menu-dropdown');
+                    allMenus.forEach(m => {
+                        if (m !== dropdown) m.classList.add('hidden');
+                    });
+                    dropdown.classList.toggle('hidden');
+                });
+                menuContainer.appendChild(menuBtn);
+
+                const dropdown = document.createElement('div');
+                dropdown.className = 'set-menu-dropdown hidden';
+
+                const editOption = document.createElement('button');
+                editOption.className = 'menu-option';
+                editOption.textContent = 'Edit';
+                editOption.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    dropdown.classList.add('hidden');
                     this.editCustomBallSet(set);
                 });
-                buttonContainer.appendChild(editBtn);
+                dropdown.appendChild(editOption);
 
-                const deleteBtn = document.createElement('button');
-                deleteBtn.className = 'delete-set';
-                deleteBtn.textContent = '\u00D7';
-                deleteBtn.title = 'Delete set';
-                deleteBtn.addEventListener('click', (e) => {
+                const deleteOption = document.createElement('button');
+                deleteOption.className = 'menu-option delete-option';
+                deleteOption.textContent = 'Delete';
+                deleteOption.addEventListener('click', (e) => {
                     e.stopPropagation();
+                    dropdown.classList.add('hidden');
                     this.deleteCustomBallSet(set.id);
                 });
-                buttonContainer.appendChild(deleteBtn);
+                dropdown.appendChild(deleteOption);
 
-                option.appendChild(buttonContainer);
+                menuContainer.appendChild(dropdown);
+                nameRow.appendChild(menuContainer);
             }
+
+            option.appendChild(nameRow);
 
             option.addEventListener('click', () => {
                 this.selectBallSet(set);
@@ -767,6 +792,14 @@ export class UI {
 
             this.ballSetGrid.appendChild(option);
         }
+
+        // Close dropdowns when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.set-menu-container')) {
+                const allMenus = this.ballSetGrid?.querySelectorAll('.set-menu-dropdown');
+                allMenus?.forEach(m => m.classList.add('hidden'));
+            }
+        });
     }
 
     // Select a ball set

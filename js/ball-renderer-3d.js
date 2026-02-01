@@ -68,22 +68,71 @@ export class BallRenderer3D {
         }
     }
 
+    // Generate cache key for a ball (includes custom options)
+    generateCacheKey(ballNumber, baseColor, isStripe, isUKBall = false, isEightBall = false, isSnookerBall = false, options = null) {
+        let key = `${ballNumber}-${baseColor}-${isStripe}-${isUKBall}-${isEightBall}-${isSnookerBall}`;
+        if (options) {
+            // Include custom options in cache key
+            key += `-${options.showNumber !== false}`;
+            key += `-${options.stripeBackgroundColor || ''}`;
+            key += `-${options.numberCircleColor || ''}`;
+            key += `-${options.numberTextColor || ''}`;
+            key += `-${options.numberBorder || false}`;
+            key += `-${options.numberBorderColor || ''}`;
+        }
+        return key;
+    }
+
     // Generate all rotation frames for a ball
-    generateBallFrames(ballNumber, baseColor, isStripe, isUKBall = false, isEightBall = false, isSnookerBall = false) {
-        const cacheKey = `${ballNumber}-${baseColor}-${isStripe}-${isUKBall}-${isEightBall}-${isSnookerBall}`;
+    generateBallFrames(ballNumber, baseColor, isStripe, isUKBall = false, isEightBall = false, isSnookerBall = false, options = null) {
+        const cacheKey = this.generateCacheKey(ballNumber, baseColor, isStripe, isUKBall, isEightBall, isSnookerBall, options);
         if (this.frameCache.has(cacheKey)) {
             return this.frameCache.get(cacheKey);
         }
 
         const frames = [];
+        const renderOptions = options || {};
         for (let i = 0; i < this.frameCount; i++) {
             const rotation = (i / this.frameCount) * Math.PI * 2;
-            const frame = this.renderBallFrame(ballNumber, baseColor, isStripe, rotation, isUKBall, isEightBall, isSnookerBall);
+            const frame = this.renderBallFrame(ballNumber, baseColor, isStripe, rotation, isUKBall, isEightBall, isSnookerBall, renderOptions);
             frames.push(frame);
         }
 
         this.frameCache.set(cacheKey, frames);
         return frames;
+    }
+
+    // Pre-cache all frames for a set of balls (call on game start or ball set change)
+    precacheBallSet(balls) {
+        for (const ball of balls) {
+            if (ball.pocketed) continue;
+
+            const hasCustomOptions = ball.numberCircleColor || ball.numberTextColor ||
+                                     ball.numberBorder || ball.stripeBackgroundColor ||
+                                     ball.showNumber === false;
+
+            if (hasCustomOptions) {
+                const options = {
+                    showNumber: ball.showNumber !== false,
+                    stripeBackgroundColor: ball.stripeBackgroundColor,
+                    numberCircleColor: ball.numberCircleColor,
+                    numberTextColor: ball.numberTextColor,
+                    numberBorder: ball.numberBorder,
+                    numberBorderColor: ball.numberBorderColor
+                };
+
+                // Pre-generate all frames for this ball
+                this.generateBallFrames(
+                    ball.number,
+                    ball.color,
+                    ball.isStripe,
+                    ball.isUKBall || false,
+                    ball.isEightBall || false,
+                    ball.isSnookerBall || false,
+                    options
+                );
+            }
+        }
     }
 
     // Render a single frame of the ball at a specific rotation
@@ -339,29 +388,18 @@ export class BallRenderer3D {
                                  ball.numberBorder || ball.stripeBackgroundColor ||
                                  ball.showNumber === false;
 
-        // If ball has custom options, render fresh frame (bypass cache)
-        if (hasCustomOptions) {
-            const renderOptions = {
-                showNumber: ball.showNumber !== false,
-                stripeBackgroundColor: ball.stripeBackgroundColor,
-                numberCircleColor: ball.numberCircleColor,
-                numberTextColor: ball.numberTextColor,
-                numberBorder: ball.numberBorder,
-                numberBorderColor: ball.numberBorderColor
-            };
+        // Build options object for custom balls
+        const options = hasCustomOptions ? {
+            showNumber: ball.showNumber !== false,
+            stripeBackgroundColor: ball.stripeBackgroundColor,
+            numberCircleColor: ball.numberCircleColor,
+            numberTextColor: ball.numberTextColor,
+            numberBorder: ball.numberBorder,
+            numberBorderColor: ball.numberBorderColor
+        } : null;
 
-            // UK balls (except 8-ball) and snooker balls - use fixed rotation
-            if ((isUKBall && !isEightBall) || isSnookerBall) {
-                return this.renderBallFrame(ball.number, baseColor, isStripe, 0, isUKBall, isEightBall, isSnookerBall, renderOptions);
-            }
-
-            // Map displayRoll to rotation
-            const rotation = ball.displayRoll;
-            return this.renderBallFrame(ball.number, baseColor, isStripe, rotation, isUKBall, isEightBall, isSnookerBall, renderOptions);
-        }
-
-        // Use cached frames for standard balls
-        const frames = this.generateBallFrames(ball.number, baseColor, isStripe, isUKBall, isEightBall, isSnookerBall);
+        // Use cached frames (works for both standard and custom balls now)
+        const frames = this.generateBallFrames(ball.number, baseColor, isStripe, isUKBall, isEightBall, isSnookerBall, options);
 
         // UK balls (except 8-ball) and snooker balls are solid color - use fixed frame so lighting stays consistent
         if ((isUKBall && !isEightBall) || isSnookerBall) {

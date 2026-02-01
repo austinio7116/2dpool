@@ -188,8 +188,9 @@ class PoolGame {
             ball.numberBorderColor = config.numberBorderColor || null;
         }
 
-        // Clear ball renderer cache to regenerate with new colors
+        // Clear ball renderer cache and pre-generate frames for custom ball set
         this.renderer.ballRenderer3D.clearCache();
+        this.renderer.ballRenderer3D.precacheBallSet(this.game.balls);
     }
 
     playAgain() {

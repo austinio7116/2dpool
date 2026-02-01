@@ -147,6 +147,92 @@ export function easeOutQuad(t) {
     return 1 - (1 - t) * (1 - t);
 }
 
+// Color conversion utilities
+export function hexToRgb(hex) {
+    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    return result ? {
+        r: parseInt(result[1], 16),
+        g: parseInt(result[2], 16),
+        b: parseInt(result[3], 16)
+    } : { r: 0, g: 0, b: 0 };
+}
+
+export function rgbToHex(r, g, b) {
+    const toHex = (n) => {
+        const hex = Math.round(n).toString(16);
+        return hex.length === 1 ? '0' + hex : hex;
+    };
+    return '#' + toHex(r) + toHex(g) + toHex(b);
+}
+
+export function rgbToHsb(r, g, b) {
+    r /= 255;
+    g /= 255;
+    b /= 255;
+
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    const delta = max - min;
+
+    let h = 0;
+    let s = max === 0 ? 0 : delta / max;
+    let v = max;
+
+    if (delta !== 0) {
+        if (max === r) {
+            h = ((g - b) / delta + (g < b ? 6 : 0)) / 6;
+        } else if (max === g) {
+            h = ((b - r) / delta + 2) / 6;
+        } else {
+            h = ((r - g) / delta + 4) / 6;
+        }
+    }
+
+    return {
+        h: Math.round(h * 360),
+        s: Math.round(s * 100),
+        b: Math.round(v * 100)
+    };
+}
+
+export function hsbToRgb(h, s, b) {
+    h = h / 360;
+    s = s / 100;
+    b = b / 100;
+
+    const i = Math.floor(h * 6);
+    const f = h * 6 - i;
+    const p = b * (1 - s);
+    const q = b * (1 - f * s);
+    const t = b * (1 - (1 - f) * s);
+
+    let r, g, bVal;
+    switch (i % 6) {
+        case 0: r = b; g = t; bVal = p; break;
+        case 1: r = q; g = b; bVal = p; break;
+        case 2: r = p; g = b; bVal = t; break;
+        case 3: r = p; g = q; bVal = b; break;
+        case 4: r = t; g = p; bVal = b; break;
+        case 5: r = b; g = p; bVal = q; break;
+    }
+
+    return {
+        r: Math.round(r * 255),
+        g: Math.round(g * 255),
+        b: Math.round(bVal * 255)
+    };
+}
+
+export function hexToHsb(hex) {
+    const rgb = hexToRgb(hex);
+    return rgbToHsb(rgb.r, rgb.g, rgb.b);
+}
+
+export function hsbToHex(h, s, b) {
+    const rgb = hsbToRgb(h, s, b);
+    return rgbToHex(rgb.r, rgb.g, rgb.b);
+}
+
 // Ease in quad
 export function easeInQuad(t) {
     return t * t;

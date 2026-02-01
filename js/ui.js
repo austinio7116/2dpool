@@ -4,7 +4,7 @@ import { GameMode, GameState } from './game.js';
 import { CustomBallSetManager, PREDEFINED_BALL_SETS } from './custom-ball-sets.js';
 import { CustomTableManager } from './custom-tables.js';
 import { BallRenderer3D } from './ball-renderer-3d.js';
-import { Constants } from './utils.js';
+import { Constants, hexToHsb, hsbToHex } from './utils.js';
 
 export class UI {
     constructor() {
@@ -82,8 +82,20 @@ export class UI {
         this.ballModal = document.getElementById('ball-modal');
         this.creatorModal = document.getElementById('creator-modal');
         this.tableCreatorModal = document.getElementById('table-creator-modal');
+        this.colorPickerModal = document.getElementById('color-picker-modal');
         this.tableGrid = document.getElementById('table-grid');
         this.ballSetGrid = document.getElementById('ball-set-grid');
+
+        // Color picker elements
+        this.colorHueSlider = document.getElementById('color-hue');
+        this.colorSaturationSlider = document.getElementById('color-saturation');
+        this.colorBrightnessSlider = document.getElementById('color-brightness');
+        this.colorHueValue = document.getElementById('color-hue-value');
+        this.colorSaturationValue = document.getElementById('color-saturation-value');
+        this.colorBrightnessValue = document.getElementById('color-brightness-value');
+        this.colorPreviewLarge = document.getElementById('color-preview-large');
+        this.colorPickerTitle = document.getElementById('color-picker-title');
+        this.currentColorTarget = null; // Tracks which swatch is being edited
 
         // Card elements
         this.tablePreview = document.getElementById('table-preview');
@@ -349,6 +361,42 @@ export class UI {
             this.saveCustomBallSet();
         });
 
+        // Color picker buttons
+        document.getElementById('close-color-picker-modal')?.addEventListener('click', () => {
+            this.hideColorPickerModal();
+        });
+
+        document.getElementById('btn-cancel-color-picker')?.addEventListener('click', () => {
+            this.hideColorPickerModal();
+        });
+
+        document.getElementById('btn-apply-color')?.addEventListener('click', () => {
+            this.applyColorFromPicker();
+        });
+
+        // Color picker sliders
+        this.colorHueSlider?.addEventListener('input', (e) => {
+            if (this.colorHueValue) this.colorHueValue.textContent = e.target.value + '°';
+            this.updateColorPreview();
+        });
+
+        this.colorSaturationSlider?.addEventListener('input', (e) => {
+            if (this.colorSaturationValue) this.colorSaturationValue.textContent = e.target.value + '%';
+            this.updateColorPreview();
+        });
+
+        this.colorBrightnessSlider?.addEventListener('input', (e) => {
+            if (this.colorBrightnessValue) this.colorBrightnessValue.textContent = e.target.value + '%';
+            this.updateColorPreview();
+        });
+
+        // Initialize color swatches - add click listeners to all color swatches
+        document.querySelectorAll('.color-swatch').forEach(swatch => {
+            swatch.addEventListener('click', (e) => {
+                this.openColorPicker(e.target);
+            });
+        });
+
         // Table creator buttons
         document.getElementById('btn-create-custom-table')?.addEventListener('click', () => {
             this.showTableCreatorModal();
@@ -393,10 +441,7 @@ export class UI {
             this.toggleAdvancedMode(this.advancedModeCheckbox.checked);
         });
 
-        // Advanced ball color pickers (paired)
-        document.querySelectorAll('#advanced-color-pickers input[type="color"]').forEach(input => {
-            input.addEventListener('input', () => this.updateCreatorPreview());
-        });
+        // Advanced ball color pickers (paired) - handled by color swatch click listeners above
 
         // Number styling options
         this.colorNumberCircle?.addEventListener('input', () => this.updateCreatorPreview());
@@ -453,6 +498,9 @@ export class UI {
         });
         this.tableCreatorModal?.addEventListener('click', (e) => {
             if (e.target === this.tableCreatorModal) this.hideTableCreatorModal();
+        });
+        this.colorPickerModal?.addEventListener('click', (e) => {
+            if (e.target === this.colorPickerModal) this.hideColorPickerModal();
         });
     }
 
@@ -890,23 +938,23 @@ export class UI {
 
         if (set.style === 'solid') {
             // Load solid mode values
-            this.setColorValue(this.colorGroup1, set.colors?.group1 || '#CC0000');
-            this.setColorValue(this.colorGroup2, set.colors?.group2 || '#FFD700');
-            this.setColorValue(this.color8Ball, set.colors?.eightBall || '#000000');
+            this.setSwatchColor('group1', set.colors?.group1 || '#CC0000');
+            this.setSwatchColor('group2', set.colors?.group2 || '#FFD700');
+            this.setSwatchColor('8ball', set.colors?.eightBall || '#000000');
             if (this.striped8BallCheckbox) this.striped8BallCheckbox.checked = set.options?.striped8Ball || false;
         } else {
             // Load stripe mode values
-            this.setColorValue(this.colorSolids, set.colors?.group1 || '#FFD700');
-            this.setColorValue(this.colorStripes, set.colors?.group2 || '#0000CD');
-            this.setColorValue(this.color8BallStripe, set.colors?.eightBall || '#000000');
-            this.setColorValue(this.colorStripeBg, set.options?.stripeBackgroundColor || '#FFFFFF');
+            this.setSwatchColor('solids', set.colors?.group1 || '#FFD700');
+            this.setSwatchColor('stripes', set.colors?.group2 || '#0000CD');
+            this.setSwatchColor('8ball-stripe', set.colors?.eightBall || '#000000');
+            this.setSwatchColor('stripe-bg', set.options?.stripeBackgroundColor || '#FFFFFF');
             if (this.striped8BallStripeCheckbox) this.striped8BallStripeCheckbox.checked = set.options?.striped8Ball || false;
 
             // Load number styling
-            this.setColorValue(this.colorNumberCircle, set.options?.numberCircleColor || '#FFFFFF');
-            this.setColorValue(this.colorNumberText, set.options?.numberTextColor || '#000000');
+            this.setSwatchColor('number-circle', set.options?.numberCircleColor || '#FFFFFF');
+            this.setSwatchColor('number-text', set.options?.numberTextColor || '#000000');
             if (this.numberBorderCheckbox) this.numberBorderCheckbox.checked = set.options?.numberBorder || false;
-            this.setColorValue(this.colorNumberBorder, set.options?.numberBorderColor || '#000000');
+            this.setSwatchColor('number-border', set.options?.numberBorderColor || '#000000');
             this.borderColorField?.classList.toggle('hidden', !set.options?.numberBorder);
 
             // Load sliders
@@ -933,10 +981,10 @@ export class UI {
                 this.advancedColorPickers?.classList.remove('hidden');
 
                 // Load individual ball colors
-                document.querySelectorAll('#advanced-color-pickers input[type="color"]').forEach(input => {
-                    const pairNum = parseInt(input.dataset.pair);
+                document.querySelectorAll('#advanced-color-pickers .color-swatch').forEach(swatch => {
+                    const pairNum = parseInt(swatch.dataset.pair);
                     if (!isNaN(pairNum) && set.ballColors[pairNum]) {
-                        this.setColorValue(input, set.ballColors[pairNum]);
+                        this.setSwatchColor(`pair-${pairNum}`, set.ballColors[pairNum]);
                     }
                 });
             } else {
@@ -971,16 +1019,16 @@ export class UI {
         if (this.customSetNameInput) this.customSetNameInput.value = '';
 
         // Reset solid mode fields
-        this.setColorValue(this.colorGroup1, '#CC0000');
-        this.setColorValue(this.colorGroup2, '#FFD700');
-        this.setColorValue(this.color8Ball, '#000000');
+        this.setSwatchColor('group1', '#CC0000');
+        this.setSwatchColor('group2', '#FFD700');
+        this.setSwatchColor('8ball', '#000000');
         if (this.striped8BallCheckbox) this.striped8BallCheckbox.checked = false;
 
         // Reset stripe mode fields
-        this.setColorValue(this.colorSolids, '#FFD700');
-        this.setColorValue(this.colorStripes, '#0000CD');
-        this.setColorValue(this.color8BallStripe, '#000000');
-        this.setColorValue(this.colorStripeBg, '#FFFFFF');
+        this.setSwatchColor('solids', '#FFD700');
+        this.setSwatchColor('stripes', '#0000CD');
+        this.setSwatchColor('8ball-stripe', '#000000');
+        this.setSwatchColor('stripe-bg', '#FFFFFF');
         if (this.striped8BallStripeCheckbox) this.striped8BallStripeCheckbox.checked = false;
 
         // Reset advanced mode
@@ -994,18 +1042,18 @@ export class UI {
             1: '#FFD700', 2: '#0000CD', 3: '#FF0000', 4: '#4B0082',
             5: '#FF8C00', 6: '#006400', 7: '#800000', 8: '#000000'
         };
-        document.querySelectorAll('#advanced-color-pickers input[type="color"]').forEach(input => {
-            const pairNum = input.dataset.pair;
+        document.querySelectorAll('#advanced-color-pickers .color-swatch').forEach(swatch => {
+            const pairNum = swatch.dataset.pair;
             if (pairNum && defaultPairColors[pairNum]) {
-                this.setColorValue(input, defaultPairColors[pairNum]);
+                this.setSwatchColor(`pair-${pairNum}`, defaultPairColors[pairNum]);
             }
         });
 
         // Reset number styling
-        this.setColorValue(this.colorNumberCircle, '#FFFFFF');
-        this.setColorValue(this.colorNumberText, '#000000');
+        this.setSwatchColor('number-circle', '#FFFFFF');
+        this.setSwatchColor('number-text', '#000000');
         if (this.numberBorderCheckbox) this.numberBorderCheckbox.checked = false;
-        this.setColorValue(this.colorNumberBorder, '#000000');
+        this.setSwatchColor('number-border', '#000000');
         this.borderColorField?.classList.add('hidden');
 
         // Reset sliders
@@ -1037,6 +1085,114 @@ export class UI {
     hideCreatorModal() {
         if (this.creatorModal) {
             this.creatorModal.classList.add('hidden');
+        }
+    }
+
+    // Open color picker for a specific swatch
+    openColorPicker(swatchElement) {
+        this.currentColorTarget = swatchElement;
+        const currentColor = swatchElement.dataset.color || '#FF0000';
+        const colorLabel = swatchElement.closest('.color-field-hsb')?.querySelector('label')?.textContent || 'Color';
+
+        // Update title
+        if (this.colorPickerTitle) {
+            this.colorPickerTitle.textContent = `Select ${colorLabel}`;
+        }
+
+        // Convert current color to HSB and set sliders
+        const hsb = hexToHsb(currentColor);
+        if (this.colorHueSlider) {
+            this.colorHueSlider.value = hsb.h;
+            if (this.colorHueValue) this.colorHueValue.textContent = hsb.h + '°';
+        }
+        if (this.colorSaturationSlider) {
+            this.colorSaturationSlider.value = hsb.s;
+            if (this.colorSaturationValue) this.colorSaturationValue.textContent = hsb.s + '%';
+        }
+        if (this.colorBrightnessSlider) {
+            this.colorBrightnessSlider.value = hsb.b;
+            if (this.colorBrightnessValue) this.colorBrightnessValue.textContent = hsb.b + '%';
+        }
+
+        this.updateColorPreview(); // This will also update the slider gradients
+        this.colorPickerModal?.classList.remove('hidden');
+    }
+
+    // Hide color picker modal
+    hideColorPickerModal() {
+        if (this.colorPickerModal) {
+            this.colorPickerModal.classList.add('hidden');
+        }
+        this.currentColorTarget = null;
+    }
+
+    // Update color preview in picker
+    updateColorPreview() {
+        if (!this.colorPreviewLarge || !this.colorHueSlider || !this.colorSaturationSlider || !this.colorBrightnessSlider) return;
+
+        const h = parseInt(this.colorHueSlider.value);
+        const s = parseInt(this.colorSaturationSlider.value);
+        const b = parseInt(this.colorBrightnessSlider.value);
+
+        const hexColor = hsbToHex(h, s, b);
+        this.colorPreviewLarge.style.backgroundColor = hexColor;
+
+        // Update slider backgrounds to show color gradients
+        this.updateColorSliderGradients(h, s, b);
+    }
+
+    // Update slider track gradients based on current HSB values
+    updateColorSliderGradients(h, s, b) {
+        if (!this.colorHueSlider || !this.colorSaturationSlider || !this.colorBrightnessSlider) return;
+
+        // Hue slider: full spectrum (red -> yellow -> green -> cyan -> blue -> magenta -> red)
+        this.colorHueSlider.style.background = 'linear-gradient(to right, ' +
+            '#FF0000 0%, #FFFF00 17%, #00FF00 33%, #00FFFF 50%, ' +
+            '#0000FF 67%, #FF00FF 83%, #FF0000 100%)';
+
+        // Saturation slider: from gray (0% saturation) to full color (100% saturation) at current hue
+        const satGray = hsbToHex(h, 0, b);
+        const satFull = hsbToHex(h, 100, b);
+        this.colorSaturationSlider.style.background =
+            `linear-gradient(to right, ${satGray}, ${satFull})`;
+
+        // Brightness slider: from black (0% brightness) to full color (100% brightness) at current hue/sat
+        const brightBlack = '#000000';
+        const brightFull = hsbToHex(h, s, 100);
+        this.colorBrightnessSlider.style.background =
+            `linear-gradient(to right, ${brightBlack}, ${brightFull})`;
+    }
+
+    // Apply color from picker to the target swatch
+    applyColorFromPicker() {
+        if (!this.currentColorTarget) return;
+
+        const h = parseInt(this.colorHueSlider.value);
+        const s = parseInt(this.colorSaturationSlider.value);
+        const b = parseInt(this.colorBrightnessSlider.value);
+
+        const hexColor = hsbToHex(h, s, b);
+
+        // Update the swatch
+        this.currentColorTarget.dataset.color = hexColor;
+        this.currentColorTarget.style.backgroundColor = hexColor;
+
+        this.hideColorPickerModal();
+        this.updateCreatorPreview();
+    }
+
+    // Helper: Get color from a swatch by ID
+    getSwatchColor(colorId) {
+        const swatch = document.querySelector(`[data-color-id="${colorId}"]`);
+        return swatch?.dataset.color || '#FFFFFF';
+    }
+
+    // Helper: Set color for a swatch by ID
+    setSwatchColor(colorId, hexColor) {
+        const swatch = document.querySelector(`[data-color-id="${colorId}"]`);
+        if (swatch) {
+            swatch.dataset.color = hexColor;
+            swatch.style.backgroundColor = hexColor;
         }
     }
 
@@ -1080,9 +1236,9 @@ export class UI {
                 style: 'solid',
                 colors: {
                     cue: '#FFFEF0',
-                    group1: this.colorGroup1?.value || '#CC0000',
-                    group2: this.colorGroup2?.value || '#FFD700',
-                    eightBall: this.color8Ball?.value || '#000000'
+                    group1: this.getSwatchColor('group1'),
+                    group2: this.getSwatchColor('group2'),
+                    eightBall: this.getSwatchColor('8ball')
                 },
                 options: {
                     hasStripes: false,
@@ -1097,19 +1253,19 @@ export class UI {
                 style: 'stripe',
                 colors: {
                     cue: '#FFFEF0',
-                    group1: this.colorSolids?.value || '#FFD700',
-                    group2: this.colorStripes?.value || '#0000CD',
-                    eightBall: this.color8BallStripe?.value || '#000000'
+                    group1: this.getSwatchColor('solids'),
+                    group2: this.getSwatchColor('stripes'),
+                    eightBall: this.getSwatchColor('8ball-stripe')
                 },
                 options: {
                     hasStripes: true,
                     showNumbers: true,
                     striped8Ball: this.striped8BallStripeCheckbox?.checked || false,
-                    stripeBackgroundColor: this.colorStripeBg?.value || '#FFFFFF',
-                    numberCircleColor: this.colorNumberCircle?.value || '#FFFFFF',
-                    numberTextColor: this.colorNumberText?.value || '#000000',
+                    stripeBackgroundColor: this.getSwatchColor('stripe-bg'),
+                    numberCircleColor: this.getSwatchColor('number-circle'),
+                    numberTextColor: this.getSwatchColor('number-text'),
                     numberBorder: this.numberBorderCheckbox?.checked || false,
-                    numberBorderColor: this.colorNumberBorder?.value || '#000000',
+                    numberBorderColor: this.getSwatchColor('number-border'),
                     numberCircleRadialLines: parseInt(this.radialLinesSlider?.value || '0'),
                     stripeThickness: parseFloat(this.stripeThicknessSlider?.value || '0.55'),
                     numberCircleRadius: parseFloat(this.circleRadiusSlider?.value || '0.5')
@@ -1120,41 +1276,24 @@ export class UI {
             if (this.creatorAdvancedMode) {
                 tempSet.advancedMode = true;
                 tempSet.ballColors = {};
-                document.querySelectorAll('#advanced-color-pickers input[type="color"]').forEach(input => {
-                    const pairNum = parseInt(input.dataset.pair);
+                document.querySelectorAll('#advanced-color-pickers .color-swatch').forEach(swatch => {
+                    const pairNum = parseInt(swatch.dataset.pair);
                     if (!isNaN(pairNum)) {
+                        const color = swatch.dataset.color;
                         if (pairNum === 8) {
                             // 8-ball is unique
-                            tempSet.ballColors[8] = input.value;
+                            tempSet.ballColors[8] = color;
                         } else {
                             // Paired balls: 1&9, 2&10, 3&11, 4&12, 5&13, 6&14, 7&15
-                            tempSet.ballColors[pairNum] = input.value;
-                            tempSet.ballColors[pairNum + 8] = input.value;
+                            tempSet.ballColors[pairNum] = color;
+                            tempSet.ballColors[pairNum + 8] = color;
                         }
                     }
                 });
             }
         }
 
-        // NEW: Sync input backgrounds to their values
-        // This ensures the "button" color matches the selection while dragging
-        const colorInputs = [
-            this.colorGroup1, this.colorGroup2, this.color8Ball,
-            this.colorSolids, this.colorStripes, this.color8BallStripe, 
-            this.colorStripeBg, this.colorNumberCircle, this.colorNumberText, 
-            this.colorNumberBorder
-        ];
-
-        colorInputs.forEach(input => {
-            if (input && input.value) {
-                input.style.backgroundColor = input.value;
-            }
-        });
-
-        // Also handle advanced color pickers
-        document.querySelectorAll('#advanced-color-pickers input[type="color"]').forEach(input => {
-            input.style.backgroundColor = input.value;
-        });
+        // Color swatches already show their colors via style.backgroundColor
 
         // Show all 16 balls (cue + 15 numbered) in creator preview
         const previewBalls = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
@@ -1179,9 +1318,9 @@ export class UI {
                 name: name,
                 style: 'solid',
                 colors: {
-                    group1: this.colorGroup1?.value || '#CC0000',
-                    group2: this.colorGroup2?.value || '#FFD700',
-                    eightBall: this.color8Ball?.value || '#000000'
+                    group1: this.getSwatchColor('group1'),
+                    group2: this.getSwatchColor('group2'),
+                    eightBall: this.getSwatchColor('8ball')
                 },
                 options: {
                     showNumbers: false,
@@ -1194,18 +1333,18 @@ export class UI {
                 name: name,
                 style: 'stripe',
                 colors: {
-                    group1: this.colorSolids?.value || '#FFD700',
-                    group2: this.colorStripes?.value || '#0000CD',
-                    eightBall: this.color8BallStripe?.value || '#000000'
+                    group1: this.getSwatchColor('solids'),
+                    group2: this.getSwatchColor('stripes'),
+                    eightBall: this.getSwatchColor('8ball-stripe')
                 },
                 options: {
                     showNumbers: true,
                     striped8Ball: this.striped8BallStripeCheckbox?.checked || false,
-                    stripeBackgroundColor: this.colorStripeBg?.value || '#FFFFFF',
-                    numberCircleColor: this.colorNumberCircle?.value || '#FFFFFF',
-                    numberTextColor: this.colorNumberText?.value || '#000000',
+                    stripeBackgroundColor: this.getSwatchColor('stripe-bg'),
+                    numberCircleColor: this.getSwatchColor('number-circle'),
+                    numberTextColor: this.getSwatchColor('number-text'),
                     numberBorder: this.numberBorderCheckbox?.checked || false,
-                    numberBorderColor: this.colorNumberBorder?.value || '#000000',
+                    numberBorderColor: this.getSwatchColor('number-border'),
                     numberCircleRadialLines: parseInt(this.radialLinesSlider?.value || '0'),
                     stripeThickness: parseFloat(this.stripeThicknessSlider?.value || '0.55'),
                     numberCircleRadius: parseFloat(this.circleRadiusSlider?.value || '0.5')

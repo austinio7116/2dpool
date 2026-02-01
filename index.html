@@ -156,17 +156,17 @@
                         <!-- Solid mode options -->
                         <div class="solid-options" id="solid-options">
                             <div class="color-row">
-                                <div class="color-field">
-                                    <label for="color-group1">Group 1 (1-7)</label>
-                                    <input type="color" id="color-group1" value="#CC0000">
+                                <div class="color-field-hsb">
+                                    <label>Group 1 (1-7)</label>
+                                    <button class="color-swatch" id="swatch-group1" data-color-id="group1" data-color="#CC0000" style="background-color: #CC0000;"></button>
                                 </div>
-                                <div class="color-field">
-                                    <label for="color-group2">Group 2 (9-15)</label>
-                                    <input type="color" id="color-group2" value="#FFD700">
+                                <div class="color-field-hsb">
+                                    <label>Group 2 (9-15)</label>
+                                    <button class="color-swatch" id="swatch-group2" data-color-id="group2" data-color="#FFD700" style="background-color: #FFD700;"></button>
                                 </div>
-                                <div class="color-field">
-                                    <label for="color-8ball">8-Ball</label>
-                                    <input type="color" id="color-8ball" value="#000000">
+                                <div class="color-field-hsb">
+                                    <label>8-Ball</label>
+                                    <button class="color-swatch" id="swatch-8ball" data-color-id="8ball" data-color="#000000" style="background-color: #000000;"></button>
                                 </div>
                             </div>
                             <label class="checkbox-label">
@@ -178,21 +178,21 @@
                         <!-- Stripe mode options -->
                         <div class="stripe-options hidden" id="stripe-mode-options">
                             <div class="color-row" id="simple-color-pickers">
-                                <div class="color-field">
-                                    <label for="color-solids">Solids (1-7)</label>
-                                    <input type="color" id="color-solids" value="#FFD700">
+                                <div class="color-field-hsb">
+                                    <label>Solids (1-7)</label>
+                                    <button class="color-swatch" id="swatch-solids" data-color-id="solids" data-color="#FFD700" style="background-color: #FFD700;"></button>
                                 </div>
-                                <div class="color-field">
-                                    <label for="color-stripes">Stripes (9-15)</label>
-                                    <input type="color" id="color-stripes" value="#0000CD">
+                                <div class="color-field-hsb">
+                                    <label>Stripes (9-15)</label>
+                                    <button class="color-swatch" id="swatch-stripes" data-color-id="stripes" data-color="#0000CD" style="background-color: #0000CD;"></button>
                                 </div>
-                                <div class="color-field">
-                                    <label for="color-8ball-stripe">8-Ball</label>
-                                    <input type="color" id="color-8ball-stripe" value="#000000">
+                                <div class="color-field-hsb">
+                                    <label>8-Ball</label>
+                                    <button class="color-swatch" id="swatch-8ball-stripe" data-color-id="8ball-stripe" data-color="#000000" style="background-color: #000000;"></button>
                                 </div>
-                                <div class="color-field">
-                                    <label for="color-stripe-bg">Stripe Background</label>
-                                    <input type="color" id="color-stripe-bg" value="#FFFFFF">
+                                <div class="color-field-hsb">
+                                    <label>Stripe Background</label>
+                                    <button class="color-swatch" id="swatch-stripe-bg" data-color-id="stripe-bg" data-color="#FFFFFF" style="background-color: #FFFFFF;"></button>
                                 </div>
                             </div>
                             <label class="checkbox-label">
@@ -205,31 +205,31 @@
                             </label>
                             <div class="advanced-color-pickers hidden" id="advanced-color-pickers">
                                 <div class="ball-color-grid">
-                                    <div class="color-field ball-color"><label>1 & 9</label><input type="color" data-pair="1" value="#FFD700"></div>
-                                    <div class="color-field ball-color"><label>2 & 10</label><input type="color" data-pair="2" value="#0000CD"></div>
-                                    <div class="color-field ball-color"><label>3 & 11</label><input type="color" data-pair="3" value="#FF0000"></div>
-                                    <div class="color-field ball-color"><label>4 & 12</label><input type="color" data-pair="4" value="#4B0082"></div>
-                                    <div class="color-field ball-color"><label>5 & 13</label><input type="color" data-pair="5" value="#FF8C00"></div>
-                                    <div class="color-field ball-color"><label>6 & 14</label><input type="color" data-pair="6" value="#006400"></div>
-                                    <div class="color-field ball-color"><label>7 & 15</label><input type="color" data-pair="7" value="#800000"></div>
-                                    <div class="color-field ball-color"><label>8</label><input type="color" data-pair="8" value="#000000"></div>
+                                    <div class="color-field-hsb ball-color"><label>1 & 9</label><button class="color-swatch" data-pair="1" data-color-id="pair-1" data-color="#FFD700" style="background-color: #FFD700;"></button></div>
+                                    <div class="color-field-hsb ball-color"><label>2 & 10</label><button class="color-swatch" data-pair="2" data-color-id="pair-2" data-color="#0000CD" style="background-color: #0000CD;"></button></div>
+                                    <div class="color-field-hsb ball-color"><label>3 & 11</label><button class="color-swatch" data-pair="3" data-color-id="pair-3" data-color="#FF0000" style="background-color: #FF0000;"></button></div>
+                                    <div class="color-field-hsb ball-color"><label>4 & 12</label><button class="color-swatch" data-pair="4" data-color-id="pair-4" data-color="#4B0082" style="background-color: #4B0082;"></button></div>
+                                    <div class="color-field-hsb ball-color"><label>5 & 13</label><button class="color-swatch" data-pair="5" data-color-id="pair-5" data-color="#FF8C00" style="background-color: #FF8C00;"></button></div>
+                                    <div class="color-field-hsb ball-color"><label>6 & 14</label><button class="color-swatch" data-pair="6" data-color-id="pair-6" data-color="#006400" style="background-color: #006400;"></button></div>
+                                    <div class="color-field-hsb ball-color"><label>7 & 15</label><button class="color-swatch" data-pair="7" data-color-id="pair-7" data-color="#800000" style="background-color: #800000;"></button></div>
+                                    <div class="color-field-hsb ball-color"><label>8</label><button class="color-swatch" data-pair="8" data-color-id="pair-8" data-color="#000000" style="background-color: #000000;"></button></div>
                                 </div>
                             </div>
                             <div class="number-style-row">
-                                <div class="color-field">
-                                    <label for="color-number-circle">Number Circle</label>
-                                    <input type="color" id="color-number-circle" value="#FFFFFF">
+                                <div class="color-field-hsb">
+                                    <label>Number Circle</label>
+                                    <button class="color-swatch" id="swatch-number-circle" data-color-id="number-circle" data-color="#FFFFFF" style="background-color: #FFFFFF;"></button>
                                 </div>
-                                <div class="color-field">
-                                    <label for="color-number-text">Number Text</label>
-                                    <input type="color" id="color-number-text" value="#000000">
+                                <div class="color-field-hsb">
+                                    <label>Number Text</label>
+                                    <button class="color-swatch" id="swatch-number-text" data-color-id="number-text" data-color="#000000" style="background-color: #000000;"></button>
                                 </div>
                                 <label class="checkbox-label border-checkbox">
                                     <input type="checkbox" id="number-border">
                                     Border
                                 </label>
-                                <div class="color-field border-color-field hidden" id="border-color-field">
-                                    <input type="color" id="color-number-border" value="#000000">
+                                <div class="color-field-hsb border-color-field hidden" id="border-color-field">
+                                    <button class="color-swatch" id="swatch-number-border" data-color-id="number-border" data-color="#000000" style="background-color: #000000;"></button>
                                 </div>
                             </div>
                             <div class="ball-slider-group">
@@ -324,6 +324,47 @@
                     </div>
                 </div>
             </div>
+
+            <!-- HSB Color Picker Modal -->
+            <div id="color-picker-modal" class="modal hidden">
+                <div class="modal-content color-picker-content">
+                    <div class="modal-header">
+                        <h2 id="color-picker-title">Select Color</h2>
+                        <button class="modal-close" id="close-color-picker-modal">&times;</button>
+                    </div>
+                    <div class="color-picker-body">
+                        <div class="color-preview-large" id="color-preview-large"></div>
+                        <div class="hsb-controls">
+                            <div class="hsb-slider-group">
+                                <label for="color-hue">
+                                    Hue
+                                    <span class="slider-value" id="color-hue-value">0°</span>
+                                </label>
+                                <input type="range" id="color-hue" min="0" max="360" value="0" step="1">
+                            </div>
+                            <div class="hsb-slider-group">
+                                <label for="color-saturation">
+                                    Saturation
+                                    <span class="slider-value" id="color-saturation-value">100%</span>
+                                </label>
+                                <input type="range" id="color-saturation" min="0" max="100" value="100" step="1">
+                            </div>
+                            <div class="hsb-slider-group">
+                                <label for="color-brightness">
+                                    Brightness
+                                    <span class="slider-value" id="color-brightness-value">100%</span>
+                                </label>
+                                <input type="range" id="color-brightness" min="0" max="100" value="100" step="1">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="creator-actions">
+                        <button class="cancel-btn" id="btn-cancel-color-picker">Cancel</button>
+                        <button class="save-btn" id="btn-apply-color">Apply</button>
+                    </div>
+                </div>
+            </div>
+
             <div id="game-hud" class="hidden">
                 <!-- Left Panel - 25% - Game Info -->
                 <div id="hud-info-panel" class="hud-panel">

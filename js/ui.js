@@ -2392,8 +2392,8 @@ export class UI {
             // Ensure we have a ball set to render with
             const ballSet = this.selectedBallSet || PREDEFINED_BALL_SETS[0];
 
-            const p1Canvas = this.renderBallPreviewCanvas(p1BallNum, ballSet, 18);
-            const p2Canvas = this.renderBallPreviewCanvas(p2BallNum, ballSet, 18);
+            const p1Canvas = this.renderBallPreviewCanvas(p1BallNum, ballSet, 28);
+            const p2Canvas = this.renderBallPreviewCanvas(p2BallNum, ballSet, 28);
 
             if (p1Canvas) this.p1BallGroup.appendChild(p1Canvas);
             if (p2Canvas) this.p2BallGroup.appendChild(p2Canvas);
@@ -2405,8 +2405,8 @@ export class UI {
             // Ensure we have a ball set to render with
             const ballSet = this.selectedBallSet || PREDEFINED_BALL_SETS[0];
 
-            const p1Canvas = this.renderBallPreviewCanvas(p1BallNum, ballSet, 18);
-            const p2Canvas = this.renderBallPreviewCanvas(p2BallNum, ballSet, 18);
+            const p1Canvas = this.renderBallPreviewCanvas(p1BallNum, ballSet, 28);
+            const p2Canvas = this.renderBallPreviewCanvas(p2BallNum, ballSet, 28);
 
             if (p1Canvas) this.p1BallGroup.appendChild(p1Canvas);
             if (p2Canvas) this.p2BallGroup.appendChild(p2Canvas);

@@ -152,6 +152,17 @@ export function easeInQuad(t) {
     return t * t;
 }
 
+const STANDARD_SNOOKER_CONFIG = {
+        spotlocations: {
+            yellow: { x: -260, y: 73 },   // Left of D
+            green: { x: -260, y: -73 },   // Right of D
+            brown: { x: -260, y: 0 },     // Center of baulk line
+            blue: { x: 0, y: 0 },         // Center spot
+            pink: { x: 208, y: 0 },       // Between center and reds
+            black: { x: 340, y: 0 }       // Behind reds
+        }
+    };
+
 // Game constants
 export const Constants = {
     // Table dimensions (in pixels)
@@ -254,15 +265,15 @@ export const Constants = {
 
     // Table-specific configurations (for tables with non-standard ball/pocket sizes)
     TABLE_CONFIGS: {
-        8: {  // Full-size snooker
-            spotlocations: {
-                yellow: { x: -260, y: 73 },   // Left of D
-                green: { x: -260, y: -73 },     // Right of D
-                brown: { x: -260, y: 0 },      // Center of baulk line
-                blue: { x: 0, y: 0 },          // Center spot
-                pink: { x: 208, y: 0 },        // Between center and reds
-                black: { x: 340, y: 0 }        // Behind reds
-            },
+        1: STANDARD_SNOOKER_CONFIG,
+        2: STANDARD_SNOOKER_CONFIG,
+        3: STANDARD_SNOOKER_CONFIG,
+        4: STANDARD_SNOOKER_CONFIG,
+        5: STANDARD_SNOOKER_CONFIG,
+        6: STANDARD_SNOOKER_CONFIG,
+        7: STANDARD_SNOOKER_CONFIG,
+        8: {  // Full-size snooker (with curved pockets)
+            spotlocations: STANDARD_SNOOKER_CONFIG.spotlocations,
             useCurvedPockets: true,
             isSnooker: true,
         },

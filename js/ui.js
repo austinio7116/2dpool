@@ -26,6 +26,33 @@ export class UI {
         this.snookerBreakDisplay = document.getElementById('snooker-break');
         this.snookerTargetDisplay = document.getElementById('snooker-target');
 
+        // New unified HUD elements
+        this.hudInfoPanel = document.getElementById('hud-info-panel');
+        this.hudPlayersPanel = document.getElementById('hud-players-panel');
+        this.hudModeName = document.getElementById('hud-mode-name');
+        this.hudTurnIndicator = document.getElementById('hud-turn-indicator');
+        this.hudTwoShot = document.getElementById('hud-two-shot');
+        this.hudSnookerBreak = document.getElementById('hud-snooker-break');
+        this.hudSnookerTarget = document.getElementById('hud-snooker-target');
+        this.hudPlayer1 = document.getElementById('hud-player-1');
+        this.hudPlayer2 = document.getElementById('hud-player-2');
+        this.p1BallGroup = document.getElementById('p1-ball-group');
+        this.p2BallGroup = document.getElementById('p2-ball-group');
+        this.hudScores = document.getElementById('hud-scores');
+        this.p1Frames = document.getElementById('p1-frames');
+        this.p2Frames = document.getElementById('p2-frames');
+
+        // Match format elements
+        this.matchFormatSelect = document.getElementById('match-format');
+        this.btnResumeMatch = document.getElementById('btn-resume-match');
+        this.resumeInfo = this.btnResumeMatch?.querySelector('.resume-info');
+
+        // Frame score display (game over)
+        this.frameScoreDisplay = document.getElementById('frame-score-display');
+        this.frameP1Score = document.getElementById('frame-p1-score');
+        this.frameP2Score = document.getElementById('frame-p2-score');
+        this.btnNextFrame = document.getElementById('btn-next-frame');
+
         // Buttons
         this.btn8Ball = document.getElementById('btn-8ball');
         this.btnUK8Ball = document.getElementById('btn-uk8ball');
@@ -97,6 +124,8 @@ export class UI {
         this.onSoundToggle = null;
         this.onSpeedChange = null;
         this.onTableChange = null;
+        this.onNextFrame = null;
+        this.onResumeMatch = null;
 
         // Current game mode
         this.currentMode = null;
@@ -183,6 +212,20 @@ export class UI {
         this.btnExitFreeplay.addEventListener('click', () => {
             if (this.onMainMenu) {
                 this.onMainMenu();
+            }
+        });
+
+        // Next frame button
+        this.btnNextFrame?.addEventListener('click', () => {
+            if (this.onNextFrame) {
+                this.onNextFrame();
+            }
+        });
+
+        // Resume match button
+        this.btnResumeMatch?.addEventListener('click', () => {
+            if (this.onResumeMatch) {
+                this.onResumeMatch();
             }
         });
 
@@ -1099,11 +1142,15 @@ export class UI {
         this.gameOverScreen.classList.add('hidden');
         this.freeplayControls.classList.add('hidden');
         if (this.snookerHud) this.snookerHud.classList.add('hidden');
+        if (this.playerIndicator) this.playerIndicator.classList.add('hidden');
         this.currentMode = null;
+
+        // Check for saved match
+        this.checkForSavedMatch();
     }
 
     // Show game HUD
-    showGameHUD(mode) {
+    showGameHUD(mode, matchInfo = null) {
         this.mainMenu.classList.add('hidden');
         this.gameHud.classList.remove('hidden');
         this.gameOverScreen.classList.add('hidden');
@@ -1111,23 +1158,65 @@ export class UI {
 
         // RESET: Clear mode-specific classes AND Styles
         this.ballGroups.className = '';
-        this.ballGroups.style.cssText = ''; 
+        this.ballGroups.style.cssText = '';
         this.ballGroups.innerHTML = ''; // Clear previous content
         this.last9BallState = null;
 
+        // Initialize new unified HUD
+        if (this.hudInfoPanel) {
+            // Set mode name
+            const modeNames = {
+                '8ball': '8-Ball',
+                'uk8ball': 'UK 8-Ball',
+                '9ball': '9-Ball',
+                'snooker': 'Snooker',
+                'freeplay': 'Free Play'
+            };
+            if (this.hudModeName) {
+                this.hudModeName.textContent = modeNames[mode] || mode;
+            }
+
+            // Reset turn indicator
+            if (this.hudTurnIndicator) {
+                this.hudTurnIndicator.textContent = "Player 1's Turn";
+            }
+
+            // Reset two-shot badge
+            if (this.hudTwoShot) {
+                this.hudTwoShot.classList.add('hidden');
+            }
+
+            // Reset snooker elements
+            if (this.hudSnookerBreak) this.hudSnookerBreak.classList.add('hidden');
+            if (this.hudSnookerTarget) this.hudSnookerTarget.classList.add('hidden');
+
+            // Reset player states
+            if (this.hudPlayer1) this.hudPlayer1.classList.add('active');
+            if (this.hudPlayer2) this.hudPlayer2.classList.remove('active');
+
+            // Clear ball group indicators
+            if (this.p1BallGroup) this.p1BallGroup.innerHTML = '';
+            if (this.p2BallGroup) this.p2BallGroup.innerHTML = '';
+
+            // Reset frame scores
+            if (this.p1Frames) this.p1Frames.textContent = matchInfo?.player1Frames || '0';
+            if (this.p2Frames) this.p2Frames.textContent = matchInfo?.player2Frames || '0';
+        }
+
+        // Hide/show players panel based on mode
+        if (this.hudPlayersPanel) {
+            this.hudPlayersPanel.classList.toggle('hidden-freeplay', mode === GameMode.FREE_PLAY);
+        }
+
+        // Always hide legacy elements - we use the unified HUD now
+        if (this.snookerHud) this.snookerHud.classList.add('hidden');
+        if (this.playerIndicator) this.playerIndicator.classList.add('hidden');
+
         if (mode === GameMode.FREE_PLAY) {
             this.freeplayControls.classList.remove('hidden');
-            this.playerIndicator.textContent = 'Free Play';
             this.ballGroups.innerHTML = '';
-            if (this.snookerHud) this.snookerHud.classList.add('hidden');
-        } else if (mode === GameMode.SNOOKER) {
-            this.freeplayControls.classList.add('hidden');
-            if (this.snookerHud) this.snookerHud.classList.remove('hidden');
-            this.updatePlayerIndicator(1);
         } else {
             this.freeplayControls.classList.add('hidden');
-            if (this.snookerHud) this.snookerHud.classList.add('hidden');
-            this.updatePlayerIndicator(1);
         }
 
         this.hideMessage();
@@ -1258,16 +1347,15 @@ export class UI {
         // 3. LAYOUT & POSITIONING
         this.ballGroups.innerHTML = '';
         this.ballGroups.className = 'ball-groups-9ball';
-        
-        // --- POSITIONING FIX: Move to Right Quadrant ---
-        // 'left: 60%' places it to the right of the middle pocket (which is at 50%)
-        // This avoids both the Player Indicator (Left) and Middle Pocket (Center)
+
+        // Position at bottom right, centered at 75% (matching right HUD panel)
         this.ballGroups.style.position = 'absolute';
-        this.ballGroups.style.top = '5px'; 
-        this.ballGroups.style.left = '60%'; 
+        this.ballGroups.style.bottom = '8px';
+        this.ballGroups.style.top = 'auto';
+        this.ballGroups.style.left = '75%';
         this.ballGroups.style.right = 'auto';
-        this.ballGroups.style.transform = 'none'; // Remove centering transforms
-        
+        this.ballGroups.style.transform = 'translateX(-50%)';
+
         this.ballGroups.style.display = 'flex';
         this.ballGroups.style.flexDirection = 'row';
         this.ballGroups.style.alignItems = 'center';
@@ -1413,23 +1501,12 @@ export class UI {
         }
 
         if (info.state === GameState.GAME_OVER) {
-            this.showGameOver(info.winner, info.gameOverReason);
+            this.showGameOverWithMatch(info.winner, info.gameOverReason, info.match);
             return;
         }
 
-        // Update player indicator
-        const currentGroup = info.currentPlayer === 1 ? info.player1Group : info.player2Group;
-        this.updatePlayerIndicator(info.currentPlayer, currentGroup, info);
-
-        // Update ball groups (8-ball US)
-        if (info.mode === GameMode.EIGHT_BALL) {
-            this.updateBallGroups(info.player1Group, info.player2Group, info.remaining, info.currentPlayer);
-        }
-
-        // Update ball groups (UK 8-ball)
-        if (info.mode === GameMode.UK_EIGHT_BALL) {
-            this.updateUKBallGroups(info.player1Group, info.player2Group, info.remainingUK, info.ukColorScheme, info.currentPlayer);
-        }
+        // Update the new unified HUD
+        this.updateUnifiedHUD(info, info.match);
 
         // --- 9-BALL LOGIC FIX ---
         if (info.mode === GameMode.NINE_BALL) {
@@ -1439,10 +1516,7 @@ export class UI {
             this.update9BallHUD(info.lowestBall, remaining);
         }
 
-        // Update snooker HUD
-        if (info.mode === GameMode.SNOOKER) {
-            this.updateSnookerHUD(info);
-        }
+        // Snooker HUD is now handled in updateUnifiedHUD
 
         // Ball in hand message
         if (info.state === GameState.BALL_IN_HAND) {
@@ -1505,5 +1579,224 @@ export class UI {
     // Get sound enabled state
     isSoundEnabled() {
         return this.soundToggle.checked;
+    }
+
+    // Get selected match format (bestOf value)
+    getMatchFormat() {
+        return parseInt(this.matchFormatSelect?.value || '1');
+    }
+
+    // Check for saved match and show resume button if found
+    checkForSavedMatch() {
+        try {
+            const saved = localStorage.getItem('poolGame_savedMatch');
+            if (saved) {
+                const data = JSON.parse(saved);
+                if (data && data.version === 1 && data.bestOf > 1) {
+                    // Show resume button with match info
+                    if (this.btnResumeMatch) {
+                        this.btnResumeMatch.classList.remove('hidden');
+                        const modeNames = {
+                            '8ball': '8-Ball',
+                            'uk8ball': 'UK 8-Ball',
+                            '9ball': '9-Ball',
+                            'snooker': 'Snooker'
+                        };
+                        const modeName = modeNames[data.gameMode] || data.gameMode;
+                        if (this.resumeInfo) {
+                            this.resumeInfo.textContent = `(${modeName} ${data.player1Frames}-${data.player2Frames})`;
+                        }
+                    }
+                    return data;
+                }
+            }
+        } catch (e) {
+            console.warn('Failed to check for saved match:', e);
+        }
+
+        // No valid saved match
+        if (this.btnResumeMatch) {
+            this.btnResumeMatch.classList.add('hidden');
+        }
+        return null;
+    }
+
+    // Update the unified HUD with game and match info
+    updateUnifiedHUD(gameInfo, matchInfo) {
+        if (!this.hudInfoPanel) return;
+
+        // Update mode name
+        const modeNames = {
+            '8ball': '8-Ball',
+            'uk8ball': 'UK 8-Ball',
+            '9ball': '9-Ball',
+            'snooker': 'Snooker',
+            'freeplay': 'Free Play'
+        };
+        if (this.hudModeName) {
+            this.hudModeName.textContent = modeNames[gameInfo.mode] || gameInfo.mode;
+        }
+
+        // Update turn indicator
+        if (this.hudTurnIndicator) {
+            this.hudTurnIndicator.textContent = `Player ${gameInfo.currentPlayer}'s Turn`;
+        }
+
+        // Show/hide two-shot badge for UK 8-ball
+        if (this.hudTwoShot) {
+            if (gameInfo.mode === GameMode.UK_EIGHT_BALL && gameInfo.shotsRemaining > 1) {
+                this.hudTwoShot.classList.remove('hidden');
+                this.hudTwoShot.textContent = `${gameInfo.shotsRemaining} shots`;
+            } else {
+                this.hudTwoShot.classList.add('hidden');
+            }
+        }
+
+        // Show snooker break and target in left panel
+        if (gameInfo.mode === GameMode.SNOOKER) {
+            // Show break
+            if (this.hudSnookerBreak) {
+                if (gameInfo.currentBreak > 0) {
+                    this.hudSnookerBreak.textContent = `Break: ${gameInfo.currentBreak}`;
+                    this.hudSnookerBreak.classList.remove('hidden');
+                } else {
+                    this.hudSnookerBreak.classList.add('hidden');
+                }
+            }
+
+            // Show target
+            if (this.hudSnookerTarget) {
+                this.hudSnookerTarget.classList.remove('hidden');
+                if (gameInfo.snookerTarget === 'red') {
+                    this.hudSnookerTarget.innerHTML = '<span class="target-dot target-red"></span> Red';
+                } else if (gameInfo.snookerTarget === 'color') {
+                    // Show compact multi-color striped indicator
+                    this.hudSnookerTarget.innerHTML = '<span class="target-dot target-multi-color"></span> Color';
+                } else {
+                    const colorName = gameInfo.snookerTarget.charAt(0).toUpperCase() + gameInfo.snookerTarget.slice(1);
+                    this.hudSnookerTarget.innerHTML = `<span class="target-dot target-${gameInfo.snookerTarget}"></span> ${colorName}`;
+                }
+            }
+        } else {
+            // Hide snooker elements for non-snooker modes
+            if (this.hudSnookerBreak) this.hudSnookerBreak.classList.add('hidden');
+            if (this.hudSnookerTarget) this.hudSnookerTarget.classList.add('hidden');
+        }
+
+        // Update player active states
+        if (this.hudPlayer1) {
+            this.hudPlayer1.classList.toggle('active', gameInfo.currentPlayer === 1);
+        }
+        if (this.hudPlayer2) {
+            this.hudPlayer2.classList.toggle('active', gameInfo.currentPlayer === 2);
+        }
+
+        // Update frame scores (or point scores for Snooker)
+        if (matchInfo && this.hudScores) {
+            if (gameInfo.mode === GameMode.SNOOKER) {
+                // Show point scores for Snooker
+                if (this.p1Frames) this.p1Frames.textContent = gameInfo.player1Score || 0;
+                if (this.p2Frames) this.p2Frames.textContent = gameInfo.player2Score || 0;
+            } else {
+                // Show frame scores
+                if (this.p1Frames) this.p1Frames.textContent = matchInfo.player1Frames;
+                if (this.p2Frames) this.p2Frames.textContent = matchInfo.player2Frames;
+            }
+        }
+
+        // Hide players panel for free play
+        if (this.hudPlayersPanel) {
+            this.hudPlayersPanel.classList.toggle('hidden-freeplay', gameInfo.mode === GameMode.FREE_PLAY);
+        }
+
+        // Update ball group indicators
+        this.updateBallGroupIndicators(gameInfo);
+    }
+
+    // Update ball group indicators for each player
+    updateBallGroupIndicators(gameInfo) {
+        if (!this.p1BallGroup || !this.p2BallGroup) return;
+
+        // Clear existing indicators
+        this.p1BallGroup.innerHTML = '';
+        this.p2BallGroup.innerHTML = '';
+
+        // Only show ball groups for 8-ball games after groups are assigned
+        if (gameInfo.mode !== GameMode.EIGHT_BALL && gameInfo.mode !== GameMode.UK_EIGHT_BALL) {
+            return;
+        }
+
+        if (!gameInfo.player1Group) {
+            return; // Table is open, no groups assigned yet
+        }
+
+        // Render ball indicator for player 1
+        const p1GroupType = gameInfo.player1Group;
+        const p2GroupType = gameInfo.player2Group;
+
+        if (gameInfo.mode === GameMode.EIGHT_BALL) {
+            // US 8-ball: solid (1) or stripe (9)
+            const p1BallNum = p1GroupType === 'solid' ? 1 : 9;
+            const p2BallNum = p2GroupType === 'solid' ? 1 : 9;
+
+            const p1Canvas = this.renderBallPreviewCanvas(p1BallNum, this.selectedBallSet, 18);
+            const p2Canvas = this.renderBallPreviewCanvas(p2BallNum, this.selectedBallSet, 18);
+
+            if (p1Canvas) this.p1BallGroup.appendChild(p1Canvas);
+            if (p2Canvas) this.p2BallGroup.appendChild(p2Canvas);
+        } else if (gameInfo.mode === GameMode.UK_EIGHT_BALL) {
+            // UK 8-ball: group1 (1) or group2 (9)
+            const p1BallNum = p1GroupType === 'group1' ? 1 : 9;
+            const p2BallNum = p2GroupType === 'group1' ? 1 : 9;
+
+            const p1Canvas = this.renderBallPreviewCanvas(p1BallNum, this.selectedBallSet, 18);
+            const p2Canvas = this.renderBallPreviewCanvas(p2BallNum, this.selectedBallSet, 18);
+
+            if (p1Canvas) this.p1BallGroup.appendChild(p1Canvas);
+            if (p2Canvas) this.p2BallGroup.appendChild(p2Canvas);
+        }
+    }
+
+    // Show game over with match context
+    showGameOverWithMatch(winner, reason, matchInfo) {
+        this.gameOverScreen.classList.remove('hidden');
+        this.freeplayControls.classList.add('hidden');
+        if (this.snookerHud) this.snookerHud.classList.add('hidden');
+
+        // Update winner text
+        if (matchInfo && matchInfo.matchComplete) {
+            // Match is complete - show match winner
+            this.winnerText.textContent = `Player ${matchInfo.matchWinner} Wins the Match!`;
+            this.winnerText.style.color = '#ffd700';
+        } else if (winner) {
+            // Single frame or multi-frame in progress
+            if (matchInfo && matchInfo.bestOf > 1) {
+                this.winnerText.textContent = `Player ${winner} Wins the Frame!`;
+            } else {
+                this.winnerText.textContent = `Player ${winner} Wins!`;
+            }
+            this.winnerText.style.color = '#ffd700';
+        } else {
+            this.winnerText.textContent = reason || 'Game Over';
+            this.winnerText.style.color = '#fff';
+        }
+
+        // Update frame score display
+        if (matchInfo && matchInfo.bestOf > 1 && this.frameScoreDisplay) {
+            this.frameScoreDisplay.classList.remove('hidden');
+            if (this.frameP1Score) this.frameP1Score.textContent = matchInfo.player1Frames;
+            if (this.frameP2Score) this.frameP2Score.textContent = matchInfo.player2Frames;
+        } else if (this.frameScoreDisplay) {
+            this.frameScoreDisplay.classList.add('hidden');
+        }
+
+        // Show/hide next frame button
+        if (this.btnNextFrame) {
+            if (matchInfo && matchInfo.bestOf > 1 && !matchInfo.matchComplete) {
+                this.btnNextFrame.classList.remove('hidden');
+            } else {
+                this.btnNextFrame.classList.add('hidden');
+            }
+        }
     }
 }

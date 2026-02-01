@@ -65,6 +65,16 @@ export class Game {
         this.nextColorInSequence = 'yellow';
         this.colorSequence = ['yellow', 'green', 'brown', 'blue', 'pink', 'black'];
 
+        // Match state (frame scoring)
+        this.match = {
+            bestOf: 1,
+            player1Frames: 0,
+            player2Frames: 0,
+            currentFrame: 1,
+            matchWinner: null,
+            matchComplete: false
+        };
+
         // Game over
         this.winner = null;
         this.gameOverReason = '';
@@ -75,6 +85,20 @@ export class Game {
         this.onFoul = null;
         this.onGameOver = null;
         this.onBallPocketed = null;
+        this.onFrameWon = null;
+        this.onMatchWon = null;
+    }
+
+    // Initialize match with bestOf format
+    initMatch(bestOf = 1) {
+        this.match = {
+            bestOf: bestOf,
+            player1Frames: 0,
+            player2Frames: 0,
+            currentFrame: 1,
+            matchWinner: null,
+            matchComplete: false
+        };
     }
 
     // Start a new game
@@ -104,6 +128,16 @@ export class Game {
         this.snookerTarget = 'red';
         this.colorsPhase = false;
         this.nextColorInSequence = 'yellow';
+
+        // Initialize match if bestOf provided in options
+        if (options.bestOf !== undefined) {
+            this.initMatch(options.bestOf);
+        } else if (options.resumeMatch) {
+            // Match state will be restored from saved data
+        } else {
+            // Single frame game
+            this.initMatch(1);
+        }
 
         // Create balls based on game mode
         const tableConfig = Constants.TABLE_CONFIGS ? Constants.TABLE_CONFIGS[this.tableStyle] : null;
@@ -697,12 +731,119 @@ export class Game {
         return true;
     }
 
+    // Award a frame to a player
+    awardFrame(winner) {
+        if (winner === 1) {
+            this.match.player1Frames++;
+        } else if (winner === 2) {
+            this.match.player2Frames++;
+        }
+
+        // Check for match winner
+        const framesToWin = Math.ceil(this.match.bestOf / 2);
+        if (this.match.player1Frames >= framesToWin) {
+            this.match.matchWinner = 1;
+            this.match.matchComplete = true;
+        } else if (this.match.player2Frames >= framesToWin) {
+            this.match.matchWinner = 2;
+            this.match.matchComplete = true;
+        }
+
+        if (this.onFrameWon) {
+            this.onFrameWon(winner, this.match);
+        }
+
+        if (this.match.matchComplete && this.onMatchWon) {
+            this.onMatchWon(this.match.matchWinner, this.match);
+        }
+    }
+
+    // Get match information for display
+    getMatchInfo() {
+        return {
+            bestOf: this.match.bestOf,
+            player1Frames: this.match.player1Frames,
+            player2Frames: this.match.player2Frames,
+            currentFrame: this.match.currentFrame,
+            matchWinner: this.match.matchWinner,
+            matchComplete: this.match.matchComplete
+        };
+    }
+
+    // Start the next frame in a match
+    startNextFrame() {
+        if (this.match.matchComplete) return;
+
+        this.match.currentFrame++;
+
+        // Reset frame state but keep match scores
+        this.state = GameState.BALL_IN_HAND;
+        this.currentPlayer = 1;
+        this.player1Group = null;
+        this.player2Group = null;
+        this.isBreakShot = true;
+        this.foul = false;
+        this.foulReason = '';
+        this.winner = null;
+        this.gameOverReason = '';
+        this.lowestBall = 1;
+        this.pushOutAvailable = false;
+        this.twoShotRule = false;
+        this.shotsRemaining = 1;
+        this.isFreeShot = false;
+
+        // Snooker reset
+        this.player1Score = 0;
+        this.player2Score = 0;
+        this.currentBreak = 0;
+        this.snookerTarget = 'red';
+        this.colorsPhase = false;
+        this.nextColorInSequence = 'yellow';
+
+        // Recreate balls based on game mode
+        const tableConfig = Constants.TABLE_CONFIGS ? Constants.TABLE_CONFIGS[this.tableStyle] : null;
+        const tableBallRadius = (tableConfig && tableConfig.ballRadius) ? tableConfig.ballRadius : null;
+
+        if (this.mode === GameMode.UK_EIGHT_BALL) {
+            this.balls = createUKBallSet(this.ukColorScheme);
+        } else if (this.mode === GameMode.SNOOKER) {
+            if (tableConfig && tableConfig.isSnooker && tableConfig.redCount === 15) {
+                this.balls = createFullSnookerBallSet(tableConfig.ballRadius);
+            } else {
+                this.balls = createSnookerBallSet();
+            }
+        } else {
+            this.balls = createBallSet();
+        }
+
+        // Apply table-specific ball radius
+        if (tableBallRadius) {
+            for (const ball of this.balls) {
+                ball.radius = tableBallRadius;
+            }
+        }
+
+        this.cueBall = this.balls.find(b => b.number === 0);
+
+        // Rack balls
+        this.rackBalls();
+
+        if (this.onStateChange) {
+            this.onStateChange(this.state);
+        }
+    }
+
     // End the game
     endGame() {
         this.state = GameState.GAME_OVER;
 
+        // Award frame to winner in match play
+        if (this.winner && this.match.bestOf > 1) {
+            this.awardFrame(this.winner);
+        }
+
         if (this.onGameOver) {
-            this.onGameOver(this.winner, this.gameOverReason);
+            this.onGameOver(this.winner, this.gameOverReason, this.match);
         }
 
         if (this.onStateChange) {
@@ -781,7 +922,9 @@ export class Game {
             ukColorScheme: this.ukColorScheme,
             shotsRemaining: this.shotsRemaining,
             twoShotRule: this.twoShotRule,
-            remainingUK: this.getRemainingUKBalls()
+            remainingUK: this.getRemainingUKBalls(),
+            // Match info
+            match: this.getMatchInfo()
         };
 
         // Add snooker info if in snooker mode
@@ -1233,5 +1376,125 @@ export class Game {
             redsRemaining: this.getActualRedsRemaining(),
             colorsPhase: this.colorsPhase
         };
+    }
+
+    // Serialize game state for saving
+    serializeState() {
+        const ballsData = this.balls.map(ball => ({
+            number: ball.number,
+            x: ball.position.x,
+            y: ball.position.y,
+            pocketed: ball.pocketed,
+            color: ball.color,
+            isStripe: ball.isStripe,
+            isGroup1: ball.isGroup1,
+            isGroup2: ball.isGroup2,
+            isSolid: ball.isSolid,
+            isEightBall: ball.isEightBall,
+            isCueBall: ball.isCueBall,
+            colorName: ball.colorName,
+            isRed: ball.isRed,
+            isColor: ball.isColor
+        }));
+
+        return {
+            version: 1,
+            savedAt: Date.now(),
+            gameMode: this.mode,
+            tableStyle: this.tableStyle,
+
+            // Match progress
+            bestOf: this.match.bestOf,
+            player1Frames: this.match.player1Frames,
+            player2Frames: this.match.player2Frames,
+            currentFrame: this.match.currentFrame,
+
+            // Current frame state
+            currentPlayer: this.currentPlayer,
+            player1Group: this.player1Group,
+            player2Group: this.player2Group,
+            isBreakShot: this.isBreakShot,
+
+            // Ball positions
+            balls: ballsData,
+
+            // Mode-specific state
+            ukColorScheme: this.ukColorScheme,
+            shotsRemaining: this.shotsRemaining,
+            twoShotRule: this.twoShotRule,
+            lowestBall: this.lowestBall,
+
+            // Snooker specific
+            player1Score: this.player1Score,
+            player2Score: this.player2Score,
+            snookerTarget: this.snookerTarget,
+            colorsPhase: this.colorsPhase,
+            nextColorInSequence: this.nextColorInSequence,
+            currentBreak: this.currentBreak,
+            highestBreak: this.highestBreak
+        };
+    }
+
+    // Restore game state from saved data
+    restoreState(data) {
+        if (!data || data.version !== 1) return false;
+
+        this.mode = data.gameMode;
+        this.tableStyle = data.tableStyle;
+
+        // Restore match state
+        this.match = {
+            bestOf: data.bestOf,
+            player1Frames: data.player1Frames,
+            player2Frames: data.player2Frames,
+            currentFrame: data.currentFrame,
+            matchWinner: null,
+            matchComplete: false
+        };
+
+        // Restore frame state
+        this.currentPlayer = data.currentPlayer;
+        this.player1Group = data.player1Group;
+        this.player2Group = data.player2Group;
+        this.isBreakShot = data.isBreakShot;
+
+        // Mode-specific state
+        this.ukColorScheme = data.ukColorScheme;
+        this.shotsRemaining = data.shotsRemaining || 1;
+        this.twoShotRule = data.twoShotRule || false;
+        this.lowestBall = data.lowestBall || 1;
+
+        // Snooker specific
+        this.player1Score = data.player1Score || 0;
+        this.player2Score = data.player2Score || 0;
+        this.snookerTarget = data.snookerTarget || 'red';
+        this.colorsPhase = data.colorsPhase || false;
+        this.nextColorInSequence = data.nextColorInSequence || 'yellow';
+        this.currentBreak = data.currentBreak || 0;
+        this.highestBreak = data.highestBreak || 0;
+
+        // Restore ball positions - must be done after balls are created
+        if (data.balls && this.balls.length > 0) {
+            for (const savedBall of data.balls) {
+                const ball = this.balls.find(b => b.number === savedBall.number);
+                if (ball) {
+                    ball.setPosition(savedBall.x, savedBall.y);
+                    ball.pocketed = savedBall.pocketed;
+                    ball.sinking = false;
+                    ball.velocity = Vec2.create(0, 0);
+                    ball.forceSync = true;
+                }
+            }
+            this.cueBall = this.balls.find(b => b.number === 0);
+        }
+
+        // Reset transient state
+        this.foul = false;
+        this.foulReason = '';
+        this.winner = null;
+        this.gameOverReason = '';
+        this.state = GameState.PLAYING;
+
+        return true;
     }
 }

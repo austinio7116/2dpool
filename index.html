@@ -52,6 +52,15 @@
                     <!-- Game Mode Card -->
                     <div class="selector-card game-mode-card">
                         <div class="card-label">Game Mode</div>
+                        <div class="match-format-row">
+                            <label for="match-format">Match</label>
+                            <select id="match-format">
+                                <option value="1">Single Frame</option>
+                                <option value="3">Best of 3</option>
+                                <option value="5">Best of 5</option>
+                                <option value="7">Best of 7</option>
+                            </select>
+                        </div>
                         <div class="game-mode-buttons">
                             <button id="btn-8ball" class="mode-btn">8-Ball (US)</button>
                             <button id="btn-uk8ball" class="mode-btn">8-Ball (UK)</button>
@@ -59,6 +68,9 @@
                             <button id="btn-snooker" class="mode-btn">Snooker</button>
                             <button id="btn-freeplay" class="mode-btn">Free Play</button>
                         </div>
+                        <button id="btn-resume-match" class="mode-btn resume-btn hidden">
+                            Resume Match <span class="resume-info"></span>
+                        </button>
                     </div>
                 </div>
                 <button id="btn-fullscreen" class="menu-btn small mobile-only">Fullscreen</button>
@@ -220,13 +232,38 @@
                 </div>
             </div>
             <div id="game-hud" class="hidden">
-                <div class="game-menu-container">
+                <!-- Left Panel - 25% - Game Info -->
+                <div id="hud-info-panel" class="hud-panel">
                     <button id="btn-game-menu" class="game-menu-btn" title="Menu">&#x2630;</button>
                     <div id="game-menu-dropdown" class="game-menu-dropdown hidden">
                         <button id="btn-quit-game" class="game-menu-item">Quit to Menu</button>
                     </div>
+                    <span id="hud-mode-name">8-Ball</span>
+                    <span id="hud-turn-indicator">Player 1's Turn</span>
+                    <span id="hud-two-shot" class="hud-badge hidden">2 shots</span>
+                    <span id="hud-snooker-break" class="hud-badge snooker-break-badge hidden">Break: 0</span>
+                    <span id="hud-snooker-target" class="hud-target hidden"></span>
                 </div>
-                <div id="player-indicator"></div>
+
+                <!-- Right Panel - 75% - Players & Scores -->
+                <div id="hud-players-panel" class="hud-panel">
+                    <div class="hud-player" id="hud-player-1">
+                        <span class="player-name">Player 1</span>
+                        <div class="player-ball-group" id="p1-ball-group"></div>
+                    </div>
+                    <div class="hud-scores" id="hud-scores">
+                        <span id="p1-frames">0</span>
+                        <span class="score-sep">-</span>
+                        <span id="p2-frames">0</span>
+                    </div>
+                    <div class="hud-player" id="hud-player-2">
+                        <div class="player-ball-group" id="p2-ball-group"></div>
+                        <span class="player-name">Player 2</span>
+                    </div>
+                </div>
+
+                <!-- Legacy elements (kept for compatibility but may be hidden) -->
+                <div id="player-indicator" class="hidden"></div>
                 <div id="ball-groups"></div>
                 <div id="foul-indicator" class="hidden">FOUL</div>
                 <div id="game-message"></div>
@@ -239,7 +276,13 @@
             </div>
             <div id="game-over" class="menu hidden">
                 <h2 id="winner-text"></h2>
+                <div id="frame-score-display" class="frame-score-display hidden">
+                    <span id="frame-p1-score">0</span>
+                    <span class="frame-score-sep">-</span>
+                    <span id="frame-p2-score">0</span>
+                </div>
                 <div class="menu-buttons">
+                    <button id="btn-next-frame" class="menu-btn hidden">Next Frame</button>
                     <button id="btn-play-again" class="menu-btn">Play Again</button>
                     <button id="btn-main-menu" class="menu-btn">Main Menu</button>
                 </div>

@@ -807,20 +807,14 @@ body {
     pointer-events: auto;
 }
 
-/* Game menu in top-left corner during gameplay */
-.game-menu-container {
-    position: absolute;
-    top: 0px;
-    left: 80px;
-    z-index: 100;
-}
+/* Game menu is now inside hud-info-panel */
 
 .game-menu-btn {
-    width: 32px;
-    height: 32px;
-    background: rgba(0, 0, 0, 0.85);
-    border: 2px solid #4a4a6a;
-    border-radius: 6px;
+    position: relative;
+    width: 24px;
+    height: 24px;
+    background: transparent;
+    border: none;
     color: #ccc;
     font-size: 16px;
     cursor: pointer;
@@ -828,30 +822,30 @@ body {
     justify-content: center;
     align-items: center;
     transition: all 0.2s ease;
+    padding: 0;
+    margin-right: 6px;
 }
 
 .game-menu-btn:hover {
-    background: rgba(40, 40, 60, 0.9);
-    border-color: #6a6a8a;
     color: #fff;
 }
 
 .game-menu-btn.active {
-    background: rgba(40, 40, 60, 0.95);
-    border-color: #ffd700;
-    color: #fff;
+    color: #ffd700;
 }
 
 .game-menu-dropdown {
     position: absolute;
-    top: 36px;
+    top: 100%;
     left: 0;
+    margin-top: 4px;
     background: rgba(26, 26, 46, 0.95);
     border: 2px solid #4a4a6a;
     border-radius: 6px;
     overflow: hidden;
     min-width: 130px;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+    z-index: 200;
 }
 
 .game-menu-dropdown.hidden {
@@ -997,6 +991,21 @@ body {
 .target-dot.target-blue { background: #0066CC; }
 .target-dot.target-pink { background: #FF69B4; }
 .target-dot.target-black { background: #222; }
+
+/* Multi-color striped ball for "any color" target */
+.target-dot.target-multi-color {
+    background: conic-gradient(
+        from 0deg,
+        #FFD700 0deg 51.4deg,      /* yellow */
+        #228B22 51.4deg 102.8deg,  /* green */
+        #8B4513 102.8deg 154.2deg, /* brown */
+        #0066CC 154.2deg 205.6deg, /* blue */
+        #FF69B4 205.6deg 257deg,   /* pink */
+        #222 257deg 308.4deg,      /* black */
+        #CC0000 308.4deg 360deg    /* red */
+    );
+    border: 1px solid rgba(255, 255, 255, 0.5);
+}
 
 /* Snooker target container classes */
 .snooker-target-red,
@@ -1219,10 +1228,6 @@ body {
         padding: 4px 8px;
         font-size: 0.8rem;
         margin-left: 50px;
-    }
-
-    .game-menu-container {
-        left: 70px;
     }
 
     .game-menu-btn {
@@ -1602,4 +1607,311 @@ body {
     gap: 12px; /* Space between Player 1 and Player 2 */
     pointer-events: auto;
     z-index: 10;
+}
+
+/* ============================================
+   NEW UNIFIED HUD PANELS
+   ============================================ */
+
+.hud-panel {
+    position: absolute;
+    top: 4px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 10px;
+    background: rgba(0, 0, 0, 0.85);
+    border-radius: 4px;
+    border: 1px solid rgba(255, 215, 0, 0.3);
+    font-size: 0.75rem;
+    color: #fff;
+    pointer-events: auto;
+    z-index: 100;
+}
+
+#hud-info-panel {
+    left: 25%;
+    transform: translateX(-50%);
+}
+
+#hud-players-panel {
+    left: 75%;
+    transform: translateX(-50%);
+}
+
+#hud-mode-name {
+    color: #ffd700;
+    font-weight: bold;
+    padding-right: 6px;
+    border-right: 1px solid rgba(255, 255, 255, 0.2);
+    font-size: 0.7rem;
+}
+
+#hud-turn-indicator {
+    color: #ccc;
+    font-size: 0.7rem;
+}
+
+.hud-badge {
+    background: rgba(255, 215, 0, 0.2);
+    color: #ffd700;
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 0.65rem;
+    font-weight: bold;
+}
+
+.snooker-break-badge {
+    background: rgba(0, 200, 0, 0.3);
+    color: #00ff00;
+}
+
+.hud-target {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: 1px 6px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 3px;
+    font-size: 0.65rem;
+}
+
+.hud-target .target-dot {
+    width: 8px;
+    height: 8px;
+    margin-right: 1px;
+}
+
+/* Players panel layout */
+#hud-players-panel {
+    gap: 6px;
+}
+
+.hud-player {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.hud-player .player-name {
+    color: #aaa;
+    font-size: 0.7rem;
+    transition: color 0.2s;
+}
+
+.hud-player.active .player-name {
+    color: #ffd700;
+    font-weight: bold;
+}
+
+.player-ball-group {
+    display: flex;
+    align-items: center;
+    gap: 1px;
+}
+
+.player-ball-group canvas {
+    width: 14px;
+    height: 14px;
+}
+
+.hud-scores {
+    font-size: 0.95rem;
+    font-weight: bold;
+    color: #ffd700;
+    padding: 0 8px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.score-sep {
+    color: #666;
+}
+
+/* Hide scores panel in free play */
+#hud-players-panel.hidden-freeplay {
+    display: none;
+}
+
+/* ============================================
+   MATCH FORMAT SELECTOR
+   ============================================ */
+
+.match-format-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    margin-bottom: 6px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid #3a3a5a;
+}
+
+.match-format-row label {
+    font-size: 0.75rem;
+    color: #888;
+    text-transform: uppercase;
+}
+
+#match-format {
+    flex: 1;
+    padding: 6px 10px;
+    border-radius: 4px;
+    border: 1px solid #4a4a6a;
+    background: #2a2a4a;
+    color: #fff;
+    font-size: 0.8rem;
+    cursor: pointer;
+}
+
+#match-format:focus {
+    outline: none;
+    border-color: #ffd700;
+}
+
+/* Resume match button */
+.resume-btn {
+    background: linear-gradient(135deg, #5a3d1a 0%, #3d2812 100%) !important;
+    border-color: #7a5a27 !important;
+    margin-top: 6px;
+}
+
+.resume-btn:hover {
+    background: linear-gradient(135deg, #7a5a27 0%, #5a3d1a 100%) !important;
+}
+
+.resume-info {
+    font-size: 0.7rem;
+    opacity: 0.8;
+    margin-left: 4px;
+}
+
+/* ============================================
+   FRAME SCORE DISPLAY (Game Over Screen)
+   ============================================ */
+
+.frame-score-display {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 15px;
+    font-size: 2rem;
+    font-weight: bold;
+    color: #ffd700;
+    margin: 15px 0;
+}
+
+.frame-score-display span {
+    padding: 5px 15px;
+}
+
+.frame-score-sep {
+    color: #666;
+}
+
+#btn-next-frame {
+    background: linear-gradient(135deg, #2d5a27 0%, #1e3d1a 100%);
+    border-color: #4d9a47;
+}
+
+#btn-next-frame:hover {
+    background: linear-gradient(135deg, #4d9a47 0%, #2d5a27 100%);
+}
+
+/* ============================================
+   MOBILE RESPONSIVE - HUD PANELS
+   ============================================ */
+
+@media (max-width: 1024px) and (orientation: landscape) {
+    .hud-panel {
+        padding: 2px 8px;
+        font-size: 0.65rem;
+        gap: 4px;
+        top: 3px;
+    }
+
+    #hud-info-panel {
+        left: 22%;
+    }
+
+    #hud-players-panel {
+        left: 78%;
+    }
+
+    #hud-mode-name {
+        padding-right: 4px;
+        font-size: 0.6rem;
+    }
+
+    #hud-turn-indicator {
+        font-size: 0.6rem;
+    }
+
+    .hud-scores {
+        font-size: 0.8rem;
+        padding: 0 6px;
+        gap: 3px;
+    }
+
+    .hud-player .player-name {
+        font-size: 0.6rem;
+    }
+
+    .player-ball-group canvas {
+        width: 12px;
+        height: 12px;
+    }
+
+    .hud-badge {
+        padding: 1px 4px;
+        font-size: 0.55rem;
+    }
+
+    .hud-target {
+        padding: 1px 4px;
+        font-size: 0.55rem;
+        gap: 1px;
+    }
+
+    .hud-target .target-dot {
+        width: 6px;
+        height: 6px;
+        margin-right: 0;
+    }
+
+    .game-menu-btn {
+        width: 20px;
+        height: 20px;
+        font-size: 14px;
+        margin-right: 3px;
+    }
+
+    /* Match format mobile */
+    .match-format-row {
+        gap: 6px;
+        margin-bottom: 4px;
+        padding-bottom: 4px;
+    }
+
+    .match-format-row label {
+        font-size: 0.65rem;
+    }
+
+    #match-format {
+        padding: 4px 6px;
+        font-size: 0.7rem;
+    }
+
+    .frame-score-display {
+        font-size: 1.5rem;
+        gap: 10px;
+        margin: 10px 0;
+    }
+
+    /* 9-ball HUD mobile positioning */
+    .ball-groups-9ball {
+        bottom: 6px !important;
+        left: 75% !important;
+    }
 }

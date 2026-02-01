@@ -32,6 +32,9 @@ class PoolGame {
         // Trajectory prediction cache
         this.trajectory = null;
 
+        // Match persistence
+        this.STORAGE_KEY = 'poolGame_savedMatch';
+
         // Bind callbacks
         this.bindCallbacks();
 
@@ -115,8 +118,12 @@ class PoolGame {
         // Game callbacks
         this.game.onStateChange = (state) => this.handleStateChange(state);
         this.game.onFoul = (reason) => this.handleFoul(reason);
-        this.game.onGameOver = (winner, reason) => this.handleGameOver(winner, reason);
+        this.game.onGameOver = (winner, reason, match) => this.handleGameOver(winner, reason, match);
         this.game.onBallPocketed = (ball) => this.handleBallPocketed(ball);
+
+        // Match callbacks
+        this.ui.onNextFrame = () => this.startNextFrame();
+        this.ui.onResumeMatch = () => this.resumeMatch();
     }
 
     startGame(mode, options = {}) {
@@ -125,6 +132,16 @@ class PoolGame {
 
         // Get the selected ball set from UI
         const selectedBallSet = this.ui.getSelectedBallSet();
+
+        // Get match format from UI (unless resuming or already specified)
+        if (options.bestOf === undefined && !options.resumeMatch) {
+            options.bestOf = this.ui.getMatchFormat();
+        }
+
+        // Clear any saved match when starting a new game (not resuming)
+        if (!options.resumeMatch) {
+            this.clearSavedMatch();
+        }
 
         // For snooker mode, force snooker ball set
         if (mode === GameMode.SNOOKER) {
@@ -148,6 +165,9 @@ class PoolGame {
             }
         }
 
+        // Store ball set ID for save/resume
+        options.ballSetId = selectedBallSet?.id || 'american';
+
         this.game.startGame(mode, options);
         this.lastGameOptions = options;  // Store for play again
         this.lastGameMode = mode; // Store mode for play again
@@ -161,7 +181,7 @@ class PoolGame {
         this.input.setCanShoot(true);
         this.input.resetSpin();
 
-        this.ui.showGameHUD(mode);
+        this.ui.showGameHUD(mode, this.game.getMatchInfo());
     }
 
     applyCustomBallSet(ballSet) {
@@ -194,12 +214,27 @@ class PoolGame {
     }
 
     playAgain() {
+        // Clear saved match since we're starting fresh
+        this.clearSavedMatch();
+
         // Use stored mode (which may have been modified from original selection)
         const mode = this.lastGameMode || this.game.mode;
-        this.startGame(mode, this.lastGameOptions || {});
+
+        // Reset match scores for a new match
+        const options = { ...(this.lastGameOptions || {}) };
+        delete options.resumeMatch; // Ensure we're not resuming
+
+        this.startGame(mode, options);
     }
 
     returnToMenu() {
+        // Save match if it's a multi-frame match in progress
+        if (this.game.match.bestOf > 1 &&
+            this.game.state !== GameState.GAME_OVER &&
+            this.game.mode !== GameMode.FREE_PLAY) {
+            this.saveMatch();
+        }
+
         this.game.state = GameState.MENU;
         this.ui.showMainMenu();
         this.input.setCanShoot(false);
@@ -334,6 +369,11 @@ class PoolGame {
         } else if (state === GameState.PLAYING) {
             this.input.setCanShoot(true);
             this.input.exitBallInHandMode();
+
+            // Auto-save match after each turn (only for multi-frame matches)
+            if (this.game.match.bestOf > 1 && this.game.mode !== GameMode.FREE_PLAY) {
+                this.saveMatch();
+            }
         }
     }
 
@@ -342,9 +382,14 @@ class PoolGame {
         this.audio.playScratch();
     }
 
-    handleGameOver(winner, reason) {
-        this.ui.showGameOver(winner, reason);
+    handleGameOver(winner, reason, match) {
+        this.ui.showGameOverWithMatch(winner, reason, match);
         this.input.setCanShoot(false);
+
+        // Clear saved match if match is complete or single frame
+        if (!match || match.matchComplete || match.bestOf === 1) {
+            this.clearSavedMatch();
+        }
 
         if (winner) {
             this.audio.playWin();
@@ -353,6 +398,137 @@ class PoolGame {
 
     handleBallPocketed(_ball) {
         // Additional handling if needed
+    }
+
+    // Start the next frame in a match
+    startNextFrame() {
+        // Reset physics for new frame
+        this.physics.reset();
+
+        // Get the selected ball set
+        const selectedBallSet = this.ui.getSelectedBallSet();
+        const mode = this.game.mode;
+
+        // Create new balls in game
+        this.game.startNextFrame();
+
+        // Re-apply custom ball set if needed
+        if (selectedBallSet && !selectedBallSet.isPredefined && mode !== GameMode.SNOOKER) {
+            this.applyCustomBallSet(selectedBallSet);
+        }
+
+        // Sync new balls to physics
+        this.physics.syncBallsToPlanck(this.game.balls);
+
+        this.input.setCueBall(this.game.cueBall);
+        this.input.setCanShoot(true);
+        this.input.resetSpin();
+
+        // Hide game over screen and show HUD
+        this.ui.gameOverScreen.classList.add('hidden');
+        this.ui.gameHud.classList.remove('hidden');
+
+        // Update HUD with new frame info
+        this.ui.updateFromGameInfo(this.game.getGameInfo());
+
+        // Save match state
+        if (this.game.match.bestOf > 1) {
+            this.saveMatch();
+        }
+    }
+
+    // Save match state to localStorage
+    saveMatch() {
+        try {
+            const data = this.game.serializeState();
+            // Add ball set and table info
+            data.ballSetId = this.lastGameOptions?.ballSetId || 'american';
+            data.tableStyle = this.ui.getSelectedTable();
+
+            localStorage.setItem(this.STORAGE_KEY, JSON.stringify(data));
+        } catch (e) {
+            console.warn('Failed to save match:', e);
+        }
+    }
+
+    // Load saved match from localStorage
+    loadSavedMatch() {
+        try {
+            const saved = localStorage.getItem(this.STORAGE_KEY);
+            if (saved) {
+                return JSON.parse(saved);
+            }
+        } catch (e) {
+            console.warn('Failed to load saved match:', e);
+        }
+        return null;
+    }
+
+    // Clear saved match from localStorage
+    clearSavedMatch() {
+        try {
+            localStorage.removeItem(this.STORAGE_KEY);
+        } catch (e) {
+            console.warn('Failed to clear saved match:', e);
+        }
+    }
+
+    // Resume a saved match
+    resumeMatch() {
+        const savedData = this.loadSavedMatch();
+        if (!savedData) {
+            console.warn('No saved match to resume');
+            return;
+        }
+
+        this.audio.init();
+        this.physics.reset();
+
+        // Restore table style
+        if (savedData.tableStyle) {
+            this.ui.selectTable(savedData.tableStyle);
+        }
+
+        // Get ball set (try to find saved one, fall back to selected)
+        let ballSet = this.ui.getSelectedBallSet();
+        if (savedData.ballSetId) {
+            const savedSet = this.ui.ballSetManager.getSet(savedData.ballSetId);
+            if (savedSet) {
+                ballSet = savedSet;
+                this.ui.selectedBallSet = savedSet;
+            }
+        }
+
+        // Start game with resume flag
+        const options = {
+            resumeMatch: true,
+            colorScheme: savedData.ukColorScheme || 'red-yellow',
+            ballSetId: savedData.ballSetId
+        };
+
+        // Start game to create balls
+        this.game.startGame(savedData.gameMode, options);
+
+        // Restore full state from saved data
+        this.game.restoreState(savedData);
+
+        // Apply custom ball colors
+        if (ballSet && !ballSet.isPredefined && savedData.gameMode !== GameMode.SNOOKER) {
+            this.applyCustomBallSet(ballSet);
+        }
+
+        // Sync physics with restored ball positions
+        this.physics.syncBallsToPlanck(this.game.balls);
+
+        this.lastGameOptions = options;
+        this.lastGameMode = savedData.gameMode;
+
+        this.input.setCueBall(this.game.cueBall);
+        this.input.setCanShoot(true);
+        this.input.resetSpin();
+
+        this.ui.showGameHUD(savedData.gameMode, this.game.getMatchInfo());
+        this.ui.updateFromGameInfo(this.game.getGameInfo());
     }
 
     gameLoop(currentTime) {

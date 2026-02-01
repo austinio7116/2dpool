@@ -79,6 +79,13 @@ export class CustomTableManager {
         return true;
     }
 
+    // Import a single table from external data (generates new ID)
+    importTable(tableData) {
+        // Strip existing IDs and metadata to avoid conflicts
+        const { id, isPredefined, isCustom, ...cleanData } = tableData;
+        return this.create(cleanData);
+    }
+
     // Get a specific custom table by ID
     get(id) {
         return this.customTables.find(t => t.id === id);

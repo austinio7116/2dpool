@@ -215,6 +215,13 @@ export class CustomBallSetManager {
         return true;
     }
 
+    // Import a single ball set from external data (generates new ID)
+    importSet(setData) {
+        // Strip existing IDs and metadata to avoid conflicts
+        const { id, isPredefined, createdAt, updatedAt, ...cleanData } = setData;
+        return this.create(cleanData);
+    }
+
     // Convert a ball set to game-compatible color configuration
     toGameColors(ballSet) {
         if (!ballSet) return null;

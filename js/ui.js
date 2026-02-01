@@ -5,6 +5,7 @@ import { CustomBallSetManager, PREDEFINED_BALL_SETS } from './custom-ball-sets.j
 import { CustomTableManager } from './custom-tables.js';
 import { BallRenderer3D } from './ball-renderer-3d.js';
 import { Constants, hexToHsb, hsbToHex } from './utils.js';
+import { exportBallSet, importBallSet, exportTable, importTable } from './import-export.js';
 
 export class UI {
     constructor() {
@@ -87,6 +88,14 @@ export class UI {
         this.colorPickerModal = document.getElementById('color-picker-modal');
         this.tableGrid = document.getElementById('table-grid');
         this.ballSetGrid = document.getElementById('ball-set-grid');
+
+        // Import/Export buttons
+        this.btnExportBalls = document.getElementById('btn-export-balls');
+        this.btnImportBalls = document.getElementById('btn-import-balls');
+        this.importBallsInput = document.getElementById('import-balls-input');
+        this.btnExportTables = document.getElementById('btn-export-tables');
+        this.btnImportTables = document.getElementById('btn-import-tables');
+        this.importTablesInput = document.getElementById('import-tables-input');
 
         // Color picker elements
         this.colorHueSlider = document.getElementById('color-hue');
@@ -553,6 +562,24 @@ export class UI {
         this.colorPickerModal?.addEventListener('click', (e) => {
             if (e.target === this.colorPickerModal) this.hideColorPickerModal();
         });
+
+        // Ball set import
+        this.btnImportBalls?.addEventListener('click', () => {
+            this.importBallsInput.click();
+        });
+
+        this.importBallsInput?.addEventListener('change', (e) => {
+            this.handleBallSetImport(e);
+        });
+
+        // Table import
+        this.btnImportTables?.addEventListener('click', () => {
+            this.importTablesInput.click();
+        });
+
+        this.importTablesInput?.addEventListener('change', (e) => {
+            this.handleTableImport(e);
+        });
     }
 
     // Initialize table selection grid
@@ -640,6 +667,16 @@ export class UI {
                 this.editCustomTable(table);
             });
             dropdown.appendChild(editOption);
+
+            const exportOption = document.createElement('button');
+            exportOption.className = 'menu-option';
+            exportOption.textContent = 'Export';
+            exportOption.addEventListener('click', (e) => {
+                e.stopPropagation();
+                dropdown.classList.add('hidden');
+                this.exportTableItem(table);
+            });
+            dropdown.appendChild(exportOption);
 
             const deleteOption = document.createElement('button');
             deleteOption.className = 'menu-option delete-option';
@@ -908,6 +945,16 @@ export class UI {
                     this.editCustomBallSet(set);
                 });
                 dropdown.appendChild(editOption);
+
+                const exportOption = document.createElement('button');
+                exportOption.className = 'menu-option';
+                exportOption.textContent = 'Export';
+                exportOption.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    dropdown.classList.add('hidden');
+                    this.exportBallSetItem(set);
+                });
+                dropdown.appendChild(exportOption);
 
                 const deleteOption = document.createElement('button');
                 deleteOption.className = 'menu-option delete-option';
@@ -2691,5 +2738,63 @@ export class UI {
     // Get HSB adjustments for a table (null if no adjustments needed)
     getTableHSBAdjustments(tableId) {
         return this.tableManager.getHSBAdjustments(tableId);
+    }
+
+    // Export a single ball set
+    exportBallSetItem(ballSet) {
+        try {
+            exportBallSet(ballSet);
+        } catch (e) {
+            console.error('Export failed:', e);
+            alert('Failed to export ball set: ' + e.message);
+        }
+    }
+
+    // Handle single ball set import
+    async handleBallSetImport(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        try {
+            const content = await file.text();
+            const setData = importBallSet(content);
+            const imported = this.ballSetManager.importSet(setData);
+            this.populateBallSetGrid();
+            alert(`Successfully imported ball set: "${imported.name}".`);
+        } catch (e) {
+            console.error('Import failed:', e);
+            alert('Failed to import ball set: ' + e.message);
+        } finally {
+            event.target.value = '';
+        }
+    }
+
+    // Export a single table
+    exportTableItem(table) {
+        try {
+            exportTable(table);
+        } catch (e) {
+            console.error('Export failed:', e);
+            alert('Failed to export table: ' + e.message);
+        }
+    }
+
+    // Handle single table import
+    async handleTableImport(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        try {
+            const content = await file.text();
+            const tableData = importTable(content);
+            const imported = this.tableManager.importTable(tableData);
+            this.initializeTableGrid();
+            alert(`Successfully imported table: "${imported.name}".`);
+        } catch (e) {
+            console.error('Import failed:', e);
+            alert('Failed to import table: ' + e.message);
+        } finally {
+            event.target.value = '';
+        }
     }
 }

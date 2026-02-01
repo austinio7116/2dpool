@@ -374,7 +374,7 @@ export class CustomBallSetManager {
             numberBorderColor: ballSet.options?.numberBorderColor || '#000000',
             numberCircleRadialLines: ballSet.options?.numberCircleRadialLines || 0,
             stripeThickness: ballSet.options?.stripeThickness ?? 0.55,
-            numberCircleRadius: ballSet.options?.numberCircleRadius ?? 0.5
+            numberCircleRadius: ballSet.options?.numberCircleRadius ?? 0.66
         };
     }
 

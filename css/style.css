@@ -898,6 +898,15 @@ body {
     flex-wrap: wrap;
 }
 
+.section-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: rgba(200, 200, 220, 0.9);
+    margin: 8px 0 4px 0;
+    padding-bottom: 4px;
+    border-bottom: 1px solid rgba(120, 120, 160, 0.3);
+}
+
 .solid-options,
 .stripe-options {
     display: flex;

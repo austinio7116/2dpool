@@ -30,7 +30,7 @@ export class Ball {
         this.numberBorderColor = null;
         this.numberCircleRadialLines = 0;  // Number of radial lines inside number circle
         this.stripeThickness = 0.55;  // Stripe thickness (latitude, default 0.55)
-        this.numberCircleRadius = 0.5;  // Number circle radius (angular radius, default 0.5)
+        this.numberCircleRadius = 0.66;  // Number circle radius (angular radius, default 0.66)
         
         // VISUALS
         this.rotation = 0; // Legacy 2D rotation (can map to Z-spin)
@@ -181,7 +181,18 @@ export function createBallSet() {
 
     // Create balls 0-15 (0 = cue ball)
     for (let i = 0; i <= 15; i++) {
-        balls.push(new Ball(0, 0, i));
+        const ball = new Ball(0, 0, i);
+
+        // Add UK 8-ball group properties (for compatibility)
+        if (i >= 1 && i <= 7) {
+            ball.isGroup1 = true;
+            ball.isGroup2 = false;
+        } else if (i >= 9 && i <= 15) {
+            ball.isGroup1 = false;
+            ball.isGroup2 = true;
+        }
+
+        balls.push(ball);
     }
 
     return balls;

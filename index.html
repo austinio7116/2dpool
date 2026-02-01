@@ -173,6 +173,54 @@
                                 <input type="checkbox" id="striped-8ball">
                                 Striped 8-Ball
                             </label>
+
+                            <!-- Number styling for 8-ball (always visible in solid mode) -->
+                            <div class="solid-number-styling" id="solid-number-styling">
+                                <div class="section-label">8-Ball Number Styling</div>
+                                <div class="color-row">
+                                    <div class="color-field-hsb">
+                                        <label>Stripe Background</label>
+                                        <button class="color-swatch" id="swatch-solid-stripe-bg" data-color-id="solid-stripe-bg" data-color="#FFFFFF" style="background-color: #FFFFFF;"></button>
+                                    </div>
+                                    <div class="color-field-hsb">
+                                        <label>Number Circle</label>
+                                        <button class="color-swatch" id="swatch-solid-number-circle" data-color-id="solid-number-circle" data-color="#FFFFFF" style="background-color: #FFFFFF;"></button>
+                                    </div>
+                                    <div class="color-field-hsb">
+                                        <label>Number Text</label>
+                                        <button class="color-swatch" id="swatch-solid-number-text" data-color-id="solid-number-text" data-color="#000000" style="background-color: #000000;"></button>
+                                    </div>
+                                </div>
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="solid-number-border">
+                                    Number Border
+                                </label>
+                                <div class="color-field-hsb hidden" id="solid-border-color-field">
+                                    <label>Border Color</label>
+                                    <button class="color-swatch" id="swatch-solid-number-border" data-color-id="solid-number-border" data-color="#000000" style="background-color: #000000;"></button>
+                                </div>
+                                <div class="ball-slider-group">
+                                    <label for="solid-radial-lines">
+                                        Radial Lines
+                                        <span class="slider-value" id="solid-radial-lines-value">0</span>
+                                    </label>
+                                    <input type="range" id="solid-radial-lines" min="0" max="12" value="0" step="1">
+                                </div>
+                                <div class="ball-slider-group">
+                                    <label for="solid-stripe-thickness">
+                                        Stripe Thickness
+                                        <span class="slider-value" id="solid-stripe-thickness-value">0.55</span>
+                                    </label>
+                                    <input type="range" id="solid-stripe-thickness" min="0.2" max="0.8" value="0.55" step="0.01">
+                                </div>
+                                <div class="ball-slider-group">
+                                    <label for="solid-circle-radius">
+                                        Circle Radius
+                                        <span class="slider-value" id="solid-circle-radius-value">0.66</span>
+                                    </label>
+                                    <input type="range" id="solid-circle-radius" min="0.5" max="1.0" value="0.66" step="0.01">
+                                </div>
+                            </div>
                         </div>
 
                         <!-- Stripe mode options -->
@@ -249,9 +297,9 @@
                             <div class="ball-slider-group">
                                 <label for="circle-radius">
                                     Circle Radius
-                                    <span class="slider-value" id="circle-radius-value">0.50</span>
+                                    <span class="slider-value" id="circle-radius-value">0.66</span>
                                 </label>
-                                <input type="range" id="circle-radius" min="0.3" max="0.7" value="0.5" step="0.01">
+                                <input type="range" id="circle-radius" min="0.5" max="1.0" value="0.66" step="0.01">
                             </div>
                         </div>
                     </div>

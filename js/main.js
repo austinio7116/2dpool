@@ -152,23 +152,9 @@ class PoolGame {
         // For snooker mode, force snooker ball set
         if (mode === GameMode.SNOOKER) {
             // Snooker uses its own ball configuration
-        } else if (selectedBallSet && !selectedBallSet.isPredefined) {
-            // Custom ball set selected
-            options.customBallSet = selectedBallSet;
         } else if (selectedBallSet) {
-            // Predefined ball set
-            if (selectedBallSet.id === 'uk-red-yellow') {
-                options.colorScheme = 'red-yellow';
-                if (mode === GameMode.EIGHT_BALL) {
-                    // Switch to UK 8-ball mode for UK ball sets
-                    mode = GameMode.UK_EIGHT_BALL;
-                }
-            } else if (selectedBallSet.id === 'uk-blue-yellow') {
-                options.colorScheme = 'blue-yellow';
-                if (mode === GameMode.EIGHT_BALL) {
-                    mode = GameMode.UK_EIGHT_BALL;
-                }
-            }
+            // Apply the selected ball set regardless of game mode
+            options.customBallSet = selectedBallSet;
         }
 
         // Store ball set ID for save/resume
@@ -178,8 +164,8 @@ class PoolGame {
         this.lastGameOptions = options;  // Store for play again
         this.lastGameMode = mode; // Store mode for play again
 
-        // Apply custom ball colors if a custom set is selected
-        if (selectedBallSet && !selectedBallSet.isPredefined && mode !== GameMode.SNOOKER) {
+        // Apply selected ball set appearance (works for both custom and predefined sets)
+        if (selectedBallSet && mode !== GameMode.SNOOKER) {
             this.applyCustomBallSet(selectedBallSet);
         }
 
@@ -214,7 +200,7 @@ class PoolGame {
             ball.numberBorderColor = config.numberBorderColor || null;
             ball.numberCircleRadialLines = config.numberCircleRadialLines || 0;
             ball.stripeThickness = config.stripeThickness ?? 0.55;
-            ball.numberCircleRadius = config.numberCircleRadius ?? 0.5;
+            ball.numberCircleRadius = config.numberCircleRadius ?? 0.66;
         }
 
         // Clear ball renderer cache and pre-generate frames for custom ball set

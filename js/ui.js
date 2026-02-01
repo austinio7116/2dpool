@@ -116,6 +116,15 @@ export class UI {
         this.color8Ball = document.getElementById('color-8ball');
         this.striped8BallCheckbox = document.getElementById('striped-8ball');
         this.striped8BallStripeCheckbox = document.getElementById('striped-8ball-stripe');
+        this.solidNumberStyling = document.getElementById('solid-number-styling');
+        this.solidNumberBorderCheckbox = document.getElementById('solid-number-border');
+        this.solidBorderColorField = document.getElementById('solid-border-color-field');
+        this.solidRadialLinesSlider = document.getElementById('solid-radial-lines');
+        this.solidRadialLinesValue = document.getElementById('solid-radial-lines-value');
+        this.solidStripeThicknessSlider = document.getElementById('solid-stripe-thickness');
+        this.solidStripeThicknessValue = document.getElementById('solid-stripe-thickness-value');
+        this.solidCircleRadiusSlider = document.getElementById('solid-circle-radius');
+        this.solidCircleRadiusValue = document.getElementById('solid-circle-radius-value');
 
         // Stripe mode elements
         this.stripeModeOptions = document.getElementById('stripe-mode-options');
@@ -427,8 +436,32 @@ export class UI {
         this.colorGroup1?.addEventListener('input', () => this.updateCreatorPreview());
         this.colorGroup2?.addEventListener('input', () => this.updateCreatorPreview());
         this.color8Ball?.addEventListener('input', () => this.updateCreatorPreview());
-        this.striped8BallCheckbox?.addEventListener('change', () => this.updateCreatorPreview());
+        this.striped8BallCheckbox?.addEventListener('change', () => {
+            this.updateCreatorPreview();
+        });
         this.striped8BallStripeCheckbox?.addEventListener('change', () => this.updateCreatorPreview());
+
+        // Solid mode number styling options
+        this.solidNumberBorderCheckbox?.addEventListener('change', () => {
+            const borderEnabled = this.solidNumberBorderCheckbox.checked;
+            this.solidBorderColorField?.classList.toggle('hidden', !borderEnabled);
+            if (this.solidRadialLinesSlider) {
+                this.solidRadialLinesSlider.disabled = !borderEnabled;
+            }
+            this.updateCreatorPreview();
+        });
+        this.solidRadialLinesSlider?.addEventListener('input', (e) => {
+            if (this.solidRadialLinesValue) this.solidRadialLinesValue.textContent = e.target.value;
+            this.updateCreatorPreview();
+        });
+        this.solidStripeThicknessSlider?.addEventListener('input', (e) => {
+            if (this.solidStripeThicknessValue) this.solidStripeThicknessValue.textContent = parseFloat(e.target.value).toFixed(2);
+            this.updateCreatorPreview();
+        });
+        this.solidCircleRadiusSlider?.addEventListener('input', (e) => {
+            if (this.solidCircleRadiusValue) this.solidCircleRadiusValue.textContent = parseFloat(e.target.value).toFixed(2);
+            this.updateCreatorPreview();
+        });
 
         // Stripe mode color picker changes
         this.colorSolids?.addEventListener('input', () => this.updateCreatorPreview());
@@ -679,6 +712,8 @@ export class UI {
         const config = this.ballSetManager.getBallConfig(ballSet, ballNumber);
         if (!config) return null;
 
+        if (!this.ballRenderer) return null;
+
         const canvas = document.createElement('canvas');
         canvas.width = size;
         canvas.height = size;
@@ -696,23 +731,28 @@ export class UI {
             numberCircleRadius: config.numberCircleRadius
         };
 
-        const frame = this.ballRenderer.renderBallFrame(
-            ballNumber,
-            config.color,
-            config.isStripe,
-            0, // rotation = 0 for static preview
-            config.isUKBall,
-            ballNumber === 8,
-            config.isSnookerBall,
-            renderOptions
-        );
+        try {
+            const frame = this.ballRenderer.renderBallFrame(
+                ballNumber,
+                config.color,
+                config.isStripe,
+                0, // rotation = 0 for static preview
+                config.isUKBall,
+                ballNumber === 8,
+                config.isSnookerBall,
+                renderOptions
+            );
 
-        const ctx = canvas.getContext('2d');
-        ctx.imageSmoothingEnabled = true;
-        ctx.imageSmoothingQuality = 'high';
-        ctx.drawImage(frame, 0, 0, size, size);
+            const ctx = canvas.getContext('2d');
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
+            ctx.drawImage(frame, 0, 0, size, size);
 
-        return canvas;
+            return canvas;
+        } catch (e) {
+            console.error('Failed to render ball preview:', e, {ballNumber, config});
+            return null;
+        }
     }
 
     // Show table selection modal
@@ -941,7 +981,32 @@ export class UI {
             this.setSwatchColor('group1', set.colors?.group1 || '#CC0000');
             this.setSwatchColor('group2', set.colors?.group2 || '#FFD700');
             this.setSwatchColor('8ball', set.colors?.eightBall || '#000000');
-            if (this.striped8BallCheckbox) this.striped8BallCheckbox.checked = set.options?.striped8Ball || false;
+            if (this.striped8BallCheckbox) {
+                this.striped8BallCheckbox.checked = set.options?.striped8Ball || false;
+            }
+
+            // Load number styling for striped 8-ball
+            this.setSwatchColor('solid-stripe-bg', set.options?.stripeBackgroundColor || '#FFFFFF');
+            this.setSwatchColor('solid-number-circle', set.options?.numberCircleColor || '#FFFFFF');
+            this.setSwatchColor('solid-number-text', set.options?.numberTextColor || '#000000');
+            if (this.solidNumberBorderCheckbox) this.solidNumberBorderCheckbox.checked = set.options?.numberBorder || false;
+            this.setSwatchColor('solid-number-border', set.options?.numberBorderColor || '#000000');
+            this.solidBorderColorField?.classList.toggle('hidden', !set.options?.numberBorder);
+
+            // Load sliders for solid mode
+            if (this.solidRadialLinesSlider) {
+                this.solidRadialLinesSlider.value = set.options?.numberCircleRadialLines || 0;
+                if (this.solidRadialLinesValue) this.solidRadialLinesValue.textContent = set.options?.numberCircleRadialLines || 0;
+                this.solidRadialLinesSlider.disabled = !set.options?.numberBorder;
+            }
+            if (this.solidStripeThicknessSlider) {
+                this.solidStripeThicknessSlider.value = set.options?.stripeThickness ?? 0.55;
+                if (this.solidStripeThicknessValue) this.solidStripeThicknessValue.textContent = (set.options?.stripeThickness ?? 0.55).toFixed(2);
+            }
+            if (this.solidCircleRadiusSlider) {
+                this.solidCircleRadiusSlider.value = set.options?.numberCircleRadius ?? 0.66;
+                if (this.solidCircleRadiusValue) this.solidCircleRadiusValue.textContent = (set.options?.numberCircleRadius ?? 0.66).toFixed(2);
+            }
         } else {
             // Load stripe mode values
             this.setSwatchColor('solids', set.colors?.group1 || '#FFD700');
@@ -1023,6 +1088,27 @@ export class UI {
         this.setSwatchColor('group2', '#FFD700');
         this.setSwatchColor('8ball', '#000000');
         if (this.striped8BallCheckbox) this.striped8BallCheckbox.checked = false;
+
+        // Reset solid number styling
+        this.setSwatchColor('solid-stripe-bg', '#FFFFFF');
+        this.setSwatchColor('solid-number-circle', '#FFFFFF');
+        this.setSwatchColor('solid-number-text', '#000000');
+        if (this.solidNumberBorderCheckbox) this.solidNumberBorderCheckbox.checked = false;
+        this.setSwatchColor('solid-number-border', '#000000');
+        this.solidBorderColorField?.classList.add('hidden');
+        if (this.solidRadialLinesSlider) {
+            this.solidRadialLinesSlider.value = 0;
+            if (this.solidRadialLinesValue) this.solidRadialLinesValue.textContent = '0';
+            this.solidRadialLinesSlider.disabled = true;
+        }
+        if (this.solidStripeThicknessSlider) {
+            this.solidStripeThicknessSlider.value = 0.55;
+            if (this.solidStripeThicknessValue) this.solidStripeThicknessValue.textContent = '0.55';
+        }
+        if (this.solidCircleRadiusSlider) {
+            this.solidCircleRadiusSlider.value = 0.66;
+            if (this.solidCircleRadiusValue) this.solidCircleRadiusValue.textContent = '0.66';
+        }
 
         // Reset stripe mode fields
         this.setSwatchColor('solids', '#FFD700');
@@ -1243,7 +1329,15 @@ export class UI {
                 options: {
                     hasStripes: false,
                     showNumbers: false,  // Solid balls have no numbers
-                    striped8Ball: this.striped8BallCheckbox?.checked || false
+                    striped8Ball: this.striped8BallCheckbox?.checked || false,
+                    stripeBackgroundColor: this.getSwatchColor('solid-stripe-bg'),
+                    numberCircleColor: this.getSwatchColor('solid-number-circle'),
+                    numberTextColor: this.getSwatchColor('solid-number-text'),
+                    numberBorder: this.solidNumberBorderCheckbox?.checked || false,
+                    numberBorderColor: this.getSwatchColor('solid-number-border'),
+                    numberCircleRadialLines: parseInt(this.solidRadialLinesSlider?.value || '0'),
+                    stripeThickness: parseFloat(this.solidStripeThicknessSlider?.value || '0.55'),
+                    numberCircleRadius: parseFloat(this.solidCircleRadiusSlider?.value || '0.80')
                 }
             };
         } else {
@@ -1324,7 +1418,15 @@ export class UI {
                 },
                 options: {
                     showNumbers: false,
-                    striped8Ball: this.striped8BallCheckbox?.checked || false
+                    striped8Ball: this.striped8BallCheckbox?.checked || false,
+                    stripeBackgroundColor: this.getSwatchColor('solid-stripe-bg'),
+                    numberCircleColor: this.getSwatchColor('solid-number-circle'),
+                    numberTextColor: this.getSwatchColor('solid-number-text'),
+                    numberBorder: this.solidNumberBorderCheckbox?.checked || false,
+                    numberBorderColor: this.getSwatchColor('solid-number-border'),
+                    numberCircleRadialLines: parseInt(this.solidRadialLinesSlider?.value || '0'),
+                    stripeThickness: parseFloat(this.solidStripeThicknessSlider?.value || '0.55'),
+                    numberCircleRadius: parseFloat(this.solidCircleRadiusSlider?.value || '0.80')
                 }
             };
         } else {
@@ -1355,15 +1457,16 @@ export class UI {
             if (this.creatorAdvancedMode) {
                 setData.advancedMode = true;
                 setData.ballColors = {};
-                document.querySelectorAll('#advanced-color-pickers input[type="color"]').forEach(input => {
-                    const pairNum = parseInt(input.dataset.pair);
+                document.querySelectorAll('#advanced-color-pickers .color-swatch').forEach(swatch => {
+                    const pairNum = parseInt(swatch.dataset.pair);
                     if (!isNaN(pairNum)) {
+                        const color = swatch.dataset.color || this.getSwatchColor(`pair-${pairNum}`);
                         if (pairNum === 8) {
-                            setData.ballColors[8] = input.value;
+                            setData.ballColors[8] = color;
                         } else {
                             // Paired: 1&9, 2&10, etc.
-                            setData.ballColors[pairNum] = input.value;
-                            setData.ballColors[pairNum + 8] = input.value;
+                            setData.ballColors[pairNum] = color;
+                            setData.ballColors[pairNum + 8] = color;
                         }
                     }
                 });
@@ -2286,8 +2389,11 @@ export class UI {
             const p1BallNum = p1GroupType === 'solid' ? 1 : 9;
             const p2BallNum = p2GroupType === 'solid' ? 1 : 9;
 
-            const p1Canvas = this.renderBallPreviewCanvas(p1BallNum, this.selectedBallSet, 18);
-            const p2Canvas = this.renderBallPreviewCanvas(p2BallNum, this.selectedBallSet, 18);
+            // Ensure we have a ball set to render with
+            const ballSet = this.selectedBallSet || PREDEFINED_BALL_SETS[0];
+
+            const p1Canvas = this.renderBallPreviewCanvas(p1BallNum, ballSet, 18);
+            const p2Canvas = this.renderBallPreviewCanvas(p2BallNum, ballSet, 18);
 
             if (p1Canvas) this.p1BallGroup.appendChild(p1Canvas);
             if (p2Canvas) this.p2BallGroup.appendChild(p2Canvas);
@@ -2296,8 +2402,11 @@ export class UI {
             const p1BallNum = p1GroupType === 'group1' ? 1 : 9;
             const p2BallNum = p2GroupType === 'group1' ? 1 : 9;
 
-            const p1Canvas = this.renderBallPreviewCanvas(p1BallNum, this.selectedBallSet, 18);
-            const p2Canvas = this.renderBallPreviewCanvas(p2BallNum, this.selectedBallSet, 18);
+            // Ensure we have a ball set to render with
+            const ballSet = this.selectedBallSet || PREDEFINED_BALL_SETS[0];
+
+            const p1Canvas = this.renderBallPreviewCanvas(p1BallNum, ballSet, 18);
+            const p2Canvas = this.renderBallPreviewCanvas(p2BallNum, ballSet, 18);
 
             if (p1Canvas) this.p1BallGroup.appendChild(p1Canvas);
             if (p2Canvas) this.p2BallGroup.appendChild(p2Canvas);

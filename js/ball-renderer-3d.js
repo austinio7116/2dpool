@@ -113,7 +113,7 @@ export class BallRenderer3D {
             const hasCustomOptions = ball.numberCircleColor || ball.numberTextColor ||
                                      ball.numberBorder || ball.stripeBackgroundColor ||
                                      ball.showNumber === false || ball.numberCircleRadialLines > 0 ||
-                                     ball.stripeThickness !== 0.55 || ball.numberCircleRadius !== 0.5;
+                                     ball.stripeThickness !== 0.55 || ball.numberCircleRadius !== 0.66;
 
             if (hasCustomOptions) {
                 const options = {
@@ -157,6 +157,8 @@ export class BallRenderer3D {
         const ivoryDefault = '#FFFEF0';
         const numberCircleRgb = this.hexToRgb(numberOptions.numberCircleColor || ivoryDefault);
         const stripeBackgroundRgb = this.hexToRgb(numberOptions.stripeBackgroundColor || ivoryDefault);
+        const numberTextRgb = this.hexToRgb(numberOptions.numberTextColor || '#000000');
+        const numberBorderRgb = this.hexToRgb(numberOptions.numberBorderColor || '#000000');
         const radius = this.sphereRadius;
 
         // Stripe is a band around the equator - latitude based
@@ -164,14 +166,23 @@ export class BallRenderer3D {
         const stripeLatitude = numberOptions.stripeThickness ?? 0.55; // Stripe covers from equator toward poles
 
         // Number spot - angular radius on sphere surface
-        const numberSpotAngle = numberOptions.numberCircleRadius ?? 0.5; // Configurable circle size
+        const numberSpotAngle = numberOptions.numberCircleRadius ?? 0.66; // Configurable circle size (larger default)
+
+        // Determine if this ball should show a number
+        const showNumber = numberOptions.showNumber !== false && ballNumber !== 0 && (!isUKBall || isEightBall) && !isSnookerBall;
+
+        // Pre-render the number text as a texture map
+        let textTexture = null;
+        let textTextureSize = 0;
+        if (showNumber) {
+            const textureResult = this.createTextTexture(ballNumber, numberOptions);
+            textTexture = textureResult.imageData;
+            textTextureSize = textureResult.size;
+        }
 
         // Precompute rotation
         const cosR = Math.cos(rotation);
         const sinR = Math.sin(rotation);
-
-        // Determine if this ball should show a number
-        const showNumber = numberOptions.showNumber !== false && ballNumber !== 0 && (!isUKBall || isEightBall) && !isSnookerBall;
 
         for (let y = 0; y < size; y++) {
             for (let x = 0; x < size; x++) {
@@ -221,11 +232,22 @@ export class BallRenderer3D {
                     const latitude = Math.abs(localY);
                     const inStripe = latitude < stripeLatitude;
 
+                    // Check if we should sample from text texture
+                    let textColor = null;
+                    if (showNumber && textTexture && inNumberSpot && numberVisible) {
+                        textColor = this.sampleTextTexture(
+                            localX, localY, localZ,
+                            textTexture, textTextureSize,
+                            numberSpotAngle, numberOptions
+                        );
+                    }
+
                     if (isStripe) {
-                        if (showNumber && inNumberSpot && numberVisible) {
-                            r = numberCircleRgb.r;
-                            g = numberCircleRgb.g;
-                            b = numberCircleRgb.b;
+                        if (textColor) {
+                            // Use color from text texture (text, border, or circle background)
+                            r = textColor.r;
+                            g = textColor.g;
+                            b = textColor.b;
                         } else if (inStripe) {
                             r = rgb.r;
                             g = rgb.g;
@@ -238,10 +260,11 @@ export class BallRenderer3D {
                         }
                     } else {
                         // Solid ball
-                        if (showNumber && inNumberSpot && numberVisible) {
-                            r = numberCircleRgb.r;
-                            g = numberCircleRgb.g;
-                            b = numberCircleRgb.b;
+                        if (textColor) {
+                            // Use color from text texture (text, border, or circle background)
+                            r = textColor.r;
+                            g = textColor.g;
+                            b = textColor.b;
                         } else {
                             r = rgb.r;
                             g = rgb.g;
@@ -270,112 +293,130 @@ export class BallRenderer3D {
 
         ctx.putImageData(imageData, 0, 0);
 
-        // Draw the number text on top of the number spot
-        if (showNumber) {
-            this.drawNumber(ctx, ballNumber, size, rotation, radius, numberOptions);
-            // Draw radial lines if configured and border is enabled
-            if (numberOptions.numberBorder && numberOptions.numberCircleRadialLines > 0) {
-                this.drawRadialLines(ctx, size, rotation, radius, numberOptions);
-            }
-        }
-
         return canvas;
     }
 
-    // Draw the number at 3D rotated position
-    drawNumber(ctx, number, size, rotation, radius, options = {}) {
-        const centerX = size / 2;
-        const centerY = size / 2;
+    // Create a texture map for the number text, border, and radial lines
+    createTextTexture(number, options = {}) {
+        // Create a high-resolution texture for the number
+        const textureSize = 512; // High resolution for quality
+        const canvas = document.createElement('canvas');
+        canvas.width = textureSize;
+        canvas.height = textureSize;
+        const ctx = canvas.getContext('2d');
 
-        // Number is at (0, 0, 1) in local coords
-        // After rotation around X axis: (0, sin(R), cos(R))
-        const spotY = Math.sin(rotation) * radius * 0.85;
-        const spotZ = Math.cos(rotation);
+        const centerX = textureSize / 2;
+        const centerY = textureSize / 2;
+        const circleRadius = textureSize * 0.38; // Slightly larger circle
 
-        // Only draw if number is on front of ball (facing camera)
-        if (spotZ > 0.1) {
-            const screenX = centerX;
-            const screenY = centerY + spotY;
+        // Fill with transparent
+        ctx.clearRect(0, 0, textureSize, textureSize);
 
-            // Scale based on Z (perspective effect)
-            const scale = 0.4 + spotZ * 0.6;
-            const fontSize = size * 0.42 * scale; // Readable numbers
-            const alpha = Math.pow(spotZ, 0.5); // Fade near edges
-            const circleRadius = size * 0.22 * scale;
-
-            ctx.save();
-            ctx.globalAlpha = alpha;
-
-            // Draw border around number circle if enabled
-            if (options.numberBorder) {
-                ctx.strokeStyle = options.numberBorderColor || '#000000';
-                ctx.lineWidth = this.renderScale * 1.5;
-                ctx.beginPath();
-                ctx.arc(screenX, screenY, circleRadius + this.renderScale, 0, Math.PI * 2);
-                ctx.stroke();
-            }
-
-            // Draw number text
-            ctx.fillStyle = options.numberTextColor || '#000000';
-            ctx.font = `bold ${fontSize}px Arial`;
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            // Offset down slightly for better centering
-            ctx.fillText(number.toString(), screenX, screenY + this.renderScale);
-            ctx.restore();
+        // Draw border FIRST if enabled (so it's underneath)
+        if (options.numberBorder) {
+            const borderWidth = 32; // Even thicker border
+            ctx.strokeStyle = options.numberBorderColor || '#000000';
+            ctx.lineWidth = borderWidth;
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, circleRadius + borderWidth / 2, 0, Math.PI * 2);
+            ctx.stroke();
         }
-    }
 
-    // Draw radial lines inside the number circle
-    drawRadialLines(ctx, size, rotation, radius, options = {}) {
-        const centerX = size / 2;
-        const centerY = size / 2;
+        // Draw circle background (on top of border)
+        ctx.fillStyle = options.numberCircleColor || '#FFFFFF';
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, circleRadius, 0, Math.PI * 2);
+        ctx.fill();
 
-        // Number circle position after rotation
-        const spotY = Math.sin(rotation) * radius * 0.85;
-        const spotZ = Math.cos(rotation);
-
-        // Only draw if number circle is on front of ball (facing camera)
-        if (spotZ > 0.1) {
-            const screenX = centerX;
-            const screenY = centerY + spotY;
-
-            // Scale based on Z (perspective effect)
-            const scale = 0.4 + spotZ * 0.6;
-            const alpha = Math.pow(spotZ, 0.5); // Fade near edges
-            const circleRadius = size * 0.22 * scale;
-
-            // Radial line length is 1/5th the circle radius
+        // Draw radial lines if enabled (on top of circle)
+        if (options.numberBorder && options.numberCircleRadialLines > 0) {
+            const lineCount = options.numberCircleRadialLines;
             const lineLength = circleRadius / 5;
-            const lineCount = options.numberCircleRadialLines || 0;
 
-            ctx.save();
-            ctx.globalAlpha = alpha;
+            ctx.strokeStyle = options.numberBorderColor || '#000000';
+            ctx.lineWidth = 20; // Even thicker radial lines
+            ctx.lineCap = 'round';
 
-            // Use the border color for the radial lines
-            const borderColor = options.numberBorderColor || '#000000';
-            ctx.strokeStyle = borderColor;
-            ctx.lineWidth = this.renderScale * 1.5;
-
-            // Draw radial lines evenly distributed around the circle
             for (let i = 0; i < lineCount; i++) {
                 const angle = (i / lineCount) * Math.PI * 2;
-
-                // Start from edge of circle, point inward
-                const outerX = screenX + Math.cos(angle) * circleRadius;
-                const outerY = screenY + Math.sin(angle) * circleRadius;
-                const innerX = screenX + Math.cos(angle) * (circleRadius - lineLength);
-                const innerY = screenY + Math.sin(angle) * (circleRadius - lineLength);
+                const outerX = centerX + Math.cos(angle) * circleRadius;
+                const outerY = centerY + Math.sin(angle) * circleRadius;
+                const innerX = centerX + Math.cos(angle) * (circleRadius - lineLength);
+                const innerY = centerY + Math.sin(angle) * (circleRadius - lineLength);
 
                 ctx.beginPath();
                 ctx.moveTo(outerX, outerY);
                 ctx.lineTo(innerX, innerY);
                 ctx.stroke();
             }
-
-            ctx.restore();
         }
+
+        // Draw number text (on top of everything)
+        ctx.fillStyle = options.numberTextColor || '#000000';
+        ctx.font = `bold ${textureSize * 0.50}px Arial`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(number.toString(), centerX, centerY + textureSize * 0.02);
+
+        // Get image data for sampling
+        const imageData = ctx.getImageData(0, 0, textureSize, textureSize);
+
+        return {
+            imageData: imageData.data,
+            size: textureSize
+        };
     }
+
+    // Sample color from text texture based on sphere position
+    sampleTextTexture(localX, localY, localZ, textureData, textureSize, spotAngle, options) {
+        // Map 3D position on sphere to 2D texture coordinates
+        // The number spot is centered at (0, 0, 1) in local coords
+
+        // Calculate position relative to spot center
+        const dx = localX;
+        const dy = localY;
+
+        // Calculate angular distance to determine radius on texture
+        const dotProduct = localZ;
+        const angleFromCenter = Math.acos(Math.max(-1, Math.min(1, dotProduct)));
+
+        // If outside the number spot, return null
+        if (angleFromCenter >= spotAngle) return null;
+
+        // Map angle to texture radius (0 at center, 1 at edge of spot)
+        const normalizedRadius = angleFromCenter / spotAngle;
+
+        // Calculate texture coordinates
+        // Use atan2 to get angle around the spot
+        const textureAngle = Math.atan2(dy, dx);
+
+        // Convert polar to cartesian on texture
+        // Use 0.52 to include border area (circle is 0.38 + thick border)
+        const texX = 0.5 + normalizedRadius * Math.cos(textureAngle) * 0.52;
+        const texY = 0.5 + normalizedRadius * Math.sin(textureAngle) * 0.52;
+
+        // Sample from texture
+        const pixelX = Math.floor(texX * textureSize);
+        const pixelY = Math.floor(texY * textureSize);
+
+        if (pixelX < 0 || pixelX >= textureSize || pixelY < 0 || pixelY >= textureSize) {
+            return null;
+        }
+
+        const idx = (pixelY * textureSize + pixelX) * 4;
+        const alpha = textureData[idx + 3];
+
+        // If transparent, return null (use ball color)
+        if (alpha < 128) return null;
+
+        return {
+            r: textureData[idx],
+            g: textureData[idx + 1],
+            b: textureData[idx + 2]
+        };
+    }
+
+    // Old 2D overlay methods removed - text is now properly rendered onto the 3D sphere
 
     calculateSpecular(normal) {
         // Primary specular highlight from main light source
@@ -451,7 +492,7 @@ export class BallRenderer3D {
         const hasCustomOptions = ball.numberCircleColor || ball.numberTextColor ||
                                  ball.numberBorder || ball.stripeBackgroundColor ||
                                  ball.showNumber === false || ball.numberCircleRadialLines > 0 ||
-                                 ball.stripeThickness !== 0.55 || ball.numberCircleRadius !== 0.5;
+                                 ball.stripeThickness !== 0.55 || ball.numberCircleRadius !== 0.66;
 
         // Build options object for custom balls
         const options = hasCustomOptions ? {
@@ -463,7 +504,7 @@ export class BallRenderer3D {
             numberBorderColor: ball.numberBorderColor,
             numberCircleRadialLines: ball.numberCircleRadialLines || 0,
             stripeThickness: ball.stripeThickness ?? 0.55,
-            numberCircleRadius: ball.numberCircleRadius ?? 0.5
+            numberCircleRadius: ball.numberCircleRadius ?? 0.66
         } : null;
 
         // Use cached frames (works for both standard and custom balls now)

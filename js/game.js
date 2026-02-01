@@ -1,7 +1,7 @@
 // Game logic - manages game state, rules, turns, and win conditions
 
 import { Vec2, Constants } from './utils.js';
-import { Ball, createBallSet, createUKBallSet, createSnookerBallSet, createFullSnookerBallSet, rackBalls, positionSnookerBalls, positionFullSnookerBalls, RackPatterns } from './ball.js';
+import { Ball, createBallSet, createSnookerBallSet, createFullSnookerBallSet, rackBalls, positionSnookerBalls, positionFullSnookerBalls, RackPatterns } from './ball.js';
 
 export const GameMode = {
     EIGHT_BALL: '8ball',
@@ -143,9 +143,7 @@ export class Game {
         const tableConfig = Constants.TABLE_CONFIGS ? Constants.TABLE_CONFIGS[this.tableStyle] : null;
         const tableBallRadius = (tableConfig && tableConfig.ballRadius) ? tableConfig.ballRadius : null;
 
-        if (mode === GameMode.UK_EIGHT_BALL) {
-            this.balls = createUKBallSet(this.ukColorScheme);
-        } else if (mode === GameMode.SNOOKER) {
+        if (mode === GameMode.SNOOKER) {
             // Check if using full-size snooker table (table style 9)
             if (tableConfig && tableConfig.isSnooker && tableConfig.redCount === 15) {
                 this.balls = createFullSnookerBallSet(tableConfig.ballRadius);
@@ -153,6 +151,8 @@ export class Game {
                 this.balls = createSnookerBallSet();
             }
         } else {
+            // All 8-ball and 9-ball modes use standard ball set
+            // (custom ball sets are applied later in main.js)
             this.balls = createBallSet();
         }
 
@@ -804,15 +804,14 @@ export class Game {
         const tableConfig = Constants.TABLE_CONFIGS ? Constants.TABLE_CONFIGS[this.tableStyle] : null;
         const tableBallRadius = (tableConfig && tableConfig.ballRadius) ? tableConfig.ballRadius : null;
 
-        if (this.mode === GameMode.UK_EIGHT_BALL) {
-            this.balls = createUKBallSet(this.ukColorScheme);
-        } else if (this.mode === GameMode.SNOOKER) {
+        if (this.mode === GameMode.SNOOKER) {
             if (tableConfig && tableConfig.isSnooker && tableConfig.redCount === 15) {
                 this.balls = createFullSnookerBallSet(tableConfig.ballRadius);
             } else {
                 this.balls = createSnookerBallSet();
             }
         } else {
+            // All 8-ball and 9-ball modes use standard ball set
             this.balls = createBallSet();
         }
 

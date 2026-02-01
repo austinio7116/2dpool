@@ -1528,6 +1528,12 @@ export class UI {
             // If that is missing, we pass empty array [] to prevent the fallback loop from showing ghost balls
             const remaining = Array.isArray(info.remainingBalls) ? info.remainingBalls : [];
             this.update9BallHUD(info.lowestBall, remaining);
+            this.hideSnookerPointsInfo();
+        } else if (info.mode === GameMode.SNOOKER) {
+            // Show snooker points remaining info
+            this.updateSnookerPointsInfo(info);
+        } else {
+            this.hideSnookerPointsInfo();
         }
 
         // Snooker HUD is now handled in updateUnifiedHUD
@@ -1587,6 +1593,106 @@ export class UI {
                 this.snookerTargetDisplay.innerHTML = `<span class="target-dot target-${info.snookerTarget}"></span> ${colorName}`;
                 this.snookerTargetDisplay.className = `snooker-target-${info.snookerTarget}`;
             }
+        }
+    }
+
+    // Update snooker points remaining info (bottom right at 75%)
+    updateSnookerPointsInfo(info) {
+        if (!this.ballGroups) return;
+
+        // Position at bottom right, centered at 75% (same as 9-ball)
+        this.ballGroups.innerHTML = '';
+        this.ballGroups.className = 'ball-groups-snooker-info';
+        this.ballGroups.style.position = 'absolute';
+        this.ballGroups.style.bottom = '8px';
+        this.ballGroups.style.top = 'auto';
+        this.ballGroups.style.left = '75%';
+        this.ballGroups.style.right = 'auto';
+        this.ballGroups.style.transform = 'translateX(-50%)';
+        this.ballGroups.style.display = 'flex';
+        this.ballGroups.style.flexDirection = 'row';
+        this.ballGroups.style.alignItems = 'center';
+        this.ballGroups.style.gap = '10px';
+        this.ballGroups.style.padding = '4px 12px';
+        this.ballGroups.style.background = 'rgba(0, 0, 0, 0.75)';
+        this.ballGroups.style.borderRadius = '4px';
+        this.ballGroups.style.border = '1px solid rgba(255, 215, 0, 0.3)';
+        this.ballGroups.style.fontSize = '0.75rem';
+        this.ballGroups.style.color = '#fff';
+
+        // Remaining points indicator
+        const remainingDiv = document.createElement('div');
+        remainingDiv.style.display = 'flex';
+        remainingDiv.style.alignItems = 'center';
+        remainingDiv.style.gap = '4px';
+
+        const remainingLabel = document.createElement('span');
+        remainingLabel.textContent = 'Available:';
+        remainingLabel.style.color = '#aaa';
+        remainingLabel.style.fontSize = '0.7rem';
+
+        const remainingValue = document.createElement('span');
+        remainingValue.textContent = info.remainingPoints || 0;
+        remainingValue.style.color = '#ffd700';
+        remainingValue.style.fontWeight = 'bold';
+
+        remainingDiv.appendChild(remainingLabel);
+        remainingDiv.appendChild(remainingValue);
+
+        this.ballGroups.appendChild(remainingDiv);
+
+        // Calculate lead/deficit
+        const p1Score = info.player1Score || 0;
+        const p2Score = info.player2Score || 0;
+        const currentPlayer = info.currentPlayer;
+
+        let leadDeficit = 0;
+        let isAhead = false;
+
+        if (currentPlayer === 1) {
+            leadDeficit = p1Score - p2Score;
+        } else {
+            leadDeficit = p2Score - p1Score;
+        }
+
+        isAhead = leadDeficit > 0;
+
+        // Show lead (green) or deficit (red) if not tied
+        if (leadDeficit !== 0) {
+            const separator = document.createElement('span');
+            separator.textContent = '|';
+            separator.style.color = '#444';
+
+            const statusDiv = document.createElement('div');
+            statusDiv.style.display = 'flex';
+            statusDiv.style.alignItems = 'center';
+            statusDiv.style.gap = '4px';
+
+            const statusLabel = document.createElement('span');
+            statusLabel.textContent = isAhead ? 'Ahead:' : 'Behind:';
+            statusLabel.style.color = '#aaa';
+            statusLabel.style.fontSize = '0.7rem';
+
+            const statusValue = document.createElement('span');
+            statusValue.textContent = Math.abs(leadDeficit);
+            statusValue.style.color = isAhead ? '#00ff00' : '#ff6b6b';
+            statusValue.style.fontWeight = 'bold';
+
+            statusDiv.appendChild(statusLabel);
+            statusDiv.appendChild(statusValue);
+
+            this.ballGroups.appendChild(separator);
+            this.ballGroups.appendChild(statusDiv);
+        }
+    }
+
+    // Hide snooker points info
+    hideSnookerPointsInfo() {
+        if (!this.ballGroups) return;
+        if (this.ballGroups.className === 'ball-groups-snooker-info') {
+            this.ballGroups.innerHTML = '';
+            this.ballGroups.className = '';
+            this.ballGroups.style.cssText = '';
         }
     }
 

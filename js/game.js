@@ -935,6 +935,8 @@ export class Game {
             info.highestBreak = this.highestBreak;
             info.snookerTarget = this.snookerTarget;
             info.colorsPhase = this.colorsPhase;
+            info.remainingPoints = this.getSnookerRemainingPoints();
+            info.pointsDeficit = this.getSnookerPointsDeficit();
         }
 
         return info;
@@ -1365,6 +1367,50 @@ export class Game {
         this.endGame();
     }
 
+    // Calculate remaining points on the table
+    getSnookerRemainingPoints() {
+        const redsLeft = this.getActualRedsRemaining();
+
+        if (!this.colorsPhase && redsLeft > 0) {
+            // Reds phase: each red can be followed by black (max)
+            let points = redsLeft * 8; // reds + blacks
+
+            // Add all colors (still on table)
+            const colorValues = { 'yellow': 2, 'green': 3, 'brown': 4, 'blue': 5, 'pink': 6, 'black': 7 };
+            for (const ball of this.balls) {
+                if (ball.isColor && !ball.pocketed && colorValues[ball.colorName]) {
+                    points += colorValues[ball.colorName];
+                }
+            }
+
+            return points;
+        } else {
+            // Colors phase: just sum remaining colors in sequence
+            let points = 0;
+            const colorValues = { 'yellow': 2, 'green': 3, 'brown': 4, 'blue': 5, 'pink': 6, 'black': 7 };
+
+            for (const ball of this.balls) {
+                if (ball.isColor && !ball.pocketed && colorValues[ball.colorName]) {
+                    points += colorValues[ball.colorName];
+                }
+            }
+
+            return points;
+        }
+    }
+
+    // Get points deficit for current player
+    getSnookerPointsDeficit() {
+        const p1Score = this.player1Score;
+        const p2Score = this.player2Score;
+
+        if (this.currentPlayer === 1) {
+            return Math.max(0, p2Score - p1Score);
+        } else {
+            return Math.max(0, p1Score - p2Score);
+        }
+    }
+
     // Get snooker game info for UI
     getSnookerInfo() {
         return {
@@ -1374,7 +1420,9 @@ export class Game {
             highestBreak: this.highestBreak,
             snookerTarget: this.snookerTarget,
             redsRemaining: this.getActualRedsRemaining(),
-            colorsPhase: this.colorsPhase
+            colorsPhase: this.colorsPhase,
+            remainingPoints: this.getSnookerRemainingPoints(),
+            pointsDeficit: this.getSnookerPointsDeficit()
         };
     }
 

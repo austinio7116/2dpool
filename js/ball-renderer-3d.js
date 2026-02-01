@@ -146,8 +146,10 @@ export class BallRenderer3D {
         const data = imageData.data;
 
         const rgb = this.hexToRgb(baseColor);
-        const numberCircleRgb = this.hexToRgb(numberOptions.numberCircleColor || '#FFFFFF');
-        const stripeBackgroundRgb = this.hexToRgb(numberOptions.stripeBackgroundColor || '#FFFFFF');
+        // Default to ivory/off-white for number circles and stripe backgrounds
+        const ivoryDefault = '#FFFEF0';
+        const numberCircleRgb = this.hexToRgb(numberOptions.numberCircleColor || ivoryDefault);
+        const stripeBackgroundRgb = this.hexToRgb(numberOptions.stripeBackgroundColor || ivoryDefault);
         const radius = this.sphereRadius;
 
         // Stripe is a band around the equator - latitude based
@@ -190,8 +192,8 @@ export class BallRenderer3D {
                 let r, g, b;
 
                 if (ballNumber === 0) {
-                    // Cue ball - pure white
-                    r = g = b = 255;
+                    // Cue ball - ivory/off-white (matches Constants.BALL_COLORS[0])
+                    r = 255; g = 254; b = 240;
                 } else if ((isUKBall && !isEightBall) || isSnookerBall) {
                     // UK balls (except 8-ball) and snooker balls - pure solid color, no number spot
                     r = rgb.r;

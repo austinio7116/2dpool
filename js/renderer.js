@@ -701,9 +701,9 @@ export class Renderer {
         const ctx = this.ctx;
 
         const whiteGradient = ctx.createRadialGradient(x - radius * 0.3, y - radius * 0.3, 0, x, y, radius);
-        whiteGradient.addColorStop(0, '#FFFFFF');
-        whiteGradient.addColorStop(0.5, '#F5F5F0');
-        whiteGradient.addColorStop(1, '#D0D0D0');
+        whiteGradient.addColorStop(0, '#FFFEF0');
+        whiteGradient.addColorStop(0.5, '#F5F5E8');
+        whiteGradient.addColorStop(1, '#D0D0C8');
 
         ctx.fillStyle = whiteGradient;
         ctx.beginPath();
@@ -775,8 +775,8 @@ export class Renderer {
             const poleY = y + Math.sin(ball.travelAngle) * poleOffset;
             const poleRadius = radius * 0.7;
 
-            // Draw pole as solid white circle with hard edge
-            ctx.fillStyle = '#FFFFFF';
+            // Draw pole as solid ivory circle with hard edge
+            ctx.fillStyle = '#FFFEF0';
             ctx.beginPath();
             ctx.arc(poleX, poleY, poleRadius, 0, Math.PI * 2);
             ctx.fill();
@@ -808,7 +808,7 @@ export class Renderer {
             ctx.save();
             ctx.globalAlpha = ctx.globalAlpha * visibility;
 
-            ctx.fillStyle = '#FFFFFF';
+            ctx.fillStyle = '#FFFEF0';
             ctx.beginPath();
             ctx.arc(x + offsetX, y + offsetY, scaledRadius, 0, Math.PI * 2);
             ctx.fill();
@@ -851,10 +851,10 @@ export class Renderer {
         ctx.arc(x, y, r + 5, 0, Math.PI * 2);
         ctx.fill();
 
-        // Cue ball representation
+        // Cue ball representation (ivory)
         const ballGradient = ctx.createRadialGradient(x - r * 0.2, y - r * 0.2, 0, x, y, r);
-        ballGradient.addColorStop(0, '#FFFFFF');
-        ballGradient.addColorStop(0.5, '#F0F0E8');
+        ballGradient.addColorStop(0, '#FFFEF0');
+        ballGradient.addColorStop(0.5, '#F0F0E0');
         ballGradient.addColorStop(1, '#C0C0B0');
 
         ctx.fillStyle = ballGradient;
@@ -969,7 +969,7 @@ export class Renderer {
         ctx.fill();
 
         // Ferrule
-        ctx.fillStyle = '#FFFFF0';
+        ctx.fillStyle = '#FFFEF0';
         ctx.fillRect(backDistance, -cueWidth / 4, 10, cueWidth / 2);
 
         // Tip with chalk

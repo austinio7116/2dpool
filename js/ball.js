@@ -344,6 +344,9 @@ export function rackBalls(balls, pattern, tableCenter, ballRadius) {
                 );
                 ball.pocketed = false;
                 ball.sinking = false;
+
+                // Add random orientations for natural appearance
+                ball.displayRoll = Math.random() * Math.PI * 2;  // Random visual rotation
             }
         });
     });

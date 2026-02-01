@@ -1375,17 +1375,13 @@ export class Game {
             // Reds phase: each red can be followed by black (max)
             let points = redsLeft * 8; // reds + blacks
 
-            // Add all colors (still on table)
-            const colorValues = { 'yellow': 2, 'green': 3, 'brown': 4, 'blue': 5, 'pink': 6, 'black': 7 };
-            for (const ball of this.balls) {
-                if (ball.isColor && !ball.pocketed && colorValues[ball.colorName]) {
-                    points += colorValues[ball.colorName];
-                }
-            }
+            // Always include all 6 colors during reds phase (they get respotted)
+            // yellow(2) + green(3) + brown(4) + blue(5) + pink(6) + black(7) = 27
+            points += 27;
 
             return points;
         } else {
-            // Colors phase: just sum remaining colors in sequence
+            // Colors phase: only sum remaining unpocketed colors
             let points = 0;
             const colorValues = { 'yellow': 2, 'green': 3, 'brown': 4, 'blue': 5, 'pink': 6, 'black': 7 };
 

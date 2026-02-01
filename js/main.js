@@ -85,12 +85,18 @@ class PoolGame {
         this.ui.onRerack = () => this.game.rerack();
         this.ui.onSoundToggle = (enabled) => this.audio.setEnabled(enabled);
         this.ui.onSpeedChange = (speed) => this.physics.setSpeedMultiplier(speed);
-        this.ui.onTableChange = (tableNum) => {
+        this.ui.onTableChange = (tableId) => {
+            // Get the actual table number for rendering (resolves custom tables to base table)
+            const tableNum = this.ui.getTableNumberForRendering(tableId);
+
+            // Get HSB adjustments if this is a custom table
+            const hsbAdjustments = this.ui.getTableHSBAdjustments(tableId);
+
             // 1. Update table dimensions first (for tighter snooker pockets and wider tables)
             this.table.setTableStyle(tableNum);
 
-            // 2. Update the visual style (Renderer) - also resizes canvas if needed
-            this.renderer.setTableStyle(tableNum);
+            // 2. Update the visual style (Renderer) with HSB adjustments - also resizes canvas if needed
+            this.renderer.setTableStyle(tableNum, hsbAdjustments);
 
             // 3. Update input canvas size to match new table dimensions
             this.input.setCanvasSize(this.table.canvasWidth, this.table.canvasHeight);

@@ -105,6 +105,7 @@
                     <div class="table-grid" id="table-grid">
                         <!-- Table thumbnails will be populated by JS -->
                     </div>
+                    <button class="create-custom-btn" id="btn-create-custom-table">+ Create Custom Table</button>
                 </div>
             </div>
 
@@ -228,6 +229,69 @@
                     <div class="creator-actions">
                         <button class="cancel-btn" id="btn-cancel-creator">Cancel</button>
                         <button class="save-btn" id="btn-save-custom">Save Ball Set</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Custom Table Creator Modal -->
+            <div id="table-creator-modal" class="modal hidden">
+                <div class="modal-content table-creator-content">
+                    <div class="modal-header">
+                        <h2>Create Custom Table</h2>
+                        <button class="modal-close" id="close-table-creator-modal">&times;</button>
+                    </div>
+                    <div class="table-creator-layout">
+                        <div class="creator-field name-field">
+                            <label for="custom-table-name">Table Name</label>
+                            <input type="text" id="custom-table-name" placeholder="My Custom Table" maxlength="30">
+                        </div>
+
+                        <div class="creator-field">
+                            <label for="base-table-select">Base Table</label>
+                            <select id="base-table-select" class="base-table-select">
+                                <option value="1">Classic Green</option>
+                                <option value="2">Blue Felt</option>
+                                <option value="3">Red Felt</option>
+                                <option value="4">Tournament</option>
+                                <option value="8">Mini Snooker</option>
+                                <option value="9">Full-Size Snooker</option>
+                            </select>
+                        </div>
+
+                        <div class="table-preview-container">
+                            <label>Preview</label>
+                            <canvas id="table-creator-preview" width="400" height="200"></canvas>
+                        </div>
+
+                        <div class="hsb-controls">
+                            <div class="hsb-slider-group">
+                                <label for="table-hue">
+                                    Hue
+                                    <span class="slider-value" id="table-hue-value">0°</span>
+                                </label>
+                                <input type="range" id="table-hue" min="0" max="360" value="0" step="1">
+                            </div>
+
+                            <div class="hsb-slider-group">
+                                <label for="table-saturation">
+                                    Saturation
+                                    <span class="slider-value" id="table-saturation-value">100%</span>
+                                </label>
+                                <input type="range" id="table-saturation" min="0" max="200" value="100" step="1">
+                            </div>
+
+                            <div class="hsb-slider-group">
+                                <label for="table-brightness">
+                                    Brightness
+                                    <span class="slider-value" id="table-brightness-value">100%</span>
+                                </label>
+                                <input type="range" id="table-brightness" min="0" max="200" value="100" step="1">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="creator-actions">
+                        <button class="cancel-btn" id="btn-cancel-table-creator">Cancel</button>
+                        <button class="save-btn" id="btn-save-table">Save Table</button>
                     </div>
                 </div>
             </div>

@@ -74,6 +74,25 @@ export class Renderer {
             this.tableImages.push(img);
         }
 
+        // Load colorize overlays for tables 1, 2, 3, 4, 8, 9
+        this.colorizeOverlays = {};
+        this.colorizeOverlaysLoaded = {};
+        const overlayTables = [1, 2, 3, 4, 8, 9];
+        for (const tableNum of overlayTables) {
+            const img = new Image();
+            img.onload = () => {
+                this.colorizeOverlaysLoaded[tableNum] = true;
+            };
+            img.onerror = () => {
+                console.warn(`Failed to load colorize overlay for table ${tableNum}`);
+            };
+            img.src = `assets/Table${tableNum}-colorize.png`;
+            this.colorizeOverlays[tableNum] = img;
+        }
+
+        // HSB adjustments for current table
+        this.currentHSBAdjustments = null;
+
         // 3D ball renderer (alternative rendering mode)
         this.ballRenderer3D = new BallRenderer3D(Constants.BALL_RADIUS);
         this.use3DBalls = true; // 3D ball rendering enabled by default
@@ -83,9 +102,12 @@ export class Renderer {
         this.use3DBalls = enabled;
     }
 
-    setTableStyle(tableNum) {
+    setTableStyle(tableNum, hsbAdjustments = null) {
         // tableNum is 1-x, convert to 0-(x-1) index
         this.currentTableIndex = Math.max(0, Math.min(this.tableImages.length - 1, tableNum - 1));
+
+        // Store HSB adjustments for this table
+        this.currentHSBAdjustments = hsbAdjustments;
 
         // Update canvas size if table dimensions changed
         if (this.canvas.width !== this.table.canvasWidth || this.canvas.height !== this.table.canvasHeight) {
@@ -102,6 +124,9 @@ export class Renderer {
         if (this.tableImagesLoaded[this.currentTableIndex]) {
             this.ctx.drawImage(this.tableImages[this.currentTableIndex], 0, 0, this.canvas.width, this.canvas.height);
         }
+
+        // Draw colorize overlay with HSB filters (if available)
+        this.drawColorizeOverlay();
 
         // DEBUG: Draw pocket detection circles (uncomment to visualize)
         // this.drawPocketDebug();
@@ -179,6 +204,28 @@ export class Renderer {
         ctx.beginPath();
         ctx.arc(t.footSpot.x, t.footSpot.y, 3, 0, Math.PI * 2);
         ctx.fill();
+    }
+
+    // Draw colorize overlay with HSB adjustments
+    drawColorizeOverlay() {
+        if (!this.currentHSBAdjustments) return;
+
+        const tableNum = this.currentTableIndex + 1;
+        const overlay = this.colorizeOverlays[tableNum];
+
+        if (!overlay || !this.colorizeOverlaysLoaded[tableNum]) return;
+
+        const ctx = this.ctx;
+        const { hue, saturation, brightness } = this.currentHSBAdjustments;
+
+        // Apply CSS filter for HSB adjustments
+        ctx.save();
+        const filterString = `hue-rotate(${hue}deg) saturate(${saturation}%) brightness(${brightness}%)`;
+        ctx.filter = filterString;
+
+        ctx.drawImage(overlay, 0, 0, this.canvas.width, this.canvas.height);
+
+        ctx.restore();
     }
 
     drawCushions() {

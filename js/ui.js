@@ -2,6 +2,7 @@
 
 import { GameMode, GameState } from './game.js';
 import { CustomBallSetManager, PREDEFINED_BALL_SETS } from './custom-ball-sets.js';
+import { CustomTableManager } from './custom-tables.js';
 import { BallRenderer3D } from './ball-renderer-3d.js';
 import { Constants } from './utils.js';
 
@@ -80,6 +81,7 @@ export class UI {
         this.tableModal = document.getElementById('table-modal');
         this.ballModal = document.getElementById('ball-modal');
         this.creatorModal = document.getElementById('creator-modal');
+        this.tableCreatorModal = document.getElementById('table-creator-modal');
         this.tableGrid = document.getElementById('table-grid');
         this.ballSetGrid = document.getElementById('ball-set-grid');
 
@@ -119,6 +121,17 @@ export class UI {
         this.borderColorField = document.getElementById('border-color-field');
         this.colorNumberBorder = document.getElementById('color-number-border');
 
+        // Table creator elements
+        this.customTableNameInput = document.getElementById('custom-table-name');
+        this.baseTableSelect = document.getElementById('base-table-select');
+        this.tableCreatorPreview = document.getElementById('table-creator-preview');
+        this.tableHueSlider = document.getElementById('table-hue');
+        this.tableSaturationSlider = document.getElementById('table-saturation');
+        this.tableBrightnessSlider = document.getElementById('table-brightness');
+        this.tableHueValue = document.getElementById('table-hue-value');
+        this.tableSaturationValue = document.getElementById('table-saturation-value');
+        this.tableBrightnessValue = document.getElementById('table-brightness-value');
+
         // Callbacks
         this.onGameStart = null;
         this.onPlayAgain = null;
@@ -137,11 +150,15 @@ export class UI {
         this.ballSetManager = new CustomBallSetManager();
         this.ballRenderer = new BallRenderer3D(Constants.BALL_RADIUS);
 
+        // Table manager
+        this.tableManager = new CustomTableManager();
+
         // Selection state - load from localStorage or use defaults
         this.selectedTable = this.loadSelectedTable();
         this.selectedBallSet = this.loadSelectedBallSet();
         this.creatorStyle = 'solid';
         this.editingSetId = null; // Track which set is being edited
+        this.editingTableId = null; // Track which table is being edited
 
         // Table names
         this.tableNames = [
@@ -325,6 +342,23 @@ export class UI {
             this.saveCustomBallSet();
         });
 
+        // Table creator buttons
+        document.getElementById('btn-create-custom-table')?.addEventListener('click', () => {
+            this.showTableCreatorModal();
+        });
+
+        document.getElementById('close-table-creator-modal')?.addEventListener('click', () => {
+            this.hideTableCreatorModal();
+        });
+
+        document.getElementById('btn-cancel-table-creator')?.addEventListener('click', () => {
+            this.hideTableCreatorModal();
+        });
+
+        document.getElementById('btn-save-table')?.addEventListener('click', () => {
+            this.saveCustomTable();
+        });
+
         // Style toggle buttons
         this.styleSolidBtn?.addEventListener('click', () => {
             this.setCreatorStyle('solid');
@@ -365,6 +399,21 @@ export class UI {
         });
         this.colorNumberBorder?.addEventListener('input', () => this.updateCreatorPreview());
 
+        // Table creator sliders
+        this.baseTableSelect?.addEventListener('change', () => this.updateTablePreviewInCreator());
+        this.tableHueSlider?.addEventListener('input', () => {
+            this.tableHueValue.textContent = `${this.tableHueSlider.value}°`;
+            this.updateTablePreviewInCreator();
+        });
+        this.tableSaturationSlider?.addEventListener('input', () => {
+            this.tableSaturationValue.textContent = `${this.tableSaturationSlider.value}%`;
+            this.updateTablePreviewInCreator();
+        });
+        this.tableBrightnessSlider?.addEventListener('input', () => {
+            this.tableBrightnessValue.textContent = `${this.tableBrightnessSlider.value}%`;
+            this.updateTablePreviewInCreator();
+        });
+
         // Close modals on backdrop click
         this.tableModal?.addEventListener('click', (e) => {
             if (e.target === this.tableModal) this.hideTableModal();
@@ -375,6 +424,9 @@ export class UI {
         this.creatorModal?.addEventListener('click', (e) => {
             if (e.target === this.creatorModal) this.hideCreatorModal();
         });
+        this.tableCreatorModal?.addEventListener('click', (e) => {
+            if (e.target === this.tableCreatorModal) this.hideTableCreatorModal();
+        });
     }
 
     // Initialize table selection grid
@@ -383,9 +435,11 @@ export class UI {
 
         this.tableGrid.innerHTML = '';
 
+        // Add predefined tables (1-9)
         for (let i = 1; i <= 9; i++) {
             const option = document.createElement('div');
-            option.className = 'table-option' + (i === this.selectedTable ? ' selected' : '');
+            const isSelected = !this.tableManager.isCustomTable(this.selectedTable) && i === this.selectedTable;
+            option.className = 'table-option' + (isSelected ? ' selected' : '');
             option.dataset.table = i;
 
             // Use actual table images
@@ -402,6 +456,62 @@ export class UI {
 
             this.tableGrid.appendChild(option);
         }
+
+        // Add custom tables
+        const customTables = this.tableManager.getAll();
+        for (const table of customTables) {
+            const option = document.createElement('div');
+            option.className = 'table-option custom-table' + (this.selectedTable === table.id ? ' selected' : '');
+            option.dataset.tableId = table.id;
+
+            // Create preview canvas for custom table
+            const previewCanvas = document.createElement('canvas');
+            previewCanvas.width = 200;
+            previewCanvas.height = 100;
+            this.renderTablePreviewToCanvas(previewCanvas, table.baseTable, {
+                hue: table.hue,
+                saturation: table.saturation,
+                brightness: table.brightness
+            });
+
+            const labelDiv = document.createElement('div');
+            labelDiv.className = 'table-label';
+            labelDiv.textContent = table.name;
+
+            // Add edit and delete buttons for custom tables
+            const buttonContainer = document.createElement('div');
+            buttonContainer.className = 'set-buttons';
+
+            const editBtn = document.createElement('button');
+            editBtn.className = 'edit-set';
+            editBtn.textContent = '\u270E';
+            editBtn.title = 'Edit table';
+            editBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.editCustomTable(table);
+            });
+            buttonContainer.appendChild(editBtn);
+
+            const deleteBtn = document.createElement('button');
+            deleteBtn.className = 'delete-set';
+            deleteBtn.textContent = '\u00D7';
+            deleteBtn.title = 'Delete table';
+            deleteBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.deleteCustomTable(table.id);
+            });
+            buttonContainer.appendChild(deleteBtn);
+
+            option.appendChild(previewCanvas);
+            option.appendChild(labelDiv);
+            option.appendChild(buttonContainer);
+
+            option.addEventListener('click', () => {
+                this.selectTable(table.id);
+            });
+
+            this.tableGrid.appendChild(option);
+        }
     }
 
     // Initialize modals
@@ -413,17 +523,29 @@ export class UI {
     updateTablePreview() {
         if (!this.tablePreview || !this.tableName) return;
 
-        const ctx = this.tablePreview.getContext('2d');
-        const img = new Image();
-        const imgSrc = this.selectedTable === 1 ? 'assets/pooltable.png' : `assets/pooltable${this.selectedTable}.png`;
+        if (this.tableManager.isCustomTable(this.selectedTable)) {
+            const customTable = this.tableManager.get(this.selectedTable);
+            if (customTable) {
+                this.renderTablePreviewToCanvas(this.tablePreview, customTable.baseTable, {
+                    hue: customTable.hue,
+                    saturation: customTable.saturation,
+                    brightness: customTable.brightness
+                });
+                this.tableName.textContent = customTable.name;
+            }
+        } else {
+            const ctx = this.tablePreview.getContext('2d');
+            const img = new Image();
+            const imgSrc = this.selectedTable === 1 ? 'assets/pooltable.png' : `assets/pooltable${this.selectedTable}.png`;
 
-        img.onload = () => {
-            ctx.clearRect(0, 0, this.tablePreview.width, this.tablePreview.height);
-            ctx.drawImage(img, 0, 0, this.tablePreview.width, this.tablePreview.height);
-        };
-        img.src = imgSrc;
+            img.onload = () => {
+                ctx.clearRect(0, 0, this.tablePreview.width, this.tablePreview.height);
+                ctx.drawImage(img, 0, 0, this.tablePreview.width, this.tablePreview.height);
+            };
+            img.src = imgSrc;
 
-        this.tableName.textContent = this.tableNames[this.selectedTable - 1];
+            this.tableName.textContent = this.tableNames[this.selectedTable - 1];
+        }
     }
 
     // Update ball set preview in main menu
@@ -502,26 +624,31 @@ export class UI {
         }
     }
 
-    // Select a table
-    selectTable(tableNum) {
-        this.selectedTable = tableNum;
+    // Select a table (handles both predefined tables and custom table IDs)
+    selectTable(tableId) {
+        this.selectedTable = tableId;
 
         // Save to localStorage
-        this.saveSelectedTable(tableNum);
+        this.saveSelectedTable(tableId);
 
         // Update visual selection
         const options = this.tableGrid?.querySelectorAll('.table-option');
         options?.forEach(opt => {
-            opt.classList.toggle('selected', parseInt(opt.dataset.table) === tableNum);
+            const optTableId = opt.dataset.tableId || parseInt(opt.dataset.table);
+            opt.classList.toggle('selected', optTableId === tableId);
         });
 
         // Update main menu preview
         this.updateTablePreview();
 
         // Trigger table change callback
-        this.tableSelect.value = tableNum;
+        // For predefined tables, set the hidden select value (for compatibility)
+        if (!this.tableManager.isCustomTable(tableId)) {
+            this.tableSelect.value = tableId;
+        }
+
         if (this.onTableChange) {
-            this.onTableChange(tableNum);
+            this.onTableChange(tableId);
         }
 
         this.hideTableModal();
@@ -1001,9 +1128,17 @@ export class UI {
         try {
             const saved = localStorage.getItem('poolGame_selectedTable');
             if (saved) {
-                const tableNum = parseInt(saved);
-                if (tableNum >= 1 && tableNum <= 9) {
-                    return tableNum;
+                // Check if it's a custom table ID
+                if (saved.startsWith('custom_')) {
+                    // Verify the custom table still exists
+                    if (this.tableManager.get(saved)) {
+                        return saved;
+                    }
+                } else {
+                    const tableNum = parseInt(saved);
+                    if (tableNum >= 1 && tableNum <= 9) {
+                        return tableNum;
+                    }
                 }
             }
         } catch (e) {
@@ -1013,9 +1148,9 @@ export class UI {
     }
 
     // Save selected table to localStorage
-    saveSelectedTable(tableNum) {
+    saveSelectedTable(tableId) {
         try {
-            localStorage.setItem('poolGame_selectedTable', tableNum.toString());
+            localStorage.setItem('poolGame_selectedTable', tableId.toString());
         } catch (e) {
             console.warn('Failed to save selected table:', e);
         }
@@ -1934,5 +2069,210 @@ export class UI {
                 this.btnNextFrame.classList.add('hidden');
             }
         }
+    }
+
+    // Show table creator modal
+    showTableCreatorModal() {
+        if (!this.tableCreatorModal) return;
+
+        this.hideTableModal();
+        this.editingTableId = null;
+
+        this.tableCreatorModal.classList.remove('hidden');
+
+        // Reset form
+        if (this.customTableNameInput) this.customTableNameInput.value = '';
+        if (this.baseTableSelect) this.baseTableSelect.value = '1';
+        if (this.tableHueSlider) this.tableHueSlider.value = '0';
+        if (this.tableSaturationSlider) this.tableSaturationSlider.value = '100';
+        if (this.tableBrightnessSlider) this.tableBrightnessSlider.value = '100';
+
+        // Update value displays
+        if (this.tableHueValue) this.tableHueValue.textContent = '0°';
+        if (this.tableSaturationValue) this.tableSaturationValue.textContent = '100%';
+        if (this.tableBrightnessValue) this.tableBrightnessValue.textContent = '100%';
+
+        // Update modal title and button text
+        const modalTitle = this.tableCreatorModal.querySelector('.modal-header h2');
+        if (modalTitle) modalTitle.textContent = 'Create Custom Table';
+        const saveBtn = document.getElementById('btn-save-table');
+        if (saveBtn) saveBtn.textContent = 'Save Table';
+
+        this.updateTablePreviewInCreator();
+    }
+
+    // Hide table creator modal
+    hideTableCreatorModal() {
+        if (this.tableCreatorModal) {
+            this.tableCreatorModal.classList.add('hidden');
+        }
+    }
+
+    // Edit a custom table
+    editCustomTable(table) {
+        this.editingTableId = table.id;
+        this.hideTableModal();
+
+        this.tableCreatorModal?.classList.remove('hidden');
+
+        // Load table data into form
+        if (this.customTableNameInput) this.customTableNameInput.value = table.name || '';
+        if (this.baseTableSelect) this.baseTableSelect.value = table.baseTable.toString();
+        if (this.tableHueSlider) this.tableHueSlider.value = table.hue.toString();
+        if (this.tableSaturationSlider) this.tableSaturationSlider.value = table.saturation.toString();
+        if (this.tableBrightnessSlider) this.tableBrightnessSlider.value = table.brightness.toString();
+
+        // Update value displays
+        if (this.tableHueValue) this.tableHueValue.textContent = `${table.hue}°`;
+        if (this.tableSaturationValue) this.tableSaturationValue.textContent = `${table.saturation}%`;
+        if (this.tableBrightnessValue) this.tableBrightnessValue.textContent = `${table.brightness}%`;
+
+        // Update modal title and button text
+        const modalTitle = this.tableCreatorModal.querySelector('.modal-header h2');
+        if (modalTitle) modalTitle.textContent = 'Edit Custom Table';
+        const saveBtn = document.getElementById('btn-save-table');
+        if (saveBtn) saveBtn.textContent = 'Save Changes';
+
+        this.updateTablePreviewInCreator();
+    }
+
+    // Delete a custom table
+    deleteCustomTable(tableId) {
+        if (!confirm('Delete this custom table?')) return;
+
+        this.tableManager.delete(tableId);
+
+        // If deleted table was selected, switch to default
+        if (this.selectedTable === tableId) {
+            this.selectedTable = 1;
+            this.saveSelectedTable(1);
+            this.updateTablePreview();
+
+            // Trigger table change callback
+            if (this.onTableChange) {
+                this.onTableChange(1);
+            }
+        }
+
+        this.initializeTableGrid();
+    }
+
+    // Save custom table
+    saveCustomTable() {
+        const name = this.customTableNameInput?.value?.trim() || 'Custom Table';
+        const baseTable = parseInt(this.baseTableSelect?.value || '1');
+        const hue = parseInt(this.tableHueSlider?.value || '0');
+        const saturation = parseInt(this.tableSaturationSlider?.value || '100');
+        const brightness = parseInt(this.tableBrightnessSlider?.value || '100');
+
+        const config = {
+            name,
+            baseTable,
+            hue,
+            saturation,
+            brightness
+        };
+
+        let savedTable;
+        if (this.editingTableId) {
+            // Update existing table
+            savedTable = this.tableManager.update(this.editingTableId, config);
+        } else {
+            // Create new table
+            savedTable = this.tableManager.create(config);
+        }
+
+        // Select the saved table
+        this.selectedTable = savedTable.id;
+        this.saveSelectedTable(savedTable.id);
+        this.updateTablePreview();
+
+        // Trigger table change callback
+        if (this.onTableChange) {
+            this.onTableChange(savedTable.id);
+        }
+
+        this.editingTableId = null;
+        this.hideTableCreatorModal();
+        this.initializeTableGrid();
+        this.showTableModal();
+    }
+
+    // Update table preview in creator modal
+    updateTablePreviewInCreator() {
+        if (!this.tableCreatorPreview || !this.baseTableSelect) return;
+
+        const baseTable = parseInt(this.baseTableSelect.value);
+        const hue = parseInt(this.tableHueSlider?.value || '0');
+        const saturation = parseInt(this.tableSaturationSlider?.value || '100');
+        const brightness = parseInt(this.tableBrightnessSlider?.value || '100');
+
+        this.renderTablePreviewToCanvas(this.tableCreatorPreview, baseTable, {
+            hue,
+            saturation,
+            brightness
+        });
+    }
+
+    // Render table preview to canvas with HSB adjustments
+    renderTablePreviewToCanvas(canvas, baseTable, hsbAdjustments = null) {
+        const ctx = canvas.getContext('2d');
+        const width = canvas.width;
+        const height = canvas.height;
+
+        // Load base table image
+        const baseImg = new Image();
+        const imgSrc = baseTable === 1 ? 'assets/pooltable.png' : `assets/pooltable${baseTable}.png`;
+
+        baseImg.onload = () => {
+            ctx.clearRect(0, 0, width, height);
+            ctx.drawImage(baseImg, 0, 0, width, height);
+
+            // Check if this table has a colorize overlay
+            const hasOverlay = this.tableManager.hasColorizeOverlay(baseTable);
+
+            if (hasOverlay && hsbAdjustments) {
+                // Load and apply colorize overlay with HSB filters
+                const overlayImg = new Image();
+                overlayImg.src = `assets/Table${baseTable}-colorize.png`;
+
+                overlayImg.onload = () => {
+                    // Apply HSB adjustments via CSS filter
+                    ctx.save();
+
+                    // Calculate filter values
+                    const hue = hsbAdjustments.hue || 0;
+                    const saturation = hsbAdjustments.saturation || 100;
+                    const brightness = hsbAdjustments.brightness || 100;
+
+                    // Build CSS filter string
+                    const filterString = `hue-rotate(${hue}deg) saturate(${saturation}%) brightness(${brightness}%)`;
+                    ctx.filter = filterString;
+
+                    ctx.drawImage(overlayImg, 0, 0, width, height);
+
+                    ctx.restore();
+                };
+
+                overlayImg.onerror = () => {
+                    console.warn(`Colorize overlay not found for table ${baseTable}`);
+                };
+            }
+        };
+
+        baseImg.src = imgSrc;
+    }
+
+    // Get the actual table number for rendering (resolves custom tables to base table)
+    getTableNumberForRendering(tableId) {
+        if (this.tableManager.isCustomTable(tableId)) {
+            return this.tableManager.getBaseTableNumber(tableId);
+        }
+        return tableId;
+    }
+
+    // Get HSB adjustments for a table (null if no adjustments needed)
+    getTableHSBAdjustments(tableId) {
+        return this.tableManager.getHSBAdjustments(tableId);
     }
 }

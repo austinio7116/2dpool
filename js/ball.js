@@ -28,6 +28,9 @@ export class Ball {
         this.numberTextColor = null;
         this.numberBorder = false;
         this.numberBorderColor = null;
+        this.numberCircleRadialLines = 0;  // Number of radial lines inside number circle
+        this.stripeThickness = 0.55;  // Stripe thickness (latitude, default 0.55)
+        this.numberCircleRadius = 0.5;  // Number circle radius (angular radius, default 0.5)
         
         // VISUALS
         this.rotation = 0; // Legacy 2D rotation (can map to Z-spin)

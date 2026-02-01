@@ -212,6 +212,9 @@ class PoolGame {
             ball.numberTextColor = config.numberTextColor || null;
             ball.numberBorder = config.numberBorder || false;
             ball.numberBorderColor = config.numberBorderColor || null;
+            ball.numberCircleRadialLines = config.numberCircleRadialLines || 0;
+            ball.stripeThickness = config.stripeThickness ?? 0.55;
+            ball.numberCircleRadius = config.numberCircleRadius ?? 0.5;
         }
 
         // Clear ball renderer cache and pre-generate frames for custom ball set

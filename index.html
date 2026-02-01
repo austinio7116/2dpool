@@ -196,6 +196,10 @@
                                 </div>
                             </div>
                             <label class="checkbox-label">
+                                <input type="checkbox" id="striped-8ball-stripe">
+                                Striped 8-Ball
+                            </label>
+                            <label class="checkbox-label">
                                 <input type="checkbox" id="advanced-mode">
                                 Individual Ball Colors
                             </label>
@@ -227,6 +231,27 @@
                                 <div class="color-field border-color-field hidden" id="border-color-field">
                                     <input type="color" id="color-number-border" value="#000000">
                                 </div>
+                            </div>
+                            <div class="ball-slider-group">
+                                <label for="radial-lines">
+                                    Radial Lines (requires border)
+                                    <span class="slider-value" id="radial-lines-value">0</span>
+                                </label>
+                                <input type="range" id="radial-lines" min="0" max="24" value="0" step="1" disabled>
+                            </div>
+                            <div class="ball-slider-group">
+                                <label for="stripe-thickness">
+                                    Stripe Thickness
+                                    <span class="slider-value" id="stripe-thickness-value">0.55</span>
+                                </label>
+                                <input type="range" id="stripe-thickness" min="0.2" max="0.8" value="0.55" step="0.01">
+                            </div>
+                            <div class="ball-slider-group">
+                                <label for="circle-radius">
+                                    Circle Radius
+                                    <span class="slider-value" id="circle-radius-value">0.50</span>
+                                </label>
+                                <input type="range" id="circle-radius" min="0.3" max="0.7" value="0.5" step="0.01">
                             </div>
                         </div>
                     </div>

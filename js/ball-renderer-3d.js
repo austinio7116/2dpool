@@ -79,6 +79,9 @@ export class BallRenderer3D {
             key += `-${options.numberTextColor || ''}`;
             key += `-${options.numberBorder || false}`;
             key += `-${options.numberBorderColor || ''}`;
+            key += `-${options.numberCircleRadialLines || 0}`;
+            key += `-${options.stripeThickness ?? 0.55}`;
+            key += `-${options.numberCircleRadius ?? 0.5}`;
         }
         return key;
     }
@@ -109,7 +112,8 @@ export class BallRenderer3D {
 
             const hasCustomOptions = ball.numberCircleColor || ball.numberTextColor ||
                                      ball.numberBorder || ball.stripeBackgroundColor ||
-                                     ball.showNumber === false;
+                                     ball.showNumber === false || ball.numberCircleRadialLines > 0 ||
+                                     ball.stripeThickness !== 0.55 || ball.numberCircleRadius !== 0.5;
 
             if (hasCustomOptions) {
                 const options = {
@@ -118,7 +122,10 @@ export class BallRenderer3D {
                     numberCircleColor: ball.numberCircleColor,
                     numberTextColor: ball.numberTextColor,
                     numberBorder: ball.numberBorder,
-                    numberBorderColor: ball.numberBorderColor
+                    numberBorderColor: ball.numberBorderColor,
+                    numberCircleRadialLines: ball.numberCircleRadialLines || 0,
+                    stripeThickness: ball.stripeThickness ?? 0.55,
+                    numberCircleRadius: ball.numberCircleRadius ?? 0.5
                 };
 
                 // Pre-generate all frames for this ball
@@ -154,10 +161,10 @@ export class BallRenderer3D {
 
         // Stripe is a band around the equator - latitude based
         // stripeHalfWidth is in terms of latitude (0 = equator, 1 = pole)
-        const stripeLatitude = 0.55; // Stripe covers from equator toward poles
+        const stripeLatitude = numberOptions.stripeThickness ?? 0.55; // Stripe covers from equator toward poles
 
         // Number spot - angular radius on sphere surface
-        const numberSpotAngle = 0.5; // Bigger white circle for number
+        const numberSpotAngle = numberOptions.numberCircleRadius ?? 0.5; // Configurable circle size
 
         // Precompute rotation
         const cosR = Math.cos(rotation);
@@ -266,6 +273,10 @@ export class BallRenderer3D {
         // Draw the number text on top of the number spot
         if (showNumber) {
             this.drawNumber(ctx, ballNumber, size, rotation, radius, numberOptions);
+            // Draw radial lines if configured and border is enabled
+            if (numberOptions.numberBorder && numberOptions.numberCircleRadialLines > 0) {
+                this.drawRadialLines(ctx, size, rotation, radius, numberOptions);
+            }
         }
 
         return canvas;
@@ -311,6 +322,57 @@ export class BallRenderer3D {
             ctx.textBaseline = 'middle';
             // Offset down slightly for better centering
             ctx.fillText(number.toString(), screenX, screenY + this.renderScale);
+            ctx.restore();
+        }
+    }
+
+    // Draw radial lines inside the number circle
+    drawRadialLines(ctx, size, rotation, radius, options = {}) {
+        const centerX = size / 2;
+        const centerY = size / 2;
+
+        // Number circle position after rotation
+        const spotY = Math.sin(rotation) * radius * 0.85;
+        const spotZ = Math.cos(rotation);
+
+        // Only draw if number circle is on front of ball (facing camera)
+        if (spotZ > 0.1) {
+            const screenX = centerX;
+            const screenY = centerY + spotY;
+
+            // Scale based on Z (perspective effect)
+            const scale = 0.4 + spotZ * 0.6;
+            const alpha = Math.pow(spotZ, 0.5); // Fade near edges
+            const circleRadius = size * 0.22 * scale;
+
+            // Radial line length is 1/5th the circle radius
+            const lineLength = circleRadius / 5;
+            const lineCount = options.numberCircleRadialLines || 0;
+
+            ctx.save();
+            ctx.globalAlpha = alpha;
+
+            // Use the border color for the radial lines
+            const borderColor = options.numberBorderColor || '#000000';
+            ctx.strokeStyle = borderColor;
+            ctx.lineWidth = this.renderScale * 1.5;
+
+            // Draw radial lines evenly distributed around the circle
+            for (let i = 0; i < lineCount; i++) {
+                const angle = (i / lineCount) * Math.PI * 2;
+
+                // Start from edge of circle, point inward
+                const outerX = screenX + Math.cos(angle) * circleRadius;
+                const outerY = screenY + Math.sin(angle) * circleRadius;
+                const innerX = screenX + Math.cos(angle) * (circleRadius - lineLength);
+                const innerY = screenY + Math.sin(angle) * (circleRadius - lineLength);
+
+                ctx.beginPath();
+                ctx.moveTo(outerX, outerY);
+                ctx.lineTo(innerX, innerY);
+                ctx.stroke();
+            }
+
             ctx.restore();
         }
     }
@@ -388,7 +450,8 @@ export class BallRenderer3D {
         // Check for custom rendering options
         const hasCustomOptions = ball.numberCircleColor || ball.numberTextColor ||
                                  ball.numberBorder || ball.stripeBackgroundColor ||
-                                 ball.showNumber === false;
+                                 ball.showNumber === false || ball.numberCircleRadialLines > 0 ||
+                                 ball.stripeThickness !== 0.55 || ball.numberCircleRadius !== 0.5;
 
         // Build options object for custom balls
         const options = hasCustomOptions ? {
@@ -397,7 +460,10 @@ export class BallRenderer3D {
             numberCircleColor: ball.numberCircleColor,
             numberTextColor: ball.numberTextColor,
             numberBorder: ball.numberBorder,
-            numberBorderColor: ball.numberBorderColor
+            numberBorderColor: ball.numberBorderColor,
+            numberCircleRadialLines: ball.numberCircleRadialLines || 0,
+            stripeThickness: ball.stripeThickness ?? 0.55,
+            numberCircleRadius: ball.numberCircleRadius ?? 0.5
         } : null;
 
         // Use cached frames (works for both standard and custom balls now)

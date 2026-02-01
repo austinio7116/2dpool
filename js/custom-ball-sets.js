@@ -135,7 +135,10 @@ export class CustomBallSetManager {
                 numberCircleColor: setData.options?.numberCircleColor || '#FFFFFF',
                 numberTextColor: setData.options?.numberTextColor || '#000000',
                 numberBorder: setData.options?.numberBorder || false,
-                numberBorderColor: setData.options?.numberBorderColor || '#000000'
+                numberBorderColor: setData.options?.numberBorderColor || '#000000',
+                numberCircleRadialLines: setData.options?.numberCircleRadialLines || 0,
+                stripeThickness: setData.options?.stripeThickness ?? 0.55,
+                numberCircleRadius: setData.options?.numberCircleRadius ?? 0.5
             },
             isPredefined: false,
             createdAt: Date.now()
@@ -178,7 +181,10 @@ export class CustomBallSetManager {
                 numberCircleColor: setData.options?.numberCircleColor || '#FFFFFF',
                 numberTextColor: setData.options?.numberTextColor || '#000000',
                 numberBorder: setData.options?.numberBorder || false,
-                numberBorderColor: setData.options?.numberBorderColor || '#000000'
+                numberBorderColor: setData.options?.numberBorderColor || '#000000',
+                numberCircleRadialLines: setData.options?.numberCircleRadialLines || 0,
+                stripeThickness: setData.options?.stripeThickness ?? 0.55,
+                numberCircleRadius: setData.options?.numberCircleRadius ?? 0.5
             },
             isPredefined: false,
             createdAt: existingSet.createdAt,
@@ -330,8 +336,8 @@ export class CustomBallSetManager {
 
         // Determine if this ball should be striped
         let isStripe = ballSet.style === 'stripe' && isGroup2;
-        // Special case: striped 8-ball option for solid sets
-        if (isEightBall && ballSet.style === 'solid' && ballSet.options?.striped8Ball) {
+        // Special case: striped 8-ball option for both solid and stripe sets
+        if (isEightBall && ballSet.options?.striped8Ball) {
             isStripe = true;
         }
 
@@ -349,8 +355,14 @@ export class CustomBallSetManager {
             showNumber = true;
         }
 
+        // For striped 8-ball in stripe sets, use black as the stripe color
+        let stripeColor = color;
+        if (isEightBall && ballSet.style === 'stripe' && ballSet.options?.striped8Ball) {
+            stripeColor = '#000000';
+        }
+
         return {
-            color: color,
+            color: stripeColor,
             isStripe: isStripe,
             isUKBall: isUKBall,
             isSnookerBall: false,
@@ -359,7 +371,10 @@ export class CustomBallSetManager {
             numberCircleColor: ballSet.options?.numberCircleColor || '#FFFFFF',
             numberTextColor: ballSet.options?.numberTextColor || '#000000',
             numberBorder: ballSet.options?.numberBorder || false,
-            numberBorderColor: ballSet.options?.numberBorderColor || '#000000'
+            numberBorderColor: ballSet.options?.numberBorderColor || '#000000',
+            numberCircleRadialLines: ballSet.options?.numberCircleRadialLines || 0,
+            stripeThickness: ballSet.options?.stripeThickness ?? 0.55,
+            numberCircleRadius: ballSet.options?.numberCircleRadius ?? 0.5
         };
     }
 

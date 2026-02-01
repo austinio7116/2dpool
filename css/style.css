@@ -869,13 +869,15 @@ body {
     padding: 15px;
 }
 
-.hsb-slider-group {
+.hsb-slider-group,
+.ball-slider-group {
     display: flex;
     flex-direction: column;
     gap: 6px;
 }
 
-.hsb-slider-group label {
+.hsb-slider-group label,
+.ball-slider-group label {
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -890,7 +892,8 @@ body {
     font-size: 0.9rem;
 }
 
-.hsb-slider-group input[type="range"] {
+.hsb-slider-group input[type="range"],
+.ball-slider-group input[type="range"] {
     width: 100%;
     height: 6px;
     border-radius: 3px;
@@ -900,7 +903,8 @@ body {
     appearance: none;
 }
 
-.hsb-slider-group input[type="range"]::-webkit-slider-thumb {
+.hsb-slider-group input[type="range"]::-webkit-slider-thumb,
+.ball-slider-group input[type="range"]::-webkit-slider-thumb {
     -webkit-appearance: none;
     appearance: none;
     width: 18px;
@@ -911,7 +915,8 @@ body {
     border: 2px solid #1a1a2e;
 }
 
-.hsb-slider-group input[type="range"]::-moz-range-thumb {
+.hsb-slider-group input[type="range"]::-moz-range-thumb,
+.ball-slider-group input[type="range"]::-moz-range-thumb {
     width: 18px;
     height: 18px;
     border-radius: 50%;
@@ -920,12 +925,32 @@ body {
     border: 2px solid #1a1a2e;
 }
 
-.hsb-slider-group input[type="range"]::-webkit-slider-thumb:hover {
+.hsb-slider-group input[type="range"]::-webkit-slider-thumb:hover,
+.ball-slider-group input[type="range"]::-webkit-slider-thumb:hover {
     background: #fff;
 }
 
-.hsb-slider-group input[type="range"]::-moz-range-thumb:hover {
+.hsb-slider-group input[type="range"]::-moz-range-thumb:hover,
+.ball-slider-group input[type="range"]::-moz-range-thumb:hover {
     background: #fff;
+}
+
+.hsb-slider-group input[type="range"]:disabled,
+.ball-slider-group input[type="range"]:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.hsb-slider-group input[type="range"]:disabled::-webkit-slider-thumb,
+.ball-slider-group input[type="range"]:disabled::-webkit-slider-thumb {
+    cursor: not-allowed;
+    background: #666;
+}
+
+.hsb-slider-group input[type="range"]:disabled::-moz-range-thumb,
+.ball-slider-group input[type="range"]:disabled::-moz-range-thumb {
+    cursor: not-allowed;
+    background: #666;
 }
 
 #game-hud {

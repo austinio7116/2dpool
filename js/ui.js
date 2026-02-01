@@ -103,6 +103,7 @@ export class UI {
         this.colorGroup2 = document.getElementById('color-group2');
         this.color8Ball = document.getElementById('color-8ball');
         this.striped8BallCheckbox = document.getElementById('striped-8ball');
+        this.striped8BallStripeCheckbox = document.getElementById('striped-8ball-stripe');
 
         // Stripe mode elements
         this.stripeModeOptions = document.getElementById('stripe-mode-options');
@@ -120,6 +121,12 @@ export class UI {
         this.numberBorderCheckbox = document.getElementById('number-border');
         this.borderColorField = document.getElementById('border-color-field');
         this.colorNumberBorder = document.getElementById('color-number-border');
+        this.radialLinesSlider = document.getElementById('radial-lines');
+        this.radialLinesValue = document.getElementById('radial-lines-value');
+        this.stripeThicknessSlider = document.getElementById('stripe-thickness');
+        this.stripeThicknessValue = document.getElementById('stripe-thickness-value');
+        this.circleRadiusSlider = document.getElementById('circle-radius');
+        this.circleRadiusValue = document.getElementById('circle-radius-value');
 
         // Table creator elements
         this.customTableNameInput = document.getElementById('custom-table-name');
@@ -373,6 +380,7 @@ export class UI {
         this.colorGroup2?.addEventListener('input', () => this.updateCreatorPreview());
         this.color8Ball?.addEventListener('input', () => this.updateCreatorPreview());
         this.striped8BallCheckbox?.addEventListener('change', () => this.updateCreatorPreview());
+        this.striped8BallStripeCheckbox?.addEventListener('change', () => this.updateCreatorPreview());
 
         // Stripe mode color picker changes
         this.colorSolids?.addEventListener('input', () => this.updateCreatorPreview());
@@ -394,10 +402,29 @@ export class UI {
         this.colorNumberCircle?.addEventListener('input', () => this.updateCreatorPreview());
         this.colorNumberText?.addEventListener('input', () => this.updateCreatorPreview());
         this.numberBorderCheckbox?.addEventListener('change', () => {
-            this.borderColorField?.classList.toggle('hidden', !this.numberBorderCheckbox.checked);
+            const borderEnabled = this.numberBorderCheckbox.checked;
+            this.borderColorField?.classList.toggle('hidden', !borderEnabled);
+            // Enable/disable radial lines slider based on border checkbox
+            if (this.radialLinesSlider) {
+                this.radialLinesSlider.disabled = !borderEnabled;
+            }
             this.updateCreatorPreview();
         });
         this.colorNumberBorder?.addEventListener('input', () => this.updateCreatorPreview());
+
+        // Ball customization sliders
+        this.radialLinesSlider?.addEventListener('input', (e) => {
+            if (this.radialLinesValue) this.radialLinesValue.textContent = e.target.value;
+            this.updateCreatorPreview();
+        });
+        this.stripeThicknessSlider?.addEventListener('input', (e) => {
+            if (this.stripeThicknessValue) this.stripeThicknessValue.textContent = parseFloat(e.target.value).toFixed(2);
+            this.updateCreatorPreview();
+        });
+        this.circleRadiusSlider?.addEventListener('input', (e) => {
+            if (this.circleRadiusValue) this.circleRadiusValue.textContent = parseFloat(e.target.value).toFixed(2);
+            this.updateCreatorPreview();
+        });
 
         // Table creator sliders
         this.baseTableSelect?.addEventListener('change', () => this.updateTablePreviewInCreator());
@@ -582,7 +609,10 @@ export class UI {
             numberCircleColor: config.numberCircleColor,
             numberTextColor: config.numberTextColor,
             numberBorder: config.numberBorder,
-            numberBorderColor: config.numberBorderColor
+            numberBorderColor: config.numberBorderColor,
+            numberCircleRadialLines: config.numberCircleRadialLines,
+            stripeThickness: config.stripeThickness,
+            numberCircleRadius: config.numberCircleRadius
         };
 
         const frame = this.ballRenderer.renderBallFrame(
@@ -804,6 +834,7 @@ export class UI {
             this.setColorValue(this.colorStripes, set.colors?.group2 || '#0000CD');
             this.setColorValue(this.color8BallStripe, set.colors?.eightBall || '#000000');
             this.setColorValue(this.colorStripeBg, set.options?.stripeBackgroundColor || '#FFFFFF');
+            if (this.striped8BallStripeCheckbox) this.striped8BallStripeCheckbox.checked = set.options?.striped8Ball || false;
 
             // Load number styling
             this.setColorValue(this.colorNumberCircle, set.options?.numberCircleColor || '#FFFFFF');
@@ -811,6 +842,22 @@ export class UI {
             if (this.numberBorderCheckbox) this.numberBorderCheckbox.checked = set.options?.numberBorder || false;
             this.setColorValue(this.colorNumberBorder, set.options?.numberBorderColor || '#000000');
             this.borderColorField?.classList.toggle('hidden', !set.options?.numberBorder);
+
+            // Load sliders
+            if (this.radialLinesSlider) {
+                this.radialLinesSlider.value = set.options?.numberCircleRadialLines || 0;
+                if (this.radialLinesValue) this.radialLinesValue.textContent = set.options?.numberCircleRadialLines || 0;
+                // Disable radial lines if border is not enabled
+                this.radialLinesSlider.disabled = !set.options?.numberBorder;
+            }
+            if (this.stripeThicknessSlider) {
+                this.stripeThicknessSlider.value = set.options?.stripeThickness ?? 0.55;
+                if (this.stripeThicknessValue) this.stripeThicknessValue.textContent = (set.options?.stripeThickness ?? 0.55).toFixed(2);
+            }
+            if (this.circleRadiusSlider) {
+                this.circleRadiusSlider.value = set.options?.numberCircleRadius ?? 0.5;
+                if (this.circleRadiusValue) this.circleRadiusValue.textContent = (set.options?.numberCircleRadius ?? 0.5).toFixed(2);
+            }
 
             // Load advanced mode
             if (set.advancedMode && set.ballColors) {
@@ -868,6 +915,7 @@ export class UI {
         this.setColorValue(this.colorStripes, '#0000CD');
         this.setColorValue(this.color8BallStripe, '#000000');
         this.setColorValue(this.colorStripeBg, '#FFFFFF');
+        if (this.striped8BallStripeCheckbox) this.striped8BallStripeCheckbox.checked = false;
 
         // Reset advanced mode
         if (this.advancedModeCheckbox) this.advancedModeCheckbox.checked = false;
@@ -893,6 +941,21 @@ export class UI {
         if (this.numberBorderCheckbox) this.numberBorderCheckbox.checked = false;
         this.setColorValue(this.colorNumberBorder, '#000000');
         this.borderColorField?.classList.add('hidden');
+
+        // Reset sliders
+        if (this.radialLinesSlider) {
+            this.radialLinesSlider.value = 0;
+            if (this.radialLinesValue) this.radialLinesValue.textContent = '0';
+            this.radialLinesSlider.disabled = true; // Disabled by default since border is unchecked
+        }
+        if (this.stripeThicknessSlider) {
+            this.stripeThicknessSlider.value = 0.55;
+            if (this.stripeThicknessValue) this.stripeThicknessValue.textContent = '0.55';
+        }
+        if (this.circleRadiusSlider) {
+            this.circleRadiusSlider.value = 0.5;
+            if (this.circleRadiusValue) this.circleRadiusValue.textContent = '0.50';
+        }
 
         // Reset modal title and button text for create mode
         const modalTitle = this.creatorModal.querySelector('.modal-header h2');
@@ -975,11 +1038,15 @@ export class UI {
                 options: {
                     hasStripes: true,
                     showNumbers: true,
+                    striped8Ball: this.striped8BallStripeCheckbox?.checked || false,
                     stripeBackgroundColor: this.colorStripeBg?.value || '#FFFFFF',
                     numberCircleColor: this.colorNumberCircle?.value || '#FFFFFF',
                     numberTextColor: this.colorNumberText?.value || '#000000',
                     numberBorder: this.numberBorderCheckbox?.checked || false,
-                    numberBorderColor: this.colorNumberBorder?.value || '#000000'
+                    numberBorderColor: this.colorNumberBorder?.value || '#000000',
+                    numberCircleRadialLines: parseInt(this.radialLinesSlider?.value || '0'),
+                    stripeThickness: parseFloat(this.stripeThicknessSlider?.value || '0.55'),
+                    numberCircleRadius: parseFloat(this.circleRadiusSlider?.value || '0.5')
                 }
             };
 
@@ -1067,11 +1134,15 @@ export class UI {
                 },
                 options: {
                     showNumbers: true,
+                    striped8Ball: this.striped8BallStripeCheckbox?.checked || false,
                     stripeBackgroundColor: this.colorStripeBg?.value || '#FFFFFF',
                     numberCircleColor: this.colorNumberCircle?.value || '#FFFFFF',
                     numberTextColor: this.colorNumberText?.value || '#000000',
                     numberBorder: this.numberBorderCheckbox?.checked || false,
-                    numberBorderColor: this.colorNumberBorder?.value || '#000000'
+                    numberBorderColor: this.colorNumberBorder?.value || '#000000',
+                    numberCircleRadialLines: parseInt(this.radialLinesSlider?.value || '0'),
+                    stripeThickness: parseFloat(this.stripeThicknessSlider?.value || '0.55'),
+                    numberCircleRadius: parseFloat(this.circleRadiusSlider?.value || '0.5')
                 }
             };
 

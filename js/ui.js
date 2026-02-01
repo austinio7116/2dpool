@@ -69,6 +69,8 @@ export class UI {
         this.btnExitFreeplay = document.getElementById('btn-exit-freeplay');
         this.btnGameMenu = document.getElementById('btn-game-menu');
         this.gameMenuDropdown = document.getElementById('game-menu-dropdown');
+        this.btnBallsUpright = document.getElementById('btn-balls-upright');
+        this.btnConcedeFrame = document.getElementById('btn-concede-frame');
         this.btnQuitGame = document.getElementById('btn-quit-game');
         this.soundToggle = document.getElementById('sound-toggle');
         this.speedSlider = document.getElementById('speed-slider');
@@ -170,6 +172,8 @@ export class UI {
         this.onTableChange = null;
         this.onNextFrame = null;
         this.onResumeMatch = null;
+        this.onBallsUpright = null;
+        this.onConcedeFrame = null;
 
         // Current game mode
         this.currentMode = null;
@@ -281,6 +285,20 @@ export class UI {
         this.btnGameMenu.addEventListener('click', (e) => {
             e.stopPropagation();
             this.toggleGameMenu();
+        });
+
+        this.btnBallsUpright.addEventListener('click', () => {
+            this.closeGameMenu();
+            if (this.onBallsUpright) {
+                this.onBallsUpright();
+            }
+        });
+
+        this.btnConcedeFrame.addEventListener('click', () => {
+            this.closeGameMenu();
+            if (this.onConcedeFrame) {
+                this.onConcedeFrame();
+            }
         });
 
         this.btnQuitGame.addEventListener('click', () => {
@@ -1749,6 +1767,20 @@ export class UI {
 
         this.hideMessage();
         this.hideFoul();
+
+        // Update game menu options based on mode
+        this.updateGameMenuOptions();
+    }
+
+    // Update game menu options based on game mode
+    updateGameMenuOptions() {
+        const isSnooker = this.currentMode === GameMode.SNOOKER;
+
+        // Show Balls Upright for non-snooker modes
+        this.btnBallsUpright.classList.toggle('hidden', isSnooker);
+
+        // Show Concede Frame for snooker mode
+        this.btnConcedeFrame.classList.toggle('hidden', !isSnooker);
     }
 
     // Show game over screen

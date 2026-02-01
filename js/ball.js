@@ -71,7 +71,7 @@ export class Ball {
 
         if (speed > minSpeed) {
             this.isRolling = true;
-            this.shouldResetRotation = false; 
+            this.shouldResetRotation = false;
 
             this.travelAngle = Math.atan2(this.velocity.y, this.velocity.x);
 
@@ -79,13 +79,13 @@ export class Ball {
             // If velocity is pixels/frame (at 60fps), you need to normalize.
             // Assuming standard scaling:
             const rotationSpeed = speed / this.radius;
-            
+
             // KEY FIX: Multiply by dt (or a timeScale factor)
             // If your velocity is "pixels per tick" targeting 60FPS:
-            // use: rotationSpeed * (dt / (1/60)); 
+            // use: rotationSpeed * (dt / (1/60));
             // If velocity is "pixels per second":
             // use: rotationSpeed * dt;
-            
+
             // Assuming velocity is pixels-per-frame @ 60hz baseline:
             const timeScale = dt * 60; // Normalize so 1/60s = 1.0
             this.rollAngle += rotationSpeed * timeScale;
@@ -93,7 +93,40 @@ export class Ball {
             this.rollAngle = this.rollAngle % (Math.PI * 2);
             this.displayRoll = this.rollAngle;
         } else {
-             // ... existing stop logic
+            // Ball is stopped
+            if (this.shouldResetRotation) {
+                // Animate displayRoll to 0 smoothly over 0.5 seconds
+                const resetDuration = 0.5;
+                const resetSpeed = (Math.PI * 2) / resetDuration;
+
+                if (Math.abs(this.displayRoll) > 0.01) {
+                    // Find shortest path to 0
+                    let diff = this.displayRoll;
+                    if (diff > Math.PI) {
+                        diff = diff - Math.PI * 2;
+                    } else if (diff < -Math.PI) {
+                        diff = diff + Math.PI * 2;
+                    }
+
+                    // Animate towards 0
+                    const timeScale = dt * 60;
+                    const step = resetSpeed * timeScale;
+
+                    if (Math.abs(diff) < step) {
+                        this.displayRoll = 0;
+                        this.shouldResetRotation = false;
+                    } else if (diff > 0) {
+                        this.displayRoll -= step;
+                    } else {
+                        this.displayRoll += step;
+                    }
+                } else {
+                    this.displayRoll = 0;
+                    this.shouldResetRotation = false;
+                }
+            } else {
+                this.isRolling = false;
+            }
         }
     }
 

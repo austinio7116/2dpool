@@ -130,6 +130,10 @@ class PoolGame {
         // Match callbacks
         this.ui.onNextFrame = () => this.startNextFrame();
         this.ui.onResumeMatch = () => this.resumeMatch();
+
+        // Menu callbacks
+        this.ui.onBallsUpright = () => this.animateBallsUpright();
+        this.ui.onConcedeFrame = () => this.concedeFrame();
     }
 
     async startGame(mode, options = {}) {
@@ -256,6 +260,28 @@ class PoolGame {
         this.game.state = GameState.MENU;
         this.ui.showMainMenu();
         this.input.setCanShoot(false);
+    }
+
+    animateBallsUpright() {
+        // Animate all balls to face up (travelAngle = 0)
+        if (this.game.state === GameState.GAME_OVER) return;
+
+        for (const ball of this.game.balls) {
+            if (!ball.pocketed) {
+                ball.resetRotation();
+            }
+        }
+    }
+
+    concedeFrame() {
+        // Concede the current frame in snooker
+        if (this.game.mode !== GameMode.SNOOKER) return;
+        if (this.game.state === GameState.GAME_OVER) return;
+
+        // Set winner to the other player
+        this.game.winner = this.game.currentPlayer === 1 ? 2 : 1;
+        this.game.gameOverReason = 'Frame conceded';
+        this.game.endGame();
     }
 
     executeShot(direction, power, spin) {

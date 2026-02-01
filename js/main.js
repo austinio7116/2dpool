@@ -230,8 +230,7 @@ class PoolGame {
             if (progressText) progressText.textContent = `${Math.round(progress)}%`;
         };
 
-        // Clear ball renderer cache and pre-generate frames for custom ball set
-        this.renderer.ballRenderer3D.clearCache();
+        // Pre-generate frames for custom ball set (do NOT clear cache - reuse cached frames when possible)
         await this.renderer.ballRenderer3D.precacheBallSet(this.game.balls, progressCallback);
     }
 

@@ -16,7 +16,7 @@ export class BallRenderer3D {
         // Cached rendered frames for each ball type (downsampled)
         this.frameCache = new Map();
         this.CACHE_PREFIX = 'ballFrames_';
-        this.CACHE_VERSION = 'v1'; // Increment to invalidate old caches
+        this.CACHE_VERSION = 'v2'; // Increment to invalidate old caches
 
         this.init();
         this.loadCacheFromStorage();
@@ -200,15 +200,17 @@ export class BallRenderer3D {
             for (const [key, framesData] of Object.entries(cached)) {
                 // Convert base64 back to canvas
                 const frames = framesData.map(dataUrl => {
-                    const img = new Image();
                     const canvas = document.createElement('canvas');
                     canvas.width = this.resolution;
                     canvas.height = this.resolution;
                     const ctx = canvas.getContext('2d');
 
-                    // Synchronously load the data URL
+                    // Data URLs load synchronously, so this works immediately
+                    const img = new Image();
                     img.src = dataUrl;
-                    if (img.complete) {
+
+                    // For data URLs, img.complete is true immediately
+                    if (img.complete && img.naturalWidth > 0) {
                         ctx.drawImage(img, 0, 0);
                     }
 

@@ -15,8 +15,11 @@ export class BallRenderer3D {
 
         // Cached rendered frames for each ball type (downsampled)
         this.frameCache = new Map();
+        this.CACHE_PREFIX = 'ballFrames_';
+        this.CACHE_VERSION = 'v1'; // Increment to invalidate old caches
 
         this.init();
+        this.loadCacheFromStorage();
     }
 
     init() {
@@ -106,7 +109,9 @@ export class BallRenderer3D {
     }
 
     // Pre-cache all frames for a set of balls (call on game start or ball set change)
-    precacheBallSet(balls) {
+    async precacheBallSet(balls) {
+        const ballsToCache = [];
+
         for (const ball of balls) {
             if (ball.pocketed) continue;
 
@@ -125,20 +130,99 @@ export class BallRenderer3D {
                     numberBorderColor: ball.numberBorderColor,
                     numberCircleRadialLines: ball.numberCircleRadialLines || 0,
                     stripeThickness: ball.stripeThickness ?? 0.55,
-                    numberCircleRadius: ball.numberCircleRadius ?? 0.5
+                    numberCircleRadius: ball.numberCircleRadius ?? 0.66
                 };
 
-                // Pre-generate all frames for this ball
-                this.generateBallFrames(
-                    ball.number,
-                    ball.color,
-                    ball.isStripe,
-                    ball.isUKBall || false,
-                    ball.isEightBall || false,
-                    ball.isSnookerBall || false,
+                ballsToCache.push({
+                    number: ball.number,
+                    color: ball.color,
+                    isStripe: ball.isStripe,
+                    isUKBall: ball.isUKBall || false,
+                    isEightBall: ball.isEightBall || false,
+                    isSnookerBall: ball.isSnookerBall || false,
                     options
-                );
+                });
             }
+        }
+
+        // Pre-generate frames for custom balls, yielding control periodically
+        for (let i = 0; i < ballsToCache.length; i++) {
+            const ball = ballsToCache[i];
+            this.generateBallFrames(
+                ball.number,
+                ball.color,
+                ball.isStripe,
+                ball.isUKBall,
+                ball.isEightBall,
+                ball.isSnookerBall,
+                ball.options
+            );
+
+            // Yield control every few balls to keep UI responsive
+            if (i % 3 === 0) {
+                await new Promise(resolve => setTimeout(resolve, 0));
+            }
+        }
+
+        // Save to localStorage
+        this.saveCacheToStorage();
+    }
+
+    // Load cache from localStorage
+    loadCacheFromStorage() {
+        try {
+            const cacheData = localStorage.getItem(this.CACHE_PREFIX + this.CACHE_VERSION);
+            if (!cacheData) return;
+
+            const cached = JSON.parse(cacheData);
+            for (const [key, framesData] of Object.entries(cached)) {
+                // Convert base64 back to canvas
+                const frames = framesData.map(dataUrl => {
+                    const img = new Image();
+                    const canvas = document.createElement('canvas');
+                    canvas.width = this.resolution;
+                    canvas.height = this.resolution;
+                    const ctx = canvas.getContext('2d');
+
+                    // Synchronously load the data URL
+                    img.src = dataUrl;
+                    if (img.complete) {
+                        ctx.drawImage(img, 0, 0);
+                    }
+
+                    return canvas;
+                });
+
+                this.frameCache.set(key, frames);
+            }
+        } catch (e) {
+            console.warn('Failed to load ball cache from storage:', e);
+        }
+    }
+
+    // Save cache to localStorage
+    saveCacheToStorage() {
+        try {
+            const cacheData = {};
+            let totalSize = 0;
+            const MAX_SIZE = 5 * 1024 * 1024; // 5MB limit
+
+            for (const [key, frames] of this.frameCache.entries()) {
+                // Convert every 4th frame to base64 (reduce storage size)
+                const framesData = frames.filter((_, i) => i % 4 === 0).map(canvas => {
+                    const dataUrl = canvas.toDataURL('image/webp', 0.8);
+                    totalSize += dataUrl.length;
+                    return dataUrl;
+                });
+
+                if (totalSize > MAX_SIZE) break; // Stop if too large
+
+                cacheData[key] = framesData;
+            }
+
+            localStorage.setItem(this.CACHE_PREFIX + this.CACHE_VERSION, JSON.stringify(cacheData));
+        } catch (e) {
+            console.warn('Failed to save ball cache to storage:', e);
         }
     }
 

@@ -29,6 +29,15 @@
     </div>
     <div id="game-container">
         <canvas id="game-canvas"></canvas>
+
+        <!-- Loading spinner for ball pre-rendering -->
+        <div id="loading-overlay" class="hidden">
+            <div class="loading-spinner">
+                <div class="spinner"></div>
+                <div class="loading-text">Preparing balls...</div>
+            </div>
+        </div>
+
         <div id="ui-overlay">
             <div id="main-menu" class="menu menu-compact">
                 <h1>2D Pool</h1>

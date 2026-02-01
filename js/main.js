@@ -132,7 +132,11 @@ class PoolGame {
         this.ui.onResumeMatch = () => this.resumeMatch();
     }
 
-    startGame(mode, options = {}) {
+    async startGame(mode, options = {}) {
+        // Show loading spinner
+        const loadingOverlay = document.getElementById('loading-overlay');
+        if (loadingOverlay) loadingOverlay.classList.remove('hidden');
+
         this.audio.init();
         this.physics.reset();  // Clear old ball bodies before creating new game
 
@@ -166,7 +170,7 @@ class PoolGame {
 
         // Apply selected ball set appearance (works for both custom and predefined sets)
         if (selectedBallSet && mode !== GameMode.SNOOKER) {
-            this.applyCustomBallSet(selectedBallSet);
+            await this.applyCustomBallSet(selectedBallSet);
         }
 
         this.input.setCueBall(this.game.cueBall);
@@ -174,9 +178,12 @@ class PoolGame {
         this.input.resetSpin();
 
         this.ui.showGameHUD(mode, this.game.getMatchInfo());
+
+        // Hide loading spinner after everything is ready
+        if (loadingOverlay) loadingOverlay.classList.add('hidden');
     }
 
-    applyCustomBallSet(ballSet) {
+    async applyCustomBallSet(ballSet) {
         if (!ballSet || !this.game.balls) return;
 
         const ballSetManager = this.ui.ballSetManager;
@@ -205,7 +212,7 @@ class PoolGame {
 
         // Clear ball renderer cache and pre-generate frames for custom ball set
         this.renderer.ballRenderer3D.clearCache();
-        this.renderer.ballRenderer3D.precacheBallSet(this.game.balls);
+        await this.renderer.ballRenderer3D.precacheBallSet(this.game.balls);
     }
 
     playAgain() {

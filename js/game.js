@@ -105,7 +105,7 @@ export class Game {
     startGame(mode, options = {}) {
         this.mode = mode;
         this.state = GameState.BALL_IN_HAND;  // Start with cue ball placement for break
-        this.currentPlayer = 1;
+        this.currentPlayer = options.startingPlayer || 1;
         this.player1Group = null;
         this.player2Group = null;
         this.isBreakShot = true;
@@ -771,14 +771,14 @@ export class Game {
     }
 
     // Start the next frame in a match
-    startNextFrame() {
+    startNextFrame(options = {}) {
         if (this.match.matchComplete) return;
 
         this.match.currentFrame++;
 
         // Reset frame state but keep match scores
         this.state = GameState.BALL_IN_HAND;
-        this.currentPlayer = 1;
+        this.currentPlayer = options.startingPlayer || 1;
         this.player1Group = null;
         this.player2Group = null;
         this.isBreakShot = true;

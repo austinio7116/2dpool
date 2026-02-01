@@ -184,6 +184,18 @@ class PoolGame {
         // Store ball set ID for save/resume
         options.ballSetId = selectedBallSet?.id || 'american';
 
+        // Setup AI if enabled (not for Free Play mode) - BEFORE starting game
+        const aiEnabled = this.ui.getAIEnabled() && mode !== GameMode.FREE_PLAY;
+        this.ai.setEnabled(aiEnabled);
+        this.ai.setDifficulty(this.ui.getAIDifficulty());
+        this.ai.setGameReferences(this.game, this.table);  // Set references BEFORE startGame
+
+        // Randomize who breaks when AI is enabled - BEFORE starting game
+        // so handleStateChange knows if it's AI's turn
+        if (aiEnabled && !options.resumeMatch) {
+            options.startingPlayer = AI.randomizeBreak();
+        }
+
         this.game.startGame(mode, options);
         this.lastGameOptions = options;  // Store for play again
         this.lastGameMode = mode; // Store mode for play again
@@ -191,18 +203,6 @@ class PoolGame {
         // Apply selected ball set appearance (works for both custom and predefined sets)
         if (selectedBallSet && mode !== GameMode.SNOOKER) {
             await this.applyCustomBallSet(selectedBallSet);
-        }
-
-        // Setup AI if enabled (not for Free Play mode)
-        const aiEnabled = this.ui.getAIEnabled() && mode !== GameMode.FREE_PLAY;
-        this.ai.setEnabled(aiEnabled);
-        this.ai.setDifficulty(this.ui.getAIDifficulty());
-        this.ai.setGameReferences(this.game, this.table);
-
-        // Randomize who breaks when AI is enabled
-        if (aiEnabled && !options.resumeMatch) {
-            const breakingPlayer = AI.randomizeBreak();
-            this.game.currentPlayer = breakingPlayer;
         }
 
         this.input.setCueBall(this.game.cueBall);
@@ -213,12 +213,6 @@ class PoolGame {
 
         // Hide loading spinner after everything is ready
         if (loadingOverlay) loadingOverlay.classList.add('hidden');
-
-        // If AI breaks first, trigger AI turn
-        if (aiEnabled && this.game.currentPlayer === 2) {
-            this.input.setCanShoot(false);
-            setTimeout(() => this.ai.takeTurn(), 500);
-        }
     }
 
     async applyCustomBallSet(ballSet) {
@@ -495,8 +489,14 @@ class PoolGame {
         const selectedBallSet = this.ui.getSelectedBallSet();
         const mode = this.game.mode;
 
+        // Randomize who breaks for new frame when AI is enabled - BEFORE starting frame
+        const options = {};
+        if (this.ai.enabled) {
+            options.startingPlayer = AI.randomizeBreak();
+        }
+
         // Create new balls in game
-        this.game.startNextFrame();
+        this.game.startNextFrame(options);
 
         // Re-apply custom ball set if needed
         if (selectedBallSet && !selectedBallSet.isPredefined && mode !== GameMode.SNOOKER) {
@@ -506,22 +506,8 @@ class PoolGame {
         // Sync new balls to physics
         this.physics.syncBallsToPlanck(this.game.balls);
 
-        // Randomize who breaks for new frame when AI is enabled
-        if (this.ai.enabled) {
-            const breakingPlayer = AI.randomizeBreak();
-            this.game.currentPlayer = breakingPlayer;
-        }
-
         this.input.setCueBall(this.game.cueBall);
         this.input.resetSpin();
-
-        // Check if AI breaks this frame
-        const isAITurn = this.ai.enabled && this.game.currentPlayer === 2;
-        if (isAITurn) {
-            this.input.setCanShoot(false);
-        } else {
-            this.input.setCanShoot(true);
-        }
 
         // Hide game over screen and show HUD
         this.ui.gameOverScreen.classList.add('hidden');
@@ -535,10 +521,7 @@ class PoolGame {
             this.saveMatch();
         }
 
-        // Trigger AI turn if AI breaks
-        if (isAITurn) {
-            setTimeout(() => this.ai.takeTurn(), 500);
-        }
+        // AI turn is handled by handleStateChange callback from game.startNextFrame
     }
 
     // Save match state to localStorage

@@ -7,21 +7,21 @@ import { GameMode, GameState } from './game.js';
 // Difficulty configurations
 const DIFFICULTY_SETTINGS = {
     easy: {
-        aimError: 10,          // Degrees of aim error
-        thinkingDelay: 1500,   // ms before shooting
+        aimError: 3,          // Degrees of aim error
+        thinkingDelay: 300,   // ms before shooting
         powerError: 0.20,      // Power variation
         shotSelection: 'random' // Picks from top 50%
     },
     medium: {
-        aimError: 5,
-        thinkingDelay: 1000,
+        aimError: 1,
+        thinkingDelay: 300,
         powerError: 0.10,
         shotSelection: 'top3'  // Best of top 3
     },
     hard: {
-        aimError: 0,           // Perfect aim
-        thinkingDelay: 500,
-        powerError: 0,         // Perfect power
+        aimError: 0.3,         // Small aim variation (1-2 degrees)
+        thinkingDelay: 300,
+        powerError: 0.02,      // Small power variation (2%)
         shotSelection: 'optimal' // Always best shot
     }
 };
@@ -79,7 +79,14 @@ export class AI {
         if (this.onThinkingStart) this.onThinkingStart();
 
         setTimeout(() => {
-            const position = this.findBestCueBallPosition();
+            let position = this.findBestCueBallPosition();
+
+            // Validate position can actually be placed
+            const kitchenOnly = this.game.isBreakShot || this.game.mode === GameMode.UK_EIGHT_BALL;
+            if (position && !this.game.canPlaceCueBall(position, kitchenOnly)) {
+                // Fallback to a valid kitchen position if our chosen position fails
+                position = this.table.findValidKitchenPosition(this.game.balls, this.table.center.y);
+            }
 
             if (this.onBallPlacement && position) {
                 this.onBallPlacement(position);
@@ -88,13 +95,27 @@ export class AI {
             this.isThinking = false;
             if (this.onThinkingEnd) this.onThinkingEnd();
 
-            // After placing, plan the shot
-            setTimeout(() => this.planAndExecuteShot(), 200);
+            // After placing, plan the shot (only if state changed to PLAYING)
+            setTimeout(() => {
+                if (this.game.state === GameState.PLAYING) {
+                    this.planAndExecuteShot();
+                }
+            }, 200);
         }, settings.thinkingDelay / 2);
     }
 
     // Find best position for cue ball placement
     findBestCueBallPosition() {
+        // For snooker break, place cue ball between green and yellow spots
+        if (this.game.isBreakShot && this.game.mode === GameMode.SNOOKER) {
+            return this.getSnookerBreakPosition();
+        }
+
+        // For pool break shots, just use a standard kitchen position (center of kitchen)
+        if (this.game.isBreakShot) {
+            return this.table.findValidKitchenPosition(this.game.balls, this.table.center.y);
+        }
+
         const validTargets = this.getValidTargets();
         if (validTargets.length === 0) {
             return this.table.findValidCueBallPosition(this.game.balls, this.table.center.y);
@@ -149,6 +170,40 @@ export class AI {
         return bestPosition || this.table.findValidCueBallPosition(this.game.balls, this.table.center.y);
     }
 
+    // Get snooker break position - between green and yellow spots
+    getSnookerBreakPosition() {
+        const tableCenter = this.table.center;
+        const spots = this.table.spots;
+
+        if (spots && spots.yellow && spots.green) {
+            // Spots are relative to table center
+            const yellowAbsolute = {
+                x: tableCenter.x + spots.yellow.x,
+                y: tableCenter.y + spots.yellow.y
+            };
+            const greenAbsolute = {
+                x: tableCenter.x + spots.green.x,
+                y: tableCenter.y + spots.green.y
+            };
+
+            // Position between green and yellow, but offset toward yellow to avoid brown ball
+            // (Brown is at the exact center between green and yellow)
+            // Use 70/30 split to ensure we're far enough from brown (need > 2 ball radii)
+            const position = {
+                x: (yellowAbsolute.x + greenAbsolute.x) / 2,
+                y: yellowAbsolute.y * 0.7 + greenAbsolute.y * 0.3  // 70% toward yellow
+            };
+
+            // Verify position is valid before returning
+            if (this.game.canPlaceCueBall(position, true)) {
+                return position;
+            }
+        }
+
+        // Fallback to default kitchen position
+        return this.table.findValidKitchenPosition(this.game.balls, this.table.center.y);
+    }
+
     // Main shot planning and execution
     planAndExecuteShot() {
         if (!this.game || this.game.state !== GameState.PLAYING) return;
@@ -178,34 +233,96 @@ export class AI {
         }, settings.thinkingDelay);
     }
 
-    // Play a break shot - aim at the front ball of the rack with maximum power
+    // Play a break shot - different strategies for pool vs snooker
     playBreakShot() {
         const cueBall = this.game.cueBall;
         if (!cueBall) return;
 
-        // Find the apex ball (front of the rack) - usually ball 1 in 8-ball/9-ball
-        // It's the ball closest to the cue ball that's part of the rack
         const rackBalls = this.game.balls.filter(b => !b.pocketed && !b.isCueBall);
         if (rackBalls.length === 0) return;
 
-        // Find ball closest to cue ball (should be apex)
-        let apexBall = rackBalls[0];
-        let minDist = Infinity;
-        for (const ball of rackBalls) {
-            const dist = Vec2.distance(cueBall.position, ball.position);
-            if (dist < minDist) {
-                minDist = dist;
-                apexBall = ball;
+        const settings = DIFFICULTY_SETTINGS[this.difficulty];
+        const isSnooker = this.game.mode === GameMode.SNOOKER;
+
+        let targetBall;
+        let basePower;
+
+        if (isSnooker) {
+            // Snooker break: aim at the BACK RIGHT red of the pack
+            // Back = furthest from cue ball, Right = positive y (below center line)
+            const redBalls = rackBalls.filter(b => b.isRed);
+            if (redBalls.length === 0) {
+                targetBall = rackBalls[0];
+            } else {
+                // Find the back right red: furthest from cue ball AND on right side (positive y)
+                let bestScore = -Infinity;
+                targetBall = redBalls[0];
+                for (const ball of redBalls) {
+                    const distFromCue = Vec2.distance(cueBall.position, ball.position);
+                    // Positive y = right side of table when looking from baulk
+                    const rightSide = ball.position.y - this.table.center.y;
+                    // Score: prefer far balls on the right side
+                    const score = distFromCue * 0.5 + rightSide * 2;
+                    if (score > bestScore) {
+                        bestScore = score;
+                        targetBall = ball;
+                    }
+                }
             }
+
+            // Adjust power based on table size (15 reds = full size, 6 reds = mini)
+            const isFullSize = redBalls.length >= 15;
+            basePower = isFullSize ? 55 : 45;
+
+            // For snooker break: aim at the side of the back right red
+            // Thin cut on the right side of the ball
+            const ballRadius = targetBall.radius || 12;
+            const thinCutOffset = ballRadius * 0.5;
+
+            // Offset perpendicular to aim line
+            const aimDir = Vec2.normalize(Vec2.subtract(targetBall.position, cueBall.position));
+            const perpendicular = { x: -aimDir.y, y: aimDir.x };
+
+            // Offset to hit the right side of the target ball (positive y direction)
+            const thinAimPoint = Vec2.add(targetBall.position, Vec2.multiply(perpendicular, thinCutOffset));
+
+            const direction = Vec2.normalize(Vec2.subtract(thinAimPoint, cueBall.position));
+
+            // Apply power variation based on difficulty
+            const powerVariation = settings.powerError * basePower * 0.1;
+            const power = basePower - Math.random() * powerVariation;
+
+            // Apply aim error based on difficulty
+            const aimError = (Math.random() - 0.5) * settings.aimError * (Math.PI / 180);
+            const adjustedDir = Vec2.rotate(direction, aimError);
+
+            // Add RIGHT-hand side spin for snooker break
+            const spin = { x: 0.6, y: 0 }; // Right side
+
+            if (this.onShot) {
+                this.onShot(Vec2.normalize(adjustedDir), power, spin);
+            }
+            return; // Early return for snooker break
+        } else {
+            // Pool modes (8-ball, 9-ball, UK 8-ball): aim at apex, power 60
+            // Find ball closest to cue ball (should be apex)
+            let minDist = Infinity;
+            targetBall = rackBalls[0];
+            for (const ball of rackBalls) {
+                const dist = Vec2.distance(cueBall.position, ball.position);
+                if (dist < minDist) {
+                    minDist = dist;
+                    targetBall = ball;
+                }
+            }
+            basePower = 60;
         }
 
-        // Aim directly at the apex ball
-        const direction = Vec2.normalize(Vec2.subtract(apexBall.position, cueBall.position));
+        // Aim at the target ball
+        const direction = Vec2.normalize(Vec2.subtract(targetBall.position, cueBall.position));
 
-        // MAXIMUM power for break shot
-        const settings = DIFFICULTY_SETTINGS[this.difficulty];
-        const basePower = 20; // Max power
-        const powerVariation = settings.powerError * 5; // Small variation based on difficulty
+        // Apply power variation based on difficulty
+        const powerVariation = settings.powerError * basePower * 0.1;
         const power = basePower - Math.random() * powerVariation;
 
         // Apply aim error based on difficulty (hard = perfect)
@@ -226,12 +343,28 @@ export class AI {
         const pockets = this.table.pockets;
         const shots = [];
 
-        // Enumerate all target + pocket combinations
+        // Enumerate all target + pocket combinations for direct shots
         for (const target of validTargets) {
             for (const pocket of pockets) {
                 const shot = this.evaluatePotentialShot(cueBall.position, target, pocket);
                 if (shot) {
                     shots.push(shot);
+                }
+            }
+        }
+
+        // If no direct shots found, try bank shots
+        if (shots.length === 0) {
+            for (const target of validTargets) {
+                // Check if there's no direct path to this target
+                if (!this.isPathClear(cueBall.position, target.position, [target])) {
+                    // Try bank shots for each pocket
+                    for (const pocket of pockets) {
+                        const bankShot = this.calculateBankShot(cueBall.position, target, pocket);
+                        if (bankShot && bankShot.score > 20) { // Only consider decent bank shots
+                            shots.push(bankShot);
+                        }
+                    }
                 }
             }
         }
@@ -336,8 +469,11 @@ export class AI {
         const ballRadius = target.radius || 12;
         const cueBallRadius = this.game.cueBall?.radius || 12;
 
+        // Get adjusted aim point between pocket jaws (not center)
+        const pocketAimPoint = this.getPocketAimPoint(target.position, pocket);
+
         // Calculate ghost ball position (where cue ball needs to hit)
-        const ghostBall = this.calculateGhostBall(target.position, pocket.position, ballRadius, cueBallRadius);
+        const ghostBall = this.calculateGhostBall(target.position, pocketAimPoint, ballRadius, cueBallRadius);
 
         // Check if path from cue ball to ghost ball is clear
         if (!this.isPathClear(cueBallPos, ghostBall, [target])) {
@@ -345,17 +481,17 @@ export class AI {
         }
 
         // Check if path from target to pocket is clear (exclude target ball itself!)
-        if (!this.isPathClear(target.position, pocket.position, [target])) {
+        if (!this.isPathClear(target.position, pocketAimPoint, [target])) {
             return null;
         }
 
         // Calculate shot parameters
         const aimDirection = Vec2.normalize(Vec2.subtract(ghostBall, cueBallPos));
         const distanceToGhost = Vec2.distance(cueBallPos, ghostBall);
-        const distanceToPocket = Vec2.distance(target.position, pocket.position);
+        const distanceToPocket = Vec2.distance(target.position, pocketAimPoint);
 
         // Calculate cut angle (angle between cue ball approach and pocket direction)
-        const targetToPocket = Vec2.normalize(Vec2.subtract(pocket.position, target.position));
+        const targetToPocket = Vec2.normalize(Vec2.subtract(pocketAimPoint, target.position));
         const cueBallToTarget = Vec2.normalize(Vec2.subtract(target.position, cueBallPos));
         const cutAngle = Math.acos(Math.max(-1, Math.min(1, Vec2.dot(cueBallToTarget, targetToPocket))));
         const cutAngleDeg = cutAngle * 180 / Math.PI;
@@ -471,6 +607,120 @@ export class AI {
         return Math.acos(Math.max(-1, Math.min(1, dot))) * 180 / Math.PI;
     }
 
+    // Calculate aim point between pocket jaws (not center)
+    // This adjusts the target point based on approach angle to aim between the cushion jaws
+    getPocketAimPoint(_targetPos, pocket) {
+        const pocketPos = pocket.position;
+        const pocketRadius = pocket.radius || 22;
+
+        // Move the aim point inward from pocket center toward the table
+        // This places it between the jaws rather than at the back of the pocket
+        const jawOffset = pocketRadius * 0.4; // Aim point is 40% of radius inside the opening
+
+        if (pocket.type === 'corner') {
+            // For corners, pull aim point diagonally toward table center
+            const tableCenter = this.table.center;
+            const toCenter = Vec2.normalize(Vec2.subtract(tableCenter, pocketPos));
+            return Vec2.add(pocketPos, Vec2.multiply(toCenter, jawOffset));
+        } else {
+            // For side pockets, pull aim point perpendicular to the rail (into table)
+            const yDir = pocketPos.y < this.table.center.y ? 1 : -1;
+            return { x: pocketPos.x, y: pocketPos.y + jawOffset * yDir };
+        }
+    }
+
+    // Calculate a bank shot off the rail
+    calculateBankShot(cueBallPos, target, pocket) {
+        const bounds = this.table.bounds;
+        const ballRadius = target.radius || 12;
+        const cueBallRadius = this.game.cueBall?.radius || 12;
+
+        // Try each rail as a potential bank surface
+        const rails = [
+            { name: 'top', y: bounds.top, axis: 'y', normal: { x: 0, y: 1 } },
+            { name: 'bottom', y: bounds.bottom, axis: 'y', normal: { x: 0, y: -1 } },
+            { name: 'left', x: bounds.left, axis: 'x', normal: { x: 1, y: 0 } },
+            { name: 'right', x: bounds.right, axis: 'x', normal: { x: -1, y: 0 } }
+        ];
+
+        const pocketAimPoint = this.getPocketAimPoint(target.position, pocket);
+        let bestBankShot = null;
+        let bestScore = -Infinity;
+
+        for (const rail of rails) {
+            // Calculate reflection point on this rail
+            // Mirror the pocket aim point across the rail
+            let mirroredTarget;
+            if (rail.axis === 'y') {
+                mirroredTarget = { x: pocketAimPoint.x, y: 2 * rail.y - pocketAimPoint.y };
+            } else {
+                mirroredTarget = { x: 2 * rail.x - pocketAimPoint.x, y: pocketAimPoint.y };
+            }
+
+            // Ghost ball for hitting target toward mirrored point
+            const ghostDir = Vec2.normalize(Vec2.subtract(mirroredTarget, target.position));
+            const ghostBall = Vec2.subtract(target.position, Vec2.multiply(ghostDir, ballRadius + cueBallRadius));
+
+            // Check if cue ball can reach ghost ball
+            if (!this.isPathClear(cueBallPos, ghostBall, [target])) continue;
+
+            // Calculate where target ball would hit the rail
+            const toMirror = Vec2.subtract(mirroredTarget, target.position);
+            let railHitPoint;
+            if (rail.axis === 'y') {
+                const t = (rail.y - target.position.y) / toMirror.y;
+                if (t <= 0 || t > 1) continue; // Rail not in path
+                railHitPoint = { x: target.position.x + toMirror.x * t, y: rail.y };
+            } else {
+                const t = (rail.x - target.position.x) / toMirror.x;
+                if (t <= 0 || t > 1) continue;
+                railHitPoint = { x: rail.x, y: target.position.y + toMirror.y * t };
+            }
+
+            // Check path from target to rail is clear
+            if (!this.isPathClear(target.position, railHitPoint, [target])) continue;
+
+            // Check path from rail to pocket is clear
+            if (!this.isPathClear(railHitPoint, pocketAimPoint, [target])) continue;
+
+            // Score this bank shot (lower than direct shots)
+            const distToGhost = Vec2.distance(cueBallPos, ghostBall);
+            const distToPocket = Vec2.distance(target.position, railHitPoint) + Vec2.distance(railHitPoint, pocketAimPoint);
+            const cutAngle = this.calculateCutAngle(cueBallPos, target.position, mirroredTarget);
+
+            // Bank shots are harder, so reduce score
+            const baseScore = this.scoreShot(cutAngle, distToGhost, distToPocket, pocket.type);
+            const bankPenalty = 25; // Bank shots scored lower
+            const score = baseScore - bankPenalty;
+
+            if (score > bestScore) {
+                bestScore = score;
+                const aimDirection = Vec2.normalize(Vec2.subtract(ghostBall, cueBallPos));
+                bestBankShot = {
+                    target,
+                    pocket,
+                    ghostBall,
+                    direction: aimDirection,
+                    power: this.calculatePower(distToGhost, distToPocket, cutAngle),
+                    cutAngle,
+                    score,
+                    isBank: true,
+                    rail: rail.name
+                };
+            }
+        }
+
+        return bestBankShot;
+    }
+
+    // Calculate cut angle between cue approach and target direction
+    calculateCutAngle(cueBallPos, targetPos, aimPoint) {
+        const cueBallToTarget = Vec2.normalize(Vec2.subtract(targetPos, cueBallPos));
+        const targetToAim = Vec2.normalize(Vec2.subtract(aimPoint, targetPos));
+        const dot = Vec2.dot(cueBallToTarget, targetToAim);
+        return Math.acos(Math.max(-1, Math.min(1, dot))) * 180 / Math.PI;
+    }
+
     // Score a shot (0-100 scale)
     scoreShot(cutAngle, distanceToGhost, distanceToPocket, pocketType) {
         // Cut angle score: straight shots are easier
@@ -541,8 +791,12 @@ export class AI {
     executeShot(shot) {
         const settings = DIFFICULTY_SETTINGS[this.difficulty];
 
-        // Apply aim error based on difficulty
         let direction = shot.direction;
+
+        // Cut-induced throw compensation disabled - was causing aim issues
+        // TODO: Re-implement with correct direction calculation if needed
+
+        // Apply aim error based on difficulty
         const aimError = (Math.random() - 0.5) * 2 * settings.aimError * (Math.PI / 180);
         direction = Vec2.rotate(direction, aimError);
         direction = Vec2.normalize(direction);

@@ -51,7 +51,7 @@ body {
     margin-top: 20px;
 }
 
-.loading-spinner {
+.loading-content .loading-spinner {
     width: 50px;
     height: 50px;
     border: 4px solid rgba(255, 215, 0, 0.2);
@@ -2337,4 +2337,25 @@ body {
     color: rgba(255, 255, 255, 0.9);
     font-size: 16px;
     font-weight: 500;
+}
+
+.progress-bar-container {
+    width: 200px;
+    height: 8px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, #4CAF50, #8BC34A);
+    width: 0%;
+    transition: width 0.2s ease;
+}
+
+.progress-text {
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 14px;
+    margin-top: 8px;
 }

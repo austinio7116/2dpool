@@ -96,12 +96,29 @@ export class BallRenderer3D {
             return this.frameCache.get(cacheKey);
         }
 
-        const frames = [];
         const renderOptions = options || {};
-        for (let i = 0; i < this.frameCount; i++) {
+
+        // Check if this ball needs rotation frames
+        // Only truly solid color balls without any features need just 1 frame
+        const hasRadialLines = (renderOptions.numberCircleRadialLines || 0) > 0;
+        const showNumber = renderOptions.showNumber !== false && ballNumber !== 0 && (!isUKBall || isEightBall) && !isSnookerBall;
+        const needsRotation = isStripe || isSnookerBall || hasRadialLines || showNumber;
+
+        const framesToRender = needsRotation ? this.frameCount : 1;
+        const frames = [];
+
+        for (let i = 0; i < framesToRender; i++) {
             const rotation = (i / this.frameCount) * Math.PI * 2;
             const frame = this.renderBallFrame(ballNumber, baseColor, isStripe, rotation, isUKBall, isEightBall, isSnookerBall, renderOptions);
             frames.push(frame);
+        }
+
+        // If only one frame, duplicate it for all rotation angles so indexing still works
+        if (framesToRender === 1) {
+            const singleFrame = frames[0];
+            for (let i = 1; i < this.frameCount; i++) {
+                frames.push(singleFrame);
+            }
         }
 
         this.frameCache.set(cacheKey, frames);
@@ -109,7 +126,7 @@ export class BallRenderer3D {
     }
 
     // Pre-cache all frames for a set of balls (call on game start or ball set change)
-    async precacheBallSet(balls) {
+    async precacheBallSet(balls, progressCallback = null) {
         const ballsToCache = [];
 
         for (const ball of balls) {
@@ -146,7 +163,8 @@ export class BallRenderer3D {
         }
 
         // Pre-generate frames for custom balls, yielding control periodically
-        for (let i = 0; i < ballsToCache.length; i++) {
+        const totalBalls = ballsToCache.length;
+        for (let i = 0; i < totalBalls; i++) {
             const ball = ballsToCache[i];
             this.generateBallFrames(
                 ball.number,
@@ -158,10 +176,14 @@ export class BallRenderer3D {
                 ball.options
             );
 
-            // Yield control every few balls to keep UI responsive
-            if (i % 3 === 0) {
-                await new Promise(resolve => setTimeout(resolve, 0));
+            // Update progress
+            if (progressCallback) {
+                const progress = ((i + 1) / totalBalls) * 100;
+                progressCallback(progress);
             }
+
+            // Yield control every ball to keep UI responsive and allow progress updates
+            await new Promise(resolve => setTimeout(resolve, 0));
         }
 
         // Save to localStorage

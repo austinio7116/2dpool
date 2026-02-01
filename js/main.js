@@ -135,7 +135,15 @@ class PoolGame {
     async startGame(mode, options = {}) {
         // Show loading spinner
         const loadingOverlay = document.getElementById('loading-overlay');
+        const progressBar = document.getElementById('loading-progress-bar');
+        const progressText = document.getElementById('loading-progress-text');
+
         if (loadingOverlay) loadingOverlay.classList.remove('hidden');
+        if (progressBar) progressBar.style.width = '0%';
+        if (progressText) progressText.textContent = '0%';
+
+        // Yield to browser to show spinner before starting work
+        await new Promise(resolve => setTimeout(resolve, 0));
 
         this.audio.init();
         this.physics.reset();  // Clear old ball bodies before creating new game
@@ -210,9 +218,17 @@ class PoolGame {
             ball.numberCircleRadius = config.numberCircleRadius ?? 0.66;
         }
 
+        // Progress callback for loading bar
+        const progressBar = document.getElementById('loading-progress-bar');
+        const progressText = document.getElementById('loading-progress-text');
+        const progressCallback = (progress) => {
+            if (progressBar) progressBar.style.width = `${progress}%`;
+            if (progressText) progressText.textContent = `${Math.round(progress)}%`;
+        };
+
         // Clear ball renderer cache and pre-generate frames for custom ball set
         this.renderer.ballRenderer3D.clearCache();
-        await this.renderer.ballRenderer3D.precacheBallSet(this.game.balls);
+        await this.renderer.ballRenderer3D.precacheBallSet(this.game.balls, progressCallback);
     }
 
     playAgain() {

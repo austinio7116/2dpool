@@ -19,7 +19,12 @@ export class BallRenderer3D {
         this.CACHE_VERSION = 'v2'; // Increment to invalidate old caches
 
         this.init();
-        this.loadCacheFromStorage();
+        // Clear corrupt cache on startup to prevent invisible balls
+        try {
+            localStorage.removeItem(this.CACHE_PREFIX + this.CACHE_VERSION);
+        } catch (e) {
+            // Ignore localStorage errors
+        }
     }
 
     init() {
@@ -198,21 +203,22 @@ export class BallRenderer3D {
 
             const cached = JSON.parse(cacheData);
             for (const [key, framesData] of Object.entries(cached)) {
-                // Convert base64 back to canvas
+                // Convert base64 back to canvas with proper async image loading
                 const frames = framesData.map(dataUrl => {
                     const canvas = document.createElement('canvas');
                     canvas.width = this.resolution;
                     canvas.height = this.resolution;
                     const ctx = canvas.getContext('2d');
 
-                    // Data URLs load synchronously, so this works immediately
                     const img = new Image();
-                    img.src = dataUrl;
-
-                    // For data URLs, img.complete is true immediately
-                    if (img.complete && img.naturalWidth > 0) {
+                    // Use onload callback to ensure image is decoded before drawing
+                    img.onload = () => {
                         ctx.drawImage(img, 0, 0);
-                    }
+                    };
+                    img.onerror = () => {
+                        console.warn('Failed to load cached ball frame');
+                    };
+                    img.src = dataUrl;
 
                     return canvas;
                 });
@@ -221,6 +227,8 @@ export class BallRenderer3D {
             }
         } catch (e) {
             console.warn('Failed to load ball cache from storage:', e);
+            // Clear corrupt cache to prevent empty balls on page refresh
+            localStorage.removeItem(this.CACHE_PREFIX + this.CACHE_VERSION);
         }
     }
 

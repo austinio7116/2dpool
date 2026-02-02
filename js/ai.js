@@ -4,6 +4,27 @@
 import { Vec2 } from './utils.js';
 import { GameMode, GameState } from './game.js';
 
+// Debug logging - set to true to see AI decision making
+const AI_DEBUG = false;
+
+function aiLog(...args) {
+    if (AI_DEBUG) {
+        console.log('%c[AI]', 'color: #4CAF50; font-weight: bold', ...args);
+    }
+}
+
+function aiLogGroup(label) {
+    if (AI_DEBUG) {
+        console.group(`%c[AI] ${label}`, 'color: #4CAF50; font-weight: bold');
+    }
+}
+
+function aiLogGroupEnd() {
+    if (AI_DEBUG) {
+        console.groupEnd();
+    }
+}
+
 // Difficulty configurations
 const DIFFICULTY_SETTINGS = {
     easy: {
@@ -19,7 +40,7 @@ const DIFFICULTY_SETTINGS = {
         shotSelection: 'top3'  // Best of top 3
     },
     hard: {
-        aimError: 0.3,         // Small aim variation (1-2 degrees)
+        aimError: 0.01,         // Small aim variation (1-2 degrees)
         thinkingDelay: 300,
         powerError: 0.02,      // Small power variation (2%)
         shotSelection: 'optimal' // Always best shot
@@ -214,20 +235,27 @@ export class AI {
         if (this.onThinkingStart) this.onThinkingStart();
 
         setTimeout(() => {
+            console.log('%c═══════════════════════════════════════════════════════════', 'color: #4CAF50');
+            aiLog('AI TURN - Difficulty:', this.difficulty, '| Mode:', this.game.mode);
+
             // Special handling for break shot - just hit the rack hard
             if (this.game.isBreakShot) {
+                aiLog('Shot type: BREAK');
                 this.playBreakShot();
             } else {
                 const shot = this.findBestShot();
 
                 if (shot) {
+                    aiLog('Shot type: POTTING ATTEMPT');
                     this.executeShot(shot);
                 } else {
                     // No good shot found, play safety
+                    aiLog('Shot type: SAFETY (no good pots)');
                     this.playSafety();
                 }
             }
 
+            console.log('%c═══════════════════════════════════════════════════════════', 'color: #4CAF50');
             this.isThinking = false;
             if (this.onThinkingEnd) this.onThinkingEnd();
         }, settings.thinkingDelay);
@@ -235,14 +263,24 @@ export class AI {
 
     // Play a break shot - different strategies for pool vs snooker
     playBreakShot() {
+        aiLogGroup('Break Shot');
         const cueBall = this.game.cueBall;
-        if (!cueBall) return;
+        if (!cueBall) {
+            aiLog('No cue ball found');
+            aiLogGroupEnd();
+            return;
+        }
 
         const rackBalls = this.game.balls.filter(b => !b.pocketed && !b.isCueBall);
-        if (rackBalls.length === 0) return;
+        if (rackBalls.length === 0) {
+            aiLog('No rack balls found');
+            aiLogGroupEnd();
+            return;
+        }
 
         const settings = DIFFICULTY_SETTINGS[this.difficulty];
         const isSnooker = this.game.mode === GameMode.SNOOKER;
+        aiLog('Mode:', isSnooker ? 'SNOOKER' : 'POOL', '| Difficulty:', this.difficulty);
 
         let targetBall;
         let basePower;
@@ -273,11 +311,15 @@ export class AI {
             // Adjust power based on table size (15 reds = full size, 6 reds = mini)
             const isFullSize = redBalls.length >= 15;
             basePower = isFullSize ? 55 : 45;
+            aiLog('Table size:', isFullSize ? 'FULL (15 reds)' : 'MINI', '| Red count:', redBalls.length);
+            aiLog('Target red:', `Ball at (${targetBall.position.x.toFixed(1)}, ${targetBall.position.y.toFixed(1)})`);
 
             // For snooker break: aim at the side of the back right red
             // Thin cut on the right side of the ball
+            // Full-size tables need thinner contact to avoid sending cue ball into the pack
             const ballRadius = targetBall.radius || 12;
-            const thinCutOffset = ballRadius * 0.5;
+            const thinCutOffset = isFullSize ? ballRadius * 0.75 : ballRadius * 0.5;
+            aiLog('Thin cut offset:', thinCutOffset.toFixed(2), '(', isFullSize ? '0.75x' : '0.5x', 'ball radius)');
 
             // Offset perpendicular to aim line
             const aimDir = Vec2.normalize(Vec2.subtract(targetBall.position, cueBall.position));
@@ -298,6 +340,8 @@ export class AI {
 
             // Add RIGHT-hand side spin for snooker break
             const spin = { x: 0.6, y: 0 }; // Right side
+            aiLog('Break shot params:', { power: power.toFixed(1), spin, aimError: (aimError * 180 / Math.PI).toFixed(2) + '°' });
+            aiLogGroupEnd();
 
             if (this.onShot) {
                 this.onShot(Vec2.normalize(adjustedDir), power, spin);
@@ -328,6 +372,8 @@ export class AI {
         // Apply aim error based on difficulty (hard = perfect)
         const aimError = (Math.random() - 0.5) * settings.aimError * (Math.PI / 180);
         const adjustedDir = Vec2.rotate(direction, aimError);
+        aiLog('Pool break:', { power: power.toFixed(1), aimError: (aimError * 180 / Math.PI).toFixed(2) + '°' });
+        aiLogGroupEnd();
 
         if (this.onShot) {
             this.onShot(Vec2.normalize(adjustedDir), power, { x: 0, y: 0 });
@@ -336,10 +382,16 @@ export class AI {
 
     // Find all possible shots and select the best one
     findBestShot() {
+        aiLogGroup('Finding Best Shot');
         const cueBall = this.game.cueBall;
-        if (!cueBall || cueBall.pocketed) return null;
+        if (!cueBall || cueBall.pocketed) {
+            aiLog('No cue ball available');
+            aiLogGroupEnd();
+            return null;
+        }
 
         const validTargets = this.getValidTargets();
+        aiLog('Valid targets:', validTargets.length, 'balls');
         const pockets = this.table.pockets;
         const shots = [];
 
@@ -369,13 +421,30 @@ export class AI {
             }
         }
 
-        if (shots.length === 0) return null;
+        if (shots.length === 0) {
+            aiLog('No valid shots found');
+            aiLogGroupEnd();
+            return null;
+        }
 
         // Sort by score (highest first)
         shots.sort((a, b) => b.score - a.score);
 
+        aiLog('Found', shots.length, 'possible shots');
+        // Log top 3 shots
+        const topShots = shots.slice(0, 3);
+        topShots.forEach((s, i) => {
+            const ballName = s.target.colorName || s.target.number || 'ball';
+            const pocketName = s.pocket.type + (s.pocket.position.x < this.table.center.x ? '-left' : '-right');
+            aiLog(`  #${i + 1}: ${ballName} → ${pocketName} | cut: ${s.cutAngle.toFixed(1)}° | score: ${s.score.toFixed(1)}${s.isBank ? ' (BANK)' : ''}`);
+        });
+
         // Select shot based on difficulty
-        return this.selectShot(shots);
+        const selected = this.selectShot(shots);
+        const selectedBall = selected.target.colorName || selected.target.number || 'ball';
+        aiLog('Selected:', selectedBall, '| Difficulty mode:', DIFFICULTY_SETTINGS[this.difficulty].shotSelection);
+        aiLogGroupEnd();
+        return selected;
     }
 
     // Get valid target balls based on game mode
@@ -475,13 +544,29 @@ export class AI {
         // Calculate ghost ball position (where cue ball needs to hit)
         const ghostBall = this.calculateGhostBall(target.position, pocketAimPoint, ballRadius, cueBallRadius);
 
-        // Check if path from cue ball to ghost ball is clear
+        // CRITICAL: Check if we can legally reach and pot this ball without fouling
+        // This is more thorough than just checking center-to-center paths
+
+        // 1. Check if path from cue ball to ghost ball is clear
         if (!this.isPathClear(cueBallPos, ghostBall, [target])) {
             return null;
         }
 
-        // Check if path from target to pocket is clear (exclude target ball itself!)
+        // 2. Check if path from target to pocket is clear
         if (!this.isPathClear(target.position, pocketAimPoint, [target])) {
+            return null;
+        }
+
+        // 3. NEW: Check that no ball is blocking the potting angle
+        // Even if we can reach the ghost ball, another ball near the target
+        // could obstruct the required contact angle
+        if (!this.isPottingAngleClear(cueBallPos, target, pocket)) {
+            return null;
+        }
+
+        // 4. NEW: Check for balls that the cue ball would clip near the contact point
+        // This catches cases where a ball is just off the direct path but would still be hit
+        if (this.wouldClipBallNearTarget(cueBallPos, ghostBall, target)) {
             return null;
         }
 
@@ -521,6 +606,113 @@ export class AI {
             cutAngle: cutAngleDeg,
             score
         };
+    }
+
+    // Check if the potting angle is clear - no ball blocking the angle we need to hit
+    isPottingAngleClear(cueBallPos, target, pocket) {
+        const ballRadius = target.radius || 12;
+        const cueBallRadius = this.game.cueBall?.radius || 12;
+
+        // Get all balls that could interfere (not pocketed, not cue ball, not target)
+        const otherBalls = this.game.balls.filter(b =>
+            !b.pocketed && !b.isCueBall && b !== target
+        );
+
+        // Direction from cue ball approach to target
+        const approachDir = Vec2.normalize(Vec2.subtract(target.position, cueBallPos));
+
+        // Direction target needs to go (toward pocket)
+        const pocketDir = Vec2.normalize(Vec2.subtract(pocket.position, target.position));
+
+        // Check each ball to see if it's blocking the required angle
+        for (const ball of otherBalls) {
+            const otherRadius = ball.radius || 12;
+
+            // Distance from this ball to the target ball
+            const distToTarget = Vec2.distance(ball.position, target.position);
+
+            // If this ball is very close to target, check if it blocks the potting angle
+            if (distToTarget < (ballRadius + otherRadius + cueBallRadius) * 2) {
+                // Vector from target to this other ball
+                const targetToOther = Vec2.subtract(ball.position, target.position);
+
+                // Check if this ball is in the "approach cone" - the area the cue ball
+                // needs to travel through to make the shot
+                const dotApproach = Vec2.dot(Vec2.normalize(targetToOther), Vec2.multiply(approachDir, -1));
+
+                // If the ball is roughly behind the target (from cue ball's perspective)
+                // and close enough to interfere with the contact
+                if (dotApproach > 0.3) { // Ball is somewhat in the approach direction
+                    // Check perpendicular distance to the approach line
+                    const projLength = Vec2.dot(targetToOther, Vec2.multiply(approachDir, -1));
+                    const closestOnLine = Vec2.add(target.position, Vec2.multiply(approachDir, -projLength));
+                    const perpDist = Vec2.distance(ball.position, closestOnLine);
+
+                    // If the ball is close enough to the approach line to cause interference
+                    if (perpDist < (otherRadius + cueBallRadius) && projLength > 0 && projLength < cueBallRadius * 3) {
+                        const blockerName = ball.colorName || ball.number || 'ball';
+                        const targetName = target.colorName || target.number || 'ball';
+                        if (AI_DEBUG) aiLog(`  Shot rejected: ${blockerName} blocks potting angle to ${targetName}`);
+                        return false; // This ball blocks the potting angle
+                    }
+                }
+
+                // Also check if ball blocks the pocket direction (between target and pocket)
+                const dotPocket = Vec2.dot(Vec2.normalize(targetToOther), pocketDir);
+                if (dotPocket > 0.5 && distToTarget < ballRadius + otherRadius + 5) {
+                    const blockerName = ball.colorName || ball.number || 'ball';
+                    const targetName = target.colorName || target.number || 'ball';
+                    if (AI_DEBUG) aiLog(`  Shot rejected: ${blockerName} blocking pocket path from ${targetName}`);
+                    return false;
+                }
+            }
+        }
+
+        return true;
+    }
+
+    // Check if cue ball would clip another ball when traveling to ghost ball position
+    // This catches edge cases where a ball is just off the direct path
+    wouldClipBallNearTarget(cueBallPos, ghostBall, target) {
+        const cueBallRadius = this.game.cueBall?.radius || 12;
+
+        // Get balls near the target/ghost ball area
+        const otherBalls = this.game.balls.filter(b =>
+            !b.pocketed && !b.isCueBall && b !== target
+        );
+
+        const approachDir = Vec2.normalize(Vec2.subtract(ghostBall, cueBallPos));
+        const distToGhost = Vec2.distance(cueBallPos, ghostBall);
+
+        for (const ball of otherBalls) {
+            const otherRadius = ball.radius || 12;
+
+            // Check distance from this ball to the ghost ball position
+            const distToGhostBall = Vec2.distance(ball.position, ghostBall);
+
+            // If a ball is very close to where the cue ball needs to be at contact
+            if (distToGhostBall < (cueBallRadius + otherRadius) * 1.5) {
+                // More careful check: would the cue ball hit this ball?
+                const toBall = Vec2.subtract(ball.position, cueBallPos);
+                const projection = Vec2.dot(toBall, approachDir);
+
+                // Only check balls that are along our path (not behind us)
+                if (projection > 0 && projection < distToGhost + cueBallRadius) {
+                    const closestPoint = Vec2.add(cueBallPos, Vec2.multiply(approachDir, projection));
+                    const perpDist = Vec2.distance(ball.position, closestPoint);
+
+                    // Use full collision radius (no tolerance) for this close-range check
+                    if (perpDist < (cueBallRadius + otherRadius)) {
+                        const clipName = ball.colorName || ball.number || 'ball';
+                        const targetName = target.colorName || target.number || 'ball';
+                        if (AI_DEBUG) aiLog(`  Shot rejected: would clip ${clipName} near ${targetName}`);
+                        return true; // Would clip this ball
+                    }
+                }
+            }
+        }
+
+        return false;
     }
 
     // Calculate ghost ball position for pocketing
@@ -789,48 +981,339 @@ export class AI {
 
     // Execute the chosen shot
     executeShot(shot) {
+        aiLogGroup('Executing Shot');
+        const ballName = shot.target.colorName || shot.target.number || 'ball';
+        aiLog('Target:', ballName, '| Cut angle:', shot.cutAngle.toFixed(1) + '°', '| Base power:', shot.power.toFixed(1));
+
         const settings = DIFFICULTY_SETTINGS[this.difficulty];
 
         let direction = shot.direction;
 
-        // Cut-induced throw compensation disabled - was causing aim issues
-        // TODO: Re-implement with correct direction calculation if needed
+        // Cut-induced throw compensation for shots > 5 degrees
+        // Throw causes object ball to deviate toward cut direction, so aim slightly thinner
+        if (shot.cutAngle > 1) {
+            const throwCompensation = this.calculateThrowCompensation(shot);
+            const throwDegrees = (throwCompensation * 180 / Math.PI).toFixed(2);
+            aiLog('Throw compensation:', throwDegrees + '°', '(cut > 5°)');
+            direction = Vec2.rotate(direction, throwCompensation);
+        } else {
+            aiLog('No throw compensation (cut ≤ 5°)');
+        }
 
         // Apply aim error based on difficulty
         const aimError = (Math.random() - 0.5) * 2 * settings.aimError * (Math.PI / 180);
         direction = Vec2.rotate(direction, aimError);
         direction = Vec2.normalize(direction);
+        aiLog('Aim error applied:', (aimError * 180 / Math.PI).toFixed(2) + '°');
 
         // Apply power error
         let power = shot.power;
         const powerError = (Math.random() - 0.5) * 2 * settings.powerError;
         power = power * (1 + powerError);
         power = Math.max(2, Math.min(20, power));
+        aiLog('Final power:', power.toFixed(1), '(error:', (powerError * 100).toFixed(1) + '%)');
 
-        // Basic spin (no spin for now, could be enhanced for hard mode)
-        const spin = { x: 0, y: 0 };
+        // Decide whether to use backspin
+        const spin = this.calculateSpin(shot);
 
+        aiLogGroupEnd();
         if (this.onShot) {
             this.onShot(direction, power, spin);
         }
     }
 
+    // Calculate throw compensation angle for cut shots
+    // Returns radians to adjust aim (negative = aim thinner/more cut)
+    calculateThrowCompensation(shot) {
+        const cutAngleDeg = shot.cutAngle;
+
+        // Throw is most significant between 15-45 degrees
+        // At shallow cuts (<15°) throw is minimal
+        // At steep cuts (>60°) throw is less relevant as the shot is harder anyway
+        // Compensate by aiming about 0.5-1.5 degrees thinner
+
+        let compensation = 0;
+        if (cutAngleDeg > 5 && cutAngleDeg < 60) {
+            // Peak compensation around 30 degrees, tapering at extremes
+            const normalized = (cutAngleDeg - 5) / 55; // 0 to 1 over the range
+            const throwFactor = Math.sin(normalized * Math.PI); // Peaks at 0.5
+            compensation = throwFactor * 1.2; // Up to 1.2 degrees
+        }
+
+        // Determine which direction to compensate
+        // We need to aim thinner (more toward the cut side)
+        const cueBall = this.game.cueBall;
+        const cueToBall = Vec2.subtract(shot.target.position, cueBall.position);
+        const ballToPocket = Vec2.subtract(shot.pocket.position, shot.target.position);
+
+        // Cross product sign tells us if cut is to left or right
+        const cross = cueToBall.x * ballToPocket.y - cueToBall.y * ballToPocket.x;
+
+        // If cross > 0, cut is to the right, compensate by aiming left (negative angle)
+        // If cross < 0, cut is to the left, compensate by aiming right (positive angle)
+        const sign = cross > 0 ? -1 : 1;
+
+        return sign * compensation * (Math.PI / 180);
+    }
+
+    // Calculate spin for the shot based on position play considerations
+    // In main.js physics: spin.y > 0 = follow/topspin, spin.y < 0 = draw/backspin
+    calculateSpin(shot) {
+        aiLogGroup('Spin Decision');
+        const cueBall = this.game.cueBall;
+        if (!cueBall) {
+            aiLog('No cue ball - using no spin');
+            aiLogGroupEnd();
+            return { x: 0, y: 0 };
+        }
+
+        let spinY = 0;
+        let reason = 'center ball (stun)';
+
+        // Condition 1: Dead straight shot with object ball near pocket - USE BACKSPIN
+        // This avoids following the object ball into the pocket (roll-in-off)
+        if (shot.cutAngle < 8) {
+            const distToPocket = Vec2.distance(shot.target.position, shot.pocket.position);
+            const ballRadius = shot.target.radius || 12;
+            aiLog('Condition 1: Straight shot check - cut:', shot.cutAngle.toFixed(1) + '°', '| dist to pocket:', distToPocket.toFixed(0) + 'px', '| threshold:', (ballRadius * 6).toFixed(0) + 'px');
+            if (distToPocket < ballRadius * 6) {
+                // More backspin for straighter shots and closer distances
+                const backspinAmount = 0.5 + (1 - shot.cutAngle / 8) * 0.3;
+                spinY = backspinAmount; // Negative = backspin/draw
+                reason = 'straight shot near pocket - backspin to avoid roll-in';
+                aiLog('  → TRIGGERED: backspin =', (spinY).toFixed(2));
+            }
+        } else {
+            aiLog('Condition 1: Skipped (cut angle', shot.cutAngle.toFixed(1) + '° > 8°)');
+        }
+
+        // Condition 2: Check scratch risk with natural roll
+        if (spinY === 0) {
+            const naturalPath = this.predictCueBallPath(shot, 0); // 0 = stun/center ball
+            aiLog('Condition 2: Scratch risk check (stun) -', naturalPath.scratchRisk ? 'RISK DETECTED' : 'no risk');
+            if (naturalPath.scratchRisk) {
+                // Try backspin to pull cue ball back
+                spinY = 0.7;
+                reason = 'scratch risk with stun - using backspin';
+                aiLog('  → TRIGGERED: backspin = 0.70');
+            }
+        }
+
+        // Condition 3: Compare position quality with different spin options
+        if (spinY === 0) {
+            // Evaluate position with stun, backspin, and topspin
+            const stunScore = this.evaluateCueBallPosition(shot, 0);
+            const backspinScore = this.evaluateCueBallPosition(shot, -0.5);
+            const topspinScore = this.evaluateCueBallPosition(shot, 0.5);
+
+            aiLog('Condition 3: Position comparison - stun:', stunScore.toFixed(1), '| backspin:', backspinScore.toFixed(1), '| topspin:', topspinScore.toFixed(1));
+
+            // Also check scratch risk for each option
+            const stunScratch = this.predictCueBallPath(shot, 0).scratchRisk;
+            const backspinScratch = this.predictCueBallPath(shot, -0.5).scratchRisk;
+            const topspinScratch = this.predictCueBallPath(shot, 0.5).scratchRisk;
+
+            aiLog('  Scratch risks - stun:', stunScratch, '| backspin:', backspinScratch, '| topspin:', topspinScratch);
+
+            // Penalize options that risk scratching
+            const stunFinal = stunScratch ? stunScore - 50 : stunScore;
+            const backspinFinal = backspinScratch ? backspinScore - 50 : backspinScore;
+            const topspinFinal = topspinScratch ? topspinScore - 50 : topspinScore;
+
+            // Pick best option
+            if (backspinFinal > stunFinal && backspinFinal > topspinFinal && backspinFinal > stunScore - 10) {
+                spinY = 0.5;
+                reason = `backspin gives better position (${backspinFinal.toFixed(0)} vs stun ${stunFinal.toFixed(0)})`;
+                aiLog('  → CHOSE: backspin');
+            } else if (topspinFinal > stunFinal && topspinFinal > backspinFinal && topspinFinal > stunScore - 10) {
+                spinY = -0.5;
+                reason = `topspin gives better position (${topspinFinal.toFixed(0)} vs stun ${stunFinal.toFixed(0)})`;
+                aiLog('  → CHOSE: topspin');
+            } else {
+                aiLog('  → CHOSE: stun (default or best)');
+                reason = 'stun is optimal or safest';
+            }
+        }
+
+        aiLog('DECISION: spin.y =', spinY.toFixed(2), '| Reason:', reason);
+        aiLogGroupEnd();
+        return { x: 0, y: spinY };
+    }
+
+    // Predict where cueball will go after contact (simplified)
+    // spinY: positive = topspin/follow, negative = backspin/draw, 0 = stun
+    predictCueBallPath(shot, spinY = 0) {
+        const target = shot.target;
+
+        // Direction cue ball is traveling
+        const cueBallDir = shot.direction;
+
+        // Direction target ball will travel (toward pocket)
+        const targetDir = Vec2.normalize(Vec2.subtract(shot.pocket.position, target.position));
+
+        // After collision, cue ball deflects roughly perpendicular to target direction
+        // For a cut shot, the cue ball continues roughly in its original direction
+        // but deflected away from the line of the target ball's path
+
+        let cueBallAfter;
+
+        // Spin affects cue ball behavior after contact:
+        // - Backspin (spinY < 0): cue ball pulls back or stops
+        // - Topspin (spinY > 0): cue ball follows through more
+        // - Stun (spinY = 0): cue ball deflects along tangent line
+
+        if (spinY < -0.3) {
+            // Strong backspin - cue ball pulls back toward shooter
+            // Reverse the incoming direction
+            cueBallAfter = Vec2.multiply(cueBallDir, -1);
+        } else if (shot.cutAngle < 10) {
+            if (spinY > 0.3) {
+                // Topspin on straight shot - strong follow through
+                cueBallAfter = targetDir;
+            } else if (spinY < -0.1) {
+                // Mild backspin on straight shot - stops or pulls back slightly
+                cueBallAfter = Vec2.multiply(cueBallDir, -0.3);
+            } else {
+                // Stun on straight shot - stops near contact point
+                cueBallAfter = { x: 0, y: 0 };
+            }
+        } else {
+            // Cut shot - cue ball deflects perpendicular (tangent line)
+            // Cross product determines which side
+            const cross = cueBallDir.x * targetDir.y - cueBallDir.y * targetDir.x;
+            if (cross > 0) {
+                cueBallAfter = { x: -targetDir.y, y: targetDir.x };
+            } else {
+                cueBallAfter = { x: targetDir.y, y: -targetDir.x };
+            }
+
+            // Topspin makes cue ball follow through more (blend toward target direction)
+            if (spinY > 0.2) {
+                cueBallAfter = Vec2.normalize(Vec2.add(
+                    Vec2.multiply(cueBallAfter, 1 - spinY * 0.5),
+                    Vec2.multiply(targetDir, spinY * 0.5)
+                ));
+            }
+        }
+
+        // Normalize if not zero
+        if (Vec2.length(cueBallAfter) > 0.01) {
+            cueBallAfter = Vec2.normalize(cueBallAfter);
+        }
+
+        // Project cue ball path and check if it goes near any pocket
+        const startPos = target.position; // Approximately where contact happens
+        const scratchRisk = this.checkPathNearPockets(startPos, cueBallAfter);
+
+        return {
+            direction: cueBallAfter,
+            scratchRisk
+        };
+    }
+
+    // Check if a path from position in direction goes near any pocket
+    checkPathNearPockets(startPos, direction) {
+        const pockets = this.table.pockets;
+        const ballRadius = this.game.cueBall?.radius || 12;
+
+        // Check each pocket
+        for (const pocket of pockets) {
+            // Calculate closest approach to pocket along the path
+            const toPoсket = Vec2.subtract(pocket.position, startPos);
+            const projection = Vec2.dot(toPoсket, direction);
+
+            // Only check if pocket is in front of us
+            if (projection < 0) continue;
+
+            // Point of closest approach
+            const closest = Vec2.add(startPos, Vec2.multiply(direction, projection));
+            const distToPocket = Vec2.distance(closest, pocket.position);
+
+            // If we pass within pocket radius + small margin, scratch risk
+            if (distToPocket < pocket.radius + ballRadius) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    // Evaluate how good the cue ball position will be after the shot
+    // spinY: positive = topspin/follow, negative = backspin/draw, 0 = stun
+    evaluateCueBallPosition(shot, spinY = 0) {
+        const target = shot.target;
+
+        // Predict approximate cue ball position after shot with given spin
+        const path = this.predictCueBallPath(shot, spinY);
+
+        // Estimate where cue ball ends up (rough approximation)
+        // Power and spin affect how far it travels after contact
+        // Backspin reduces travel distance, topspin increases it
+        let travelDist = shot.power * 15;
+        if (spinY < 0) {
+            // Backspin reduces forward travel (can even go negative for draw)
+            travelDist *= Math.max(0.1, 1 + spinY * 1.5); // spinY=-0.5 -> travelDist*0.35
+        } else if (spinY > 0) {
+            // Topspin increases follow-through
+            travelDist *= (1 + spinY * 0.5); // spinY=0.5 -> travelDist*1.25
+        }
+
+        const endPos = Vec2.add(target.position, Vec2.multiply(path.direction, travelDist));
+
+        // Clamp to table bounds
+        const bounds = this.table.bounds;
+        endPos.x = Math.max(bounds.left + 20, Math.min(bounds.right - 20, endPos.x));
+        endPos.y = Math.max(bounds.top + 20, Math.min(bounds.bottom - 20, endPos.y));
+
+        // Find next target balls
+        const validTargets = this.getValidTargets().filter(b => b !== target);
+        if (validTargets.length === 0) {
+            return 100; // No more targets, position doesn't matter
+        }
+
+        // Score based on how many pocketing opportunities from predicted position
+        let bestScore = 0;
+        for (const nextTarget of validTargets) {
+            for (const pocket of this.table.pockets) {
+                const potentialShot = this.evaluatePotentialShot(endPos, nextTarget, pocket);
+                if (potentialShot && potentialShot.score > bestScore) {
+                    bestScore = potentialShot.score;
+                }
+            }
+        }
+
+        return bestScore;
+    }
+
     // Play a safety shot when no good pocketing options
     playSafety() {
+        aiLogGroup('Safety Shot');
+        aiLog('No good pocketing options - playing safety');
+
         const cueBall = this.game.cueBall;
-        if (!cueBall) return;
+        if (!cueBall) {
+            aiLog('No cue ball');
+            aiLogGroupEnd();
+            return;
+        }
 
         const validTargets = this.getValidTargets();
         if (validTargets.length === 0) {
             // No valid targets at all - just hit any ball
             const anyBalls = this.game.balls.filter(b => !b.pocketed && !b.isCueBall);
-            if (anyBalls.length === 0) return;
+            if (anyBalls.length === 0) {
+                aiLog('No balls to hit');
+                aiLogGroupEnd();
+                return;
+            }
             validTargets.push(...anyBalls);
+            aiLog('No valid targets - hitting any ball');
         }
 
         // Find a target we can actually reach (path is clear)
         let bestTarget = null;
         let bestDist = Infinity;
+        let hasCleavePath = false;
 
         for (const target of validTargets) {
             const dist = Vec2.distance(cueBall.position, target.position);
@@ -839,6 +1322,7 @@ export class AI {
                 if (dist < bestDist) {
                     bestDist = dist;
                     bestTarget = target;
+                    hasCleavePath = true;
                 }
             }
         }
@@ -854,13 +1338,21 @@ export class AI {
             }
         }
 
-        if (!bestTarget) return;
+        if (!bestTarget) {
+            aiLog('No target found');
+            aiLogGroupEnd();
+            return;
+        }
+
+        const targetName = bestTarget.colorName || bestTarget.number || 'ball';
+        aiLog('Target:', targetName, '| Distance:', bestDist.toFixed(0) + 'px', '| Clear path:', hasCleavePath);
 
         // Aim at the target - use decent power to at least scatter balls
         const direction = Vec2.normalize(Vec2.subtract(bestTarget.position, cueBall.position));
 
         // Power based on distance - need to at least reach the ball with some momentum
         const power = Math.max(8, Math.min(14, 6 + bestDist / 80));
+        aiLog('Safety power:', power.toFixed(1));
 
         const settings = DIFFICULTY_SETTINGS[this.difficulty];
 
@@ -868,6 +1360,7 @@ export class AI {
         const aimError = (Math.random() - 0.5) * 2 * settings.aimError * (Math.PI / 180);
         const adjustedDir = Vec2.rotate(direction, aimError);
 
+        aiLogGroupEnd();
         if (this.onShot) {
             this.onShot(Vec2.normalize(adjustedDir), power, { x: 0, y: 0 });
         }

@@ -138,7 +138,7 @@ export class Renderer {
 
         // Draw AI visualization overlay (if present)
         if (state.aiVisualization) {
-            //this.drawAIVisualization(state.aiVisualization);
+            this.drawAIVisualization(state.aiVisualization);
         }
 
         if (state.showSpinIndicator) {

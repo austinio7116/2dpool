@@ -5,7 +5,7 @@ import { Vec2 } from './utils.js';
 import { GameMode, GameState } from './game.js';
 
 // Debug logging - set to true to see AI decision making
-const AI_DEBUG = false;
+const AI_DEBUG = true;
 
 function aiLog(...args) {
     if (AI_DEBUG) {
@@ -597,7 +597,7 @@ export class AI {
         // Reject shots with extreme cut angles (over 60 degrees is very difficult)
         // Exception: allow up to 75 degrees if ball is very close to pocket
         const isNearPocket = distanceToPocket < ballRadius * 8; // Within ~4 ball widths
-        const maxCutAngle = isNearPocket ? 85 : 75;
+        const maxCutAngle = isNearPocket ? 75 : 60;
 
         if (cutAngleDeg > maxCutAngle) {
             return null;
@@ -839,6 +839,11 @@ export class AI {
         // Move the aim point inward from pocket center toward the table
         const jawOffset = pocketRadius * 0.4;
 
+        // Extra margin for curved pocket jaws (tables 7, 8, 9 have curved pockets)
+        const tableStyle = this.table?.tableStyle || 1;
+        const hasCurvedPockets = tableStyle >= 7 && tableStyle <= 9;
+        const curvedJawMargin = hasCurvedPockets ? 8 : 0;
+
         // Calculate approach angle from CUE BALL to pocket (not target ball)
         const cueToPocket = Vec2.subtract(pocketPos, cueBallPos);
 
@@ -875,7 +880,13 @@ export class AI {
             if (Math.abs(angleDiff) > 10) {
                 // Shift perpendicular to the ideal 45-degree line
                 // The shift direction depends on which jaw is "near"
-                const shiftMagnitude = Math.min(Math.abs(angleDiff) / 45, 1) * pocketRadius * 0.35;
+                let shiftMagnitude = Math.min(Math.abs(angleDiff) / 45, 1) * pocketRadius * 0.35;
+
+                // Extra margin for curved jaws when coming along the rail
+                // The more extreme the angle, the more we need to avoid the curved lip
+                if (Math.abs(angleDiff) > 30) {
+                    shiftMagnitude += curvedJawMargin * (Math.abs(angleDiff) - 30) / 30;
+                }
 
                 // Shift along the pocket opening (perpendicular to ideal approach)
                 // For a corner, this is along the 45-degree line rotated 90 degrees
@@ -884,6 +895,12 @@ export class AI {
 
                 aimPoint.x += Math.cos(shiftAngle) * shiftMagnitude * shiftDir;
                 aimPoint.y += Math.sin(shiftAngle) * shiftMagnitude * shiftDir;
+            }
+
+            // Additional inward pull for very steep rail angles to clear curved jaw
+            if (Math.abs(angleDiff) > 50) {
+                const extraInward = curvedJawMargin * (Math.abs(angleDiff) - 50) / 40;
+                aimPoint = Vec2.add(aimPoint, Vec2.multiply(toCenter, extraInward));
             }
 
             return aimPoint;
@@ -901,9 +918,21 @@ export class AI {
             if (approachAngle < 80) {
                 // Coming at an angle - shift away from the near jaw
                 // If cue ball is to the left of pocket, shift aim point right
-                const shiftMagnitude = ((80 - approachAngle) / 50) * pocketRadius * 0.4;
+                let shiftMagnitude = ((80 - approachAngle) / 50) * pocketRadius * 0.4;
+
+                // Extra margin for curved jaws on steep rail approaches
+                if (approachAngle < 50) {
+                    shiftMagnitude += curvedJawMargin * (50 - approachAngle) / 30;
+                }
+
                 const shiftDir = cueBallPos.x < pocketPos.x ? 1 : -1;
                 aimPoint.x += shiftMagnitude * shiftDir;
+            }
+
+            // Additional inward pull for very steep angles
+            if (approachAngle < 40) {
+                const extraInward = curvedJawMargin * (40 - approachAngle) / 40;
+                aimPoint.y += extraInward * yDir;
             }
 
             return aimPoint;
@@ -1422,25 +1451,108 @@ export class AI {
             aiLog('No valid targets - hitting any ball');
         }
 
-        // Find a target we can actually reach (path is clear)
+        // Check if we're snookered (no direct path to any valid target)
+        const isSnookered = this.checkIfSnookered(validTargets);
+
+        if (isSnookered) {
+            aiLog('AI is SNOOKERED - attempting escape');
+            const escapeShot = this.findSnookerEscape(validTargets);
+
+            if (escapeShot) {
+                const targetName = escapeShot.target.colorName || escapeShot.target.number || 'ball';
+                aiLog('Escape shot: bank off', escapeShot.rail, 'to hit', targetName,
+                      '| Power:', escapeShot.power.toFixed(1));
+
+                const settings = DIFFICULTY_SETTINGS[this.difficulty];
+                const aimError = (Math.random() - 0.5) * 2 * settings.aimError * (Math.PI / 180);
+                const adjustedDir = Vec2.rotate(escapeShot.direction, aimError);
+
+                let power = escapeShot.power;
+                const powerError = (Math.random() - 0.5) * 2 * settings.powerError;
+                power = power * (1 + powerError);
+                power = Math.max(8, Math.min(30, power));
+
+                aiLogGroupEnd();
+                if (this.onShot) {
+                    this.onShot(Vec2.normalize(adjustedDir), power, { x: 0, y: 0 });
+                }
+                return;
+            }
+            aiLog('No escape found - will try direct shot anyway');
+        }
+
+        // Get opponent's target balls for snookering
+        const opponentBalls = this.getOpponentTargets();
+        aiLog('Opponent has', opponentBalls.length, 'target balls');
+
+        // Find best safety shot - one that leaves opponent snookered or in a difficult position
+        const safetyShot = this.findBestSafetyShot(validTargets, opponentBalls);
+
+        if (safetyShot) {
+            const targetName = safetyShot.target.colorName || safetyShot.target.number || 'ball';
+            aiLog('Best safety: hit', targetName,
+                  '| Angle:', safetyShot.contactAngle.toFixed(1) + '°',
+                  '| Power:', safetyShot.power.toFixed(1),
+                  '| Score:', safetyShot.score.toFixed(1));
+            if (safetyShot.snookerBall) {
+                const snookerName = safetyShot.snookerBall.colorName || safetyShot.snookerBall.number || 'ball';
+                aiLog('  Snooker behind:', snookerName);
+            }
+
+            const settings = DIFFICULTY_SETTINGS[this.difficulty];
+
+            // Apply aim error based on difficulty
+            const aimError = (Math.random() - 0.5) * 2 * settings.aimError * (Math.PI / 180);
+            const adjustedDir = Vec2.rotate(safetyShot.direction, aimError);
+
+            // Apply power error
+            let power = safetyShot.power;
+            const powerError = (Math.random() - 0.5) * 2 * settings.powerError;
+            power = power * (1 + powerError);
+            power = Math.max(5, Math.min(25, power));
+
+            aiLogGroupEnd();
+            if (this.onShot) {
+                this.onShot(Vec2.normalize(adjustedDir), power, safetyShot.spin);
+            }
+            return;
+        }
+
+        // Fallback: just hit the closest reachable ball with moderate power
+        aiLog('No good safety found - using basic safety');
         let bestTarget = null;
         let bestDist = Infinity;
-        let hasCleavePath = false;
 
         for (const target of validTargets) {
             const dist = Vec2.distance(cueBall.position, target.position);
-            // Check if we can reach this ball
-            if (this.isPathClear(cueBall.position, target.position, [target])) {
+            if (this.canLegallyReachBall(cueBall.position, target)) {
                 if (dist < bestDist) {
                     bestDist = dist;
                     bestTarget = target;
-                    hasCleavePath = true;
                 }
             }
         }
 
-        // If no clear path found, just aim at closest
+        // If still no target found and we're snookered, try the escape shot again with lower standards
+        if (!bestTarget && isSnookered) {
+            const desperateEscape = this.findSnookerEscape(validTargets, true);
+            if (desperateEscape) {
+                aiLog('Desperate escape attempt');
+                const settings = DIFFICULTY_SETTINGS[this.difficulty];
+                const aimError = (Math.random() - 0.5) * 2 * settings.aimError * (Math.PI / 180);
+                const adjustedDir = Vec2.rotate(desperateEscape.direction, aimError);
+
+                aiLogGroupEnd();
+                if (this.onShot) {
+                    this.onShot(Vec2.normalize(adjustedDir), desperateEscape.power, { x: 0, y: 0 });
+                }
+                return;
+            }
+        }
+
         if (!bestTarget) {
+            aiLog('No legal target found - forced to foul');
+            // Last resort: aim at nearest valid target even if blocked
             for (const target of validTargets) {
                 const dist = Vec2.distance(cueBall.position, target.position);
                 if (dist < bestDist) {
@@ -1451,24 +1563,18 @@ export class AI {
         }
 
         if (!bestTarget) {
-            aiLog('No target found');
+            aiLog('No target found at all');
             aiLogGroupEnd();
             return;
         }
 
         const targetName = bestTarget.colorName || bestTarget.number || 'ball';
-        aiLog('Target:', targetName, '| Distance:', bestDist.toFixed(0) + 'px', '| Clear path:', hasCleavePath);
+        aiLog('Fallback target:', targetName);
 
-        // Aim at the target - use decent power to at least scatter balls
         const direction = Vec2.normalize(Vec2.subtract(bestTarget.position, cueBall.position));
-
-        // Power based on distance - need to at least reach the ball with some momentum
         const power = Math.max(8, Math.min(14, 6 + bestDist / 80));
-        aiLog('Safety power:', power.toFixed(1));
 
         const settings = DIFFICULTY_SETTINGS[this.difficulty];
-
-        // Apply aim error
         const aimError = (Math.random() - 0.5) * 2 * settings.aimError * (Math.PI / 180);
         const adjustedDir = Vec2.rotate(direction, aimError);
 
@@ -1476,6 +1582,768 @@ export class AI {
         if (this.onShot) {
             this.onShot(Vec2.normalize(adjustedDir), power, { x: 0, y: 0 });
         }
+    }
+
+    // Check if AI is snookered (no direct clear path to any valid target)
+    checkIfSnookered(validTargets) {
+        const cueBall = this.game.cueBall;
+        if (!cueBall) return false;
+
+        for (const target of validTargets) {
+            if (this.canLegallyReachBall(cueBall.position, target)) {
+                return false; // At least one target is reachable
+            }
+        }
+        return true; // No targets reachable - we're snookered
+    }
+
+    // Check if we can legally reach a ball (path is clear of other balls)
+    canLegallyReachBall(fromPos, targetBall) {
+        const cueBallRadius = this.game.cueBall?.radius || 12;
+        const targetRadius = targetBall.radius || 12;
+
+        // Get all other balls (not cue ball, not target, not pocketed)
+        const otherBalls = this.game.balls.filter(b =>
+            !b.pocketed && !b.isCueBall && b !== targetBall
+        );
+
+        const direction = Vec2.subtract(targetBall.position, fromPos);
+        const distance = Vec2.length(direction);
+        if (distance < 1) return true;
+
+        const normalized = Vec2.normalize(direction);
+
+        // Check each ball to see if it blocks the path
+        for (const ball of otherBalls) {
+            const ballRadius = ball.radius || 12;
+            const toBall = Vec2.subtract(ball.position, fromPos);
+            const projection = Vec2.dot(toBall, normalized);
+
+            // Ball is behind us or beyond target
+            if (projection < 0 || projection > distance - targetRadius) continue;
+
+            // Calculate perpendicular distance to path
+            const closestPoint = Vec2.add(fromPos, Vec2.multiply(normalized, projection));
+            const perpDist = Vec2.distance(ball.position, closestPoint);
+
+            // Check if this ball blocks the path
+            const clearance = ballRadius + cueBallRadius;
+            if (perpDist < clearance) {
+                return false; // Path is blocked
+            }
+        }
+
+        return true;
+    }
+
+    // Find an escape shot when snookered - try all angles and trace through rail bounces
+    findSnookerEscape(validTargets, desperate = false) {
+        const cueBall = this.game.cueBall;
+        if (!cueBall) return null;
+
+        const escapeOptions = [];
+
+        // Try angles all around (every 5 degrees = 72 angles)
+        const angleStep = 5;
+        for (let angleDeg = 0; angleDeg < 360; angleDeg += angleStep) {
+            const angleRad = angleDeg * Math.PI / 180;
+            const aimDir = { x: Math.cos(angleRad), y: Math.sin(angleRad) };
+
+            // Trace this shot path through rail bounces to see what ball we hit first
+            const traceResult = this.traceShotPath(cueBall.position, aimDir, validTargets);
+
+            if (traceResult && traceResult.hitsValidTarget) {
+                // Calculate power based on total distance
+                const power = Math.min(30, 12 + traceResult.totalDistance / 25);
+
+                // Score: prefer shorter paths and fewer bounces
+                let score = 100 - traceResult.totalDistance / 15 - traceResult.bounces * 15;
+
+                // Bonus if we hit target without bouncing (direct shot we missed earlier)
+                if (traceResult.bounces === 0) {
+                    score += 20;
+                }
+
+                if (score > 0 || desperate) {
+                    escapeOptions.push({
+                        target: traceResult.targetHit,
+                        rail: traceResult.bounces > 0 ? `${traceResult.bounces} cushion(s)` : 'direct',
+                        direction: aimDir,
+                        power,
+                        score,
+                        bounces: traceResult.bounces,
+                        angle: angleDeg
+                    });
+                }
+            }
+        }
+
+        if (escapeOptions.length === 0) {
+            return null;
+        }
+
+        // Sort by score and return best
+        escapeOptions.sort((a, b) => b.score - a.score);
+
+        aiLog('Found', escapeOptions.length, 'escape options');
+        const topEscape = escapeOptions[0];
+        const targetName = topEscape.target.colorName || topEscape.target.number || 'ball';
+        aiLog('Best escape: angle', topEscape.angle + '°', '→', targetName,
+              '| bounces:', topEscape.bounces, '| score:', topEscape.score.toFixed(1));
+
+        return topEscape;
+    }
+
+    // Trace a shot path through rail bounces and find what ball is hit first
+    traceShotPath(startPos, aimDir, validTargets) {
+        const cueBallRadius = this.game.cueBall?.radius || 12;
+        const bounds = this.table.bounds;
+        const margin = cueBallRadius + 2;
+
+        // All balls we could potentially hit
+        const allBalls = this.game.balls.filter(b => !b.pocketed && !b.isCueBall);
+
+        let currentPos = { x: startPos.x, y: startPos.y };
+        let currentDir = { x: aimDir.x, y: aimDir.y };
+        let totalDistance = 0;
+        let bounces = 0;
+        const maxBounces = 3; // Allow up to 3 cushion bounces
+        const maxDistance = 2000; // Safety limit
+
+        while (bounces <= maxBounces && totalDistance < maxDistance) {
+            // Find the first ball we'd hit along current path
+            let firstBallHit = null;
+            let firstBallDist = Infinity;
+
+            for (const ball of allBalls) {
+                const ballRadius = ball.radius || 12;
+                const toBall = Vec2.subtract(ball.position, currentPos);
+                const projection = Vec2.dot(toBall, currentDir);
+
+                if (projection < 0) continue; // Ball is behind us
+
+                // Calculate perpendicular distance to aim line
+                const closestPoint = Vec2.add(currentPos, Vec2.multiply(currentDir, projection));
+                const perpDist = Vec2.distance(ball.position, closestPoint);
+
+                // Check if we'd hit this ball
+                const hitRadius = ballRadius + cueBallRadius;
+                if (perpDist < hitRadius) {
+                    // Calculate actual contact distance
+                    const offset = Math.sqrt(Math.max(0, hitRadius * hitRadius - perpDist * perpDist));
+                    const contactDist = projection - offset;
+                    if (contactDist > 1 && contactDist < firstBallDist) {
+                        firstBallDist = contactDist;
+                        firstBallHit = ball;
+                    }
+                }
+            }
+
+            // Find distance to each rail
+            let nearestRailDist = Infinity;
+            let hitRail = null;
+
+            // Top rail
+            if (currentDir.y < -0.01) {
+                const t = (bounds.top + margin - currentPos.y) / currentDir.y;
+                if (t > 0 && t < nearestRailDist) {
+                    nearestRailDist = t;
+                    hitRail = 'top';
+                }
+            }
+            // Bottom rail
+            if (currentDir.y > 0.01) {
+                const t = (bounds.bottom - margin - currentPos.y) / currentDir.y;
+                if (t > 0 && t < nearestRailDist) {
+                    nearestRailDist = t;
+                    hitRail = 'bottom';
+                }
+            }
+            // Left rail
+            if (currentDir.x < -0.01) {
+                const t = (bounds.left + margin - currentPos.x) / currentDir.x;
+                if (t > 0 && t < nearestRailDist) {
+                    nearestRailDist = t;
+                    hitRail = 'left';
+                }
+            }
+            // Right rail
+            if (currentDir.x > 0.01) {
+                const t = (bounds.right - margin - currentPos.x) / currentDir.x;
+                if (t > 0 && t < nearestRailDist) {
+                    nearestRailDist = t;
+                    hitRail = 'right';
+                }
+            }
+
+            // Do we hit a ball before the rail?
+            if (firstBallHit && firstBallDist < nearestRailDist) {
+                totalDistance += firstBallDist;
+
+                // Check if it's a valid target
+                const isValidTarget = validTargets.includes(firstBallHit);
+
+                return {
+                    hitsValidTarget: isValidTarget,
+                    targetHit: firstBallHit,
+                    totalDistance,
+                    bounces
+                };
+            }
+
+            // Hit the rail - bounce
+            if (!hitRail) {
+                break; // Something went wrong
+            }
+
+            // Move to rail contact point
+            const railHitPoint = Vec2.add(currentPos, Vec2.multiply(currentDir, nearestRailDist));
+            totalDistance += nearestRailDist;
+
+            // Check rail hit point isn't near a pocket (would go in)
+            if (this.isNearPocket(railHitPoint)) {
+                return null; // Would scratch
+            }
+
+            // Reflect direction off rail WITH cushion throw compensation
+            // Cushion friction causes ball to come off straighter than pure reflection
+            // The throw factor reduces the angle (0.75 = comes off 25% straighter)
+            const cushionThrowFactor = 0.75;
+
+            if (hitRail === 'top' || hitRail === 'bottom') {
+                // For horizontal rails, the x component is the "along rail" part
+                // Reduce it to simulate coming off straighter
+                currentDir = {
+                    x: currentDir.x * cushionThrowFactor,
+                    y: -currentDir.y
+                };
+            } else {
+                // For vertical rails, the y component is the "along rail" part
+                currentDir = {
+                    x: -currentDir.x,
+                    y: currentDir.y * cushionThrowFactor
+                };
+            }
+            // Re-normalize after throw adjustment
+            currentDir = Vec2.normalize(currentDir);
+
+            currentPos = railHitPoint;
+            bounces++;
+        }
+
+        return null; // Didn't hit anything valid
+    }
+
+    // Check if a position is near a pocket
+    isNearPocket(pos) {
+        const pockets = this.table.pockets;
+        for (const pocket of pockets) {
+            const dist = Vec2.distance(pos, pocket.position);
+            if (dist < pocket.radius + 10) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // Check if path is clear of ALL balls (for snooker escape)
+    isPathClearOfAllBalls(start, end, excludeBalls = []) {
+        const cueBallRadius = this.game.cueBall?.radius || 12;
+        const balls = this.game.balls.filter(b =>
+            !b.pocketed && !b.isCueBall && !excludeBalls.includes(b)
+        );
+
+        const direction = Vec2.subtract(end, start);
+        const distance = Vec2.length(direction);
+        if (distance < 1) return true;
+
+        const normalized = Vec2.normalize(direction);
+
+        for (const ball of balls) {
+            const ballRadius = ball.radius || 12;
+            const toBall = Vec2.subtract(ball.position, start);
+            const projection = Vec2.dot(toBall, normalized);
+
+            if (projection < -5 || projection > distance + 5) continue;
+
+            const closestPoint = Vec2.add(start, Vec2.multiply(normalized, Math.max(0, Math.min(distance, projection))));
+            const perpDist = Vec2.distance(ball.position, closestPoint);
+
+            const clearance = ballRadius + cueBallRadius;
+            if (perpDist < clearance) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    // Get opponent's target balls (what they need to hit)
+    getOpponentTargets() {
+        const mode = this.game.mode;
+        const balls = this.game.balls.filter(b => !b.pocketed && !b.isCueBall);
+        const opponentPlayer = this.game.currentPlayer === 1 ? 2 : 1;
+
+        switch (mode) {
+            case GameMode.EIGHT_BALL: {
+                const opponentGroup = opponentPlayer === 1 ? this.game.player1Group : this.game.player2Group;
+                if (!opponentGroup) {
+                    // Groups not assigned - opponent can hit anything except 8-ball
+                    return balls.filter(b => !b.isEightBall);
+                }
+                const groupBalls = balls.filter(b => {
+                    if (opponentGroup === 'solid') return b.isSolid;
+                    if (opponentGroup === 'stripe') return b.isStripe;
+                    return false;
+                });
+                // If opponent cleared their group, they're on the 8-ball
+                if (groupBalls.length === 0) {
+                    return balls.filter(b => b.isEightBall);
+                }
+                return groupBalls;
+            }
+
+            case GameMode.NINE_BALL:
+                // Opponent must hit lowest ball
+                return balls.filter(b => b.number === this.game.lowestBall);
+
+            case GameMode.UK_EIGHT_BALL: {
+                const opponentGroup = opponentPlayer === 1 ? this.game.player1Group : this.game.player2Group;
+                if (!opponentGroup) {
+                    return balls.filter(b => !b.isEightBall);
+                }
+                const groupBalls = balls.filter(b => {
+                    if (opponentGroup === 'group1') return b.isGroup1;
+                    if (opponentGroup === 'group2') return b.isGroup2;
+                    return false;
+                });
+                if (groupBalls.length === 0) {
+                    return balls.filter(b => b.isEightBall);
+                }
+                return groupBalls;
+            }
+
+            case GameMode.SNOOKER:
+                // In snooker, opponent's target depends on current target
+                // For safety, we want to hide reds if they're on reds, colors if on colors
+                if (this.game.snookerTarget === 'red') {
+                    return balls.filter(b => b.isRed);
+                } else {
+                    return balls.filter(b => b.isColor);
+                }
+
+            case GameMode.FREE_PLAY:
+            default:
+                return balls;
+        }
+    }
+
+    // Find the best safety shot that leaves opponent in difficulty
+    findBestSafetyShot(validTargets, opponentBalls) {
+        const cueBall = this.game.cueBall;
+        const cueBallRadius = cueBall?.radius || 12;
+        const safetyOptions = [];
+
+        // For each valid target we can reach directly
+        for (const target of validTargets) {
+            // First check if we can legally reach this ball at all
+            if (!this.canLegallyReachBall(cueBall.position, target)) {
+                continue; // Can't reach this ball legally
+            }
+
+            const ballRadius = target.radius || 12;
+
+            // Try different contact angles (thin cuts to thick hits)
+            // Contact angle: 0 = full ball (straight through), 90 = thinnest possible
+            for (let contactAngle = 0; contactAngle <= 70; contactAngle += 10) {
+                // Try both sides of the target ball (and center for angle 0)
+                const sides = contactAngle === 0 ? [0] : [-1, 1];
+                for (const side of sides) {
+                    // Calculate ghost ball position for this contact angle
+                    const directDir = Vec2.normalize(Vec2.subtract(target.position, cueBall.position));
+
+                    // Perpendicular direction
+                    const perpDir = { x: -directDir.y * side, y: directDir.x * side };
+
+                    // Ghost ball offset based on contact angle
+                    // contactAngle of 0 = full hit, 90 = miss
+                    const angleRad = contactAngle * Math.PI / 180;
+                    const lateralOffset = Math.sin(angleRad) * (ballRadius + cueBallRadius);
+
+                    // Ghost ball position
+                    const ghostBall = Vec2.add(
+                        Vec2.subtract(target.position, Vec2.multiply(directDir, ballRadius + cueBallRadius)),
+                        Vec2.multiply(perpDir, lateralOffset)
+                    );
+
+                    // CRITICAL: Check if the path to ghost ball would hit target FIRST
+                    // (not some other ball before we reach the target)
+                    const aimDir = Vec2.normalize(Vec2.subtract(ghostBall, cueBall.position));
+
+                    // Verify we don't hit any other ball before reaching the target
+                    if (!this.willHitTargetFirst(cueBall.position, aimDir, target)) {
+                        continue; // Would hit wrong ball first - foul!
+                    }
+
+                    // Try different power levels
+                    for (const power of [8, 12, 18]) {
+                        // Try with and without backspin
+                        for (const spinY of [0, 0.5]) { // 0 = stun, 0.5 = backspin
+                            // Predict where cue ball ends up
+                            const cueBallEndPos = this.predictSafetyCueBallPosition(
+                                cueBall.position, target.position, ghostBall,
+                                aimDir, power, spinY, contactAngle
+                            );
+
+                            // Score this position based on opponent difficulty
+                            const safetyScore = this.scoreSafetyPosition(
+                                cueBallEndPos, opponentBalls, target
+                            );
+
+                            if (safetyScore.score > 0) {
+                                safetyOptions.push({
+                                    target,
+                                    ghostBall,
+                                    direction: aimDir,
+                                    power,
+                                    spin: { x: 0, y: spinY },
+                                    contactAngle,
+                                    cueBallEndPos,
+                                    score: safetyScore.score,
+                                    snookerBall: safetyScore.snookerBall
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if (safetyOptions.length === 0) {
+            return null;
+        }
+
+        // Sort by score and return best
+        safetyOptions.sort((a, b) => b.score - a.score);
+
+        // Log top options
+        aiLog('Found', safetyOptions.length, 'safety options');
+        const topOptions = safetyOptions.slice(0, 3);
+        topOptions.forEach((opt, i) => {
+            const name = opt.target.colorName || opt.target.number || 'ball';
+            aiLog(`  #${i + 1}: ${name} | angle: ${opt.contactAngle}° | power: ${opt.power} | score: ${opt.score.toFixed(1)}`);
+        });
+
+        return safetyOptions[0];
+    }
+
+    // Check if shooting in a direction will hit the target ball FIRST (not another ball)
+    willHitTargetFirst(cueBallPos, aimDir, targetBall) {
+        const cueBallRadius = this.game.cueBall?.radius || 12;
+
+        // Get all balls except cue ball
+        const allBalls = this.game.balls.filter(b => !b.pocketed && !b.isCueBall);
+
+        // Find which ball we hit first along this aim direction
+        let firstHitBall = null;
+        let firstHitDist = Infinity;
+
+        for (const ball of allBalls) {
+            const ballRadius = ball.radius || 12;
+            const toBall = Vec2.subtract(ball.position, cueBallPos);
+            const projection = Vec2.dot(toBall, aimDir);
+
+            // Ball is behind us
+            if (projection < 0) continue;
+
+            // Calculate perpendicular distance to aim line
+            const closestPoint = Vec2.add(cueBallPos, Vec2.multiply(aimDir, projection));
+            const perpDist = Vec2.distance(ball.position, closestPoint);
+
+            // Check if we'd hit this ball
+            const hitRadius = ballRadius + cueBallRadius;
+            if (perpDist < hitRadius) {
+                // Calculate actual contact distance (accounting for ball radius)
+                const contactDist = projection - Math.sqrt(Math.max(0, hitRadius * hitRadius - perpDist * perpDist));
+                if (contactDist > 0 && contactDist < firstHitDist) {
+                    firstHitDist = contactDist;
+                    firstHitBall = ball;
+                }
+            }
+        }
+
+        // Return true only if the first ball we'd hit is the target
+        return firstHitBall === targetBall;
+    }
+
+    // Predict where cue ball ends up after a safety shot
+    predictSafetyCueBallPosition(_cueBallStart, targetPos, ghostBall, aimDir, power, spinY, contactAngle) {
+        // After contact, cue ball deflects based on cut angle
+        // Thinner cut = cue ball continues more in original direction
+        // Fuller hit = more deflection (up to 90° for stun shot)
+
+        const angleRad = contactAngle * Math.PI / 180;
+
+        // Direction target ball will travel (roughly opposite of contact normal)
+        const contactNormal = Vec2.normalize(Vec2.subtract(targetPos, ghostBall));
+
+        // Tangent line (perpendicular to contact)
+        const tangent = { x: -contactNormal.y, y: contactNormal.x };
+
+        // For a stun shot, cue ball travels along tangent
+        // For topspin, cue ball follows through more
+        // For backspin, cue ball pulls back
+
+        let deflectionDir;
+        if (spinY > 0.3) {
+            // Backspin - pull back toward original direction
+            deflectionDir = Vec2.normalize(Vec2.add(
+                Vec2.multiply(tangent, Math.cos(angleRad)),
+                Vec2.multiply(aimDir, -spinY * 0.5)
+            ));
+        } else if (spinY < -0.3) {
+            // Topspin - follow through
+            deflectionDir = Vec2.normalize(Vec2.add(
+                Vec2.multiply(tangent, Math.cos(angleRad) * 0.5),
+                Vec2.multiply(contactNormal, 0.5)
+            ));
+        } else {
+            // Stun - follow tangent line
+            // Determine which way along tangent based on approach direction
+            const dot = Vec2.dot(aimDir, tangent);
+            deflectionDir = dot >= 0 ? tangent : Vec2.multiply(tangent, -1);
+        }
+
+        // Travel distance depends on power, cut angle, and spin
+        // Thinner cuts transfer less energy to object ball, so cue ball keeps more speed
+        const energyRetained = Math.cos(angleRad) * 0.7 + 0.3;
+        let travelDist = power * 20 * energyRetained;
+
+        // Backspin reduces travel, topspin increases
+        if (spinY > 0) {
+            travelDist *= (1 - spinY * 0.4);
+        } else if (spinY < 0) {
+            travelDist *= (1 - spinY * 0.3);
+        }
+
+        // Calculate end position
+        let endPos = Vec2.add(targetPos, Vec2.multiply(deflectionDir, travelDist));
+
+        // Simulate bounces off rails
+        endPos = this.simulateRailBounces(targetPos, endPos);
+
+        return endPos;
+    }
+
+    // Simple rail bounce simulation
+    simulateRailBounces(startPos, endPos) {
+        const bounds = this.table.bounds;
+        const margin = 15; // Ball can't be right at the edge
+
+        let currentPos = { x: startPos.x, y: startPos.y };
+        let targetPos = { x: endPos.x, y: endPos.y };
+
+        // Allow up to 3 bounces
+        for (let bounce = 0; bounce < 3; bounce++) {
+            // Check if we'd go out of bounds
+            const outLeft = targetPos.x < bounds.left + margin;
+            const outRight = targetPos.x > bounds.right - margin;
+            const outTop = targetPos.y < bounds.top + margin;
+            const outBottom = targetPos.y > bounds.bottom - margin;
+
+            if (!outLeft && !outRight && !outTop && !outBottom) {
+                break; // Within bounds
+            }
+
+            const direction = Vec2.subtract(targetPos, currentPos);
+            const dist = Vec2.length(direction);
+            if (dist < 1) break;
+
+            const dir = Vec2.normalize(direction);
+
+            // Find where we hit the rail
+            let t = dist;
+            let hitRail = null;
+
+            if (outLeft && dir.x < 0) {
+                const tLeft = (bounds.left + margin - currentPos.x) / dir.x;
+                if (tLeft > 0 && tLeft < t) { t = tLeft; hitRail = 'left'; }
+            }
+            if (outRight && dir.x > 0) {
+                const tRight = (bounds.right - margin - currentPos.x) / dir.x;
+                if (tRight > 0 && tRight < t) { t = tRight; hitRail = 'right'; }
+            }
+            if (outTop && dir.y < 0) {
+                const tTop = (bounds.top + margin - currentPos.y) / dir.y;
+                if (tTop > 0 && tTop < t) { t = tTop; hitRail = 'top'; }
+            }
+            if (outBottom && dir.y > 0) {
+                const tBottom = (bounds.bottom - margin - currentPos.y) / dir.y;
+                if (tBottom > 0 && tBottom < t) { t = tBottom; hitRail = 'bottom'; }
+            }
+
+            if (!hitRail) break;
+
+            // Move to rail contact point
+            const hitPoint = Vec2.add(currentPos, Vec2.multiply(dir, t));
+            const remainingDist = dist - t;
+
+            // Reflect direction WITH cushion throw
+            // Cushion friction causes ball to come off straighter (reduced angle)
+            const cushionThrowFactor = 0.75;
+            let newDir;
+            if (hitRail === 'left' || hitRail === 'right') {
+                // Vertical rail - y component is "along rail", reduce it
+                newDir = { x: -dir.x, y: dir.y * cushionThrowFactor };
+            } else {
+                // Horizontal rail - x component is "along rail", reduce it
+                newDir = { x: dir.x * cushionThrowFactor, y: -dir.y };
+            }
+            newDir = Vec2.normalize(newDir);
+
+            // Energy loss on bounce
+            const bounceEnergy = 0.7;
+            currentPos = hitPoint;
+            targetPos = Vec2.add(hitPoint, Vec2.multiply(newDir, remainingDist * bounceEnergy));
+        }
+
+        // Clamp to table bounds
+        targetPos.x = Math.max(bounds.left + margin, Math.min(bounds.right - margin, targetPos.x));
+        targetPos.y = Math.max(bounds.top + margin, Math.min(bounds.bottom - margin, targetPos.y));
+
+        return targetPos;
+    }
+
+    // Score a safety position - higher score = better safety
+    scoreSafetyPosition(cueBallEndPos, opponentBalls, hitTarget) {
+        let score = 0;
+        let bestSnookerBall = null;
+
+        const pockets = this.table.pockets;
+
+        // Get all balls that could act as blockers (not cue ball, not pocketed)
+        const blockerBalls = this.game.balls.filter(b =>
+            !b.pocketed && !b.isCueBall
+        );
+
+        // Check how many opponent balls we can snooker
+        for (const opponentBall of opponentBalls) {
+
+            // Check if there's a clear path from predicted cue position to this opponent ball
+            const pathToOpponent = this.isPathClear(cueBallEndPos, opponentBall.position, [opponentBall]);
+
+            if (!pathToOpponent) {
+                // Great! Opponent can't directly see this ball - it's snookered
+                score += 30;
+
+                // Find which ball is blocking
+                for (const blocker of blockerBalls) {
+                    if (blocker === opponentBall) continue;
+                    if (this.ballBlocksPath(cueBallEndPos, opponentBall.position, blocker)) {
+                        if (!bestSnookerBall) bestSnookerBall = blocker;
+                        break;
+                    }
+                }
+            } else {
+                // Can see the ball - but can they pot it?
+                let canPotAny = false;
+                for (const pocket of pockets) {
+                    // Check if opponent has a potting opportunity
+                    if (this.isPathClear(opponentBall.position, pocket.position, [opponentBall])) {
+                        // Check the angle - if it's a difficult shot, that's good for us
+                        const cueToBall = Vec2.normalize(Vec2.subtract(opponentBall.position, cueBallEndPos));
+                        const ballToPocket = Vec2.normalize(Vec2.subtract(pocket.position, opponentBall.position));
+                        const cutAngle = Math.acos(Math.max(-1, Math.min(1, Vec2.dot(cueToBall, ballToPocket)))) * 180 / Math.PI;
+
+                        // If easy shot exists (< 45 degree cut), that's bad
+                        if (cutAngle < 45) {
+                            canPotAny = true;
+                            break;
+                        }
+                    }
+                }
+
+                if (!canPotAny) {
+                    // Opponent can see ball but can't easily pot it
+                    score += 10;
+                } else {
+                    // Opponent has a makeable shot - bad position
+                    score -= 10;
+                }
+            }
+        }
+
+        // Bonus for distance from opponent balls (harder for them to reach)
+        let minDistToOpponent = Infinity;
+        for (const opponentBall of opponentBalls) {
+            const dist = Vec2.distance(cueBallEndPos, opponentBall.position);
+            if (dist < minDistToOpponent) {
+                minDistToOpponent = dist;
+            }
+        }
+        // More distance is better, up to a point
+        score += Math.min(20, minDistToOpponent / 30);
+
+        // Penalty for being close to a pocket (risk of scratching if opponent kicks)
+        let minDistToPocket = Infinity;
+        for (const pocket of pockets) {
+            const dist = Vec2.distance(cueBallEndPos, pocket.position);
+            if (dist < minDistToPocket) {
+                minDistToPocket = dist;
+            }
+        }
+        if (minDistToPocket < 50) {
+            score -= 20; // Too close to pocket
+        } else if (minDistToPocket < 100) {
+            score -= 10;
+        }
+
+        // Bonus for being near a rail (limits opponent's options)
+        const bounds = this.table.bounds;
+        const distToNearestRail = Math.min(
+            cueBallEndPos.x - bounds.left,
+            bounds.right - cueBallEndPos.x,
+            cueBallEndPos.y - bounds.top,
+            bounds.bottom - cueBallEndPos.y
+        );
+        if (distToNearestRail < 40) {
+            score += 5; // Near cushion is good
+        }
+
+        // Big bonus if we're behind the ball we hit (and it's blocking opponent balls)
+        const hitBallBlocking = opponentBalls.some(ob =>
+            this.ballBlocksPath(cueBallEndPos, ob.position, hitTarget)
+        );
+        if (hitBallBlocking) {
+            score += 25;
+            if (!bestSnookerBall) bestSnookerBall = hitTarget;
+        }
+
+        return { score, snookerBall: bestSnookerBall };
+    }
+
+    // Check if a ball blocks the path between two points
+    ballBlocksPath(start, end, ball) {
+        const ballRadius = ball.radius || 12;
+        const cueBallRadius = this.game.cueBall?.radius || 12;
+        const blockRadius = ballRadius + cueBallRadius - 2;
+
+        const direction = Vec2.subtract(end, start);
+        const dist = Vec2.length(direction);
+        if (dist < 1) return false;
+
+        const normalized = Vec2.normalize(direction);
+        const toBall = Vec2.subtract(ball.position, start);
+        const projection = Vec2.dot(toBall, normalized);
+
+        // Ball is behind start or beyond end
+        if (projection < 0 || projection > dist) return false;
+
+        // Calculate perpendicular distance to path
+        const closestPoint = Vec2.add(start, Vec2.multiply(normalized, projection));
+        const perpDist = Vec2.distance(ball.position, closestPoint);
+
+        return perpDist < blockRadius;
     }
 
     // Randomize who breaks (called at game start when AI is enabled)

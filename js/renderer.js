@@ -136,6 +136,11 @@ export class Renderer {
 
         this.drawBalls(state.balls);
 
+        // Draw AI visualization overlay (if present)
+        if (state.aiVisualization) {
+            //this.drawAIVisualization(state.aiVisualization);
+        }
+
         if (state.showSpinIndicator) {
             this.drawSpinIndicator(state.spinIndicator, state.spin);
         }
@@ -1080,5 +1085,152 @@ export class Renderer {
         const G = Math.max(0, ((num >> 8) & 0x00FF) - amt);
         const B = Math.max(0, (num & 0x0000FF) - amt);
         return `rgb(${R},${G},${B})`;
+    }
+
+    // Draw AI visualization overlay showing aiming calculations
+    drawAIVisualization(vis) {
+        const ctx = this.ctx;
+        const lineLength = 300; // Length to extend aim lines
+
+        // 1. Draw pocket aim point (target on pocket)
+        ctx.fillStyle = 'rgba(255, 0, 255, 0.8)';
+        ctx.strokeStyle = '#ff00ff';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(vis.pocketAimPoint.x, vis.pocketAimPoint.y, 6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        // Label for pocket aim point
+        ctx.fillStyle = '#ff00ff';
+        ctx.font = 'bold 10px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('POCKET TARGET', vis.pocketAimPoint.x, vis.pocketAimPoint.y - 12);
+
+        // 2. Draw original ghost ball position (before throw adjustment)
+        ctx.fillStyle = 'rgba(0, 255, 255, 0.2)';
+        ctx.strokeStyle = 'rgba(0, 255, 255, 0.5)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([3, 3]);
+        ctx.beginPath();
+        ctx.arc(vis.ghostBall.x, vis.ghostBall.y, 12, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // 2b. Draw adjusted ghost ball (after throw compensation) - solid orange
+        if (vis.adjustedGhostBall) {
+            ctx.fillStyle = 'rgba(255, 165, 0, 0.4)';
+            ctx.strokeStyle = '#ffa500';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(vis.adjustedGhostBall.x, vis.adjustedGhostBall.y, 12, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+
+            // Label for adjusted ghost ball
+            ctx.fillStyle = '#ffa500';
+            ctx.fillText('GHOST (adj)', vis.adjustedGhostBall.x, vis.adjustedGhostBall.y - 18);
+        } else {
+            // Label for original ghost ball if no adjustment
+            ctx.fillStyle = '#00ffff';
+            ctx.fillText('GHOST', vis.ghostBall.x, vis.ghostBall.y - 18);
+        }
+
+        // 3. Draw line from target ball to pocket (object ball path)
+        ctx.strokeStyle = 'rgba(255, 255, 0, 0.6)';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([4, 4]);
+        ctx.beginPath();
+        ctx.moveTo(vis.targetBallPos.x, vis.targetBallPos.y);
+        ctx.lineTo(vis.pocketAimPoint.x, vis.pocketAimPoint.y);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // 4. Draw initial aim line (before throw compensation) - WHITE
+        const initialEnd = {
+            x: vis.cueBallPos.x + vis.initialAimLine.x * lineLength,
+            y: vis.cueBallPos.y + vis.initialAimLine.y * lineLength
+        };
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([8, 4]);
+        ctx.beginPath();
+        ctx.moveTo(vis.cueBallPos.x, vis.cueBallPos.y);
+        ctx.lineTo(initialEnd.x, initialEnd.y);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // 5. Draw throw-adjusted aim line (after compensation, before error) - ORANGE
+        const throwEnd = {
+            x: vis.cueBallPos.x + vis.throwAdjustedLine.x * lineLength,
+            y: vis.cueBallPos.y + vis.throwAdjustedLine.y * lineLength
+        };
+        ctx.strokeStyle = 'rgba(255, 165, 0, 0.9)';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(vis.cueBallPos.x, vis.cueBallPos.y);
+        ctx.lineTo(throwEnd.x, throwEnd.y);
+        ctx.stroke();
+
+        // 6. Draw final aim line (with error applied) - GREEN
+        const finalEnd = {
+            x: vis.cueBallPos.x + vis.finalAimLine.x * lineLength,
+            y: vis.cueBallPos.y + vis.finalAimLine.y * lineLength
+        };
+        ctx.strokeStyle = 'rgba(0, 255, 0, 0.9)';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([2, 2]);
+        ctx.beginPath();
+        ctx.moveTo(vis.cueBallPos.x, vis.cueBallPos.y);
+        ctx.lineTo(finalEnd.x, finalEnd.y);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // 7. Draw legend
+        const legendX = 20;
+        const legendY = this.table.canvasHeight - 80;
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        ctx.fillRect(legendX - 5, legendY - 15, 140, 70);
+
+        ctx.font = 'bold 10px Arial';
+        ctx.textAlign = 'left';
+
+        // Initial aim (white dashed)
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+        ctx.setLineDash([4, 2]);
+        ctx.beginPath();
+        ctx.moveTo(legendX, legendY);
+        ctx.lineTo(legendX + 25, legendY);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = '#ffffff';
+        ctx.fillText('Initial Aim', legendX + 30, legendY + 4);
+
+        // Throw adjusted (orange solid)
+        ctx.strokeStyle = 'rgba(255, 165, 0, 0.9)';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(legendX, legendY + 18);
+        ctx.lineTo(legendX + 25, legendY + 18);
+        ctx.stroke();
+        ctx.fillStyle = '#ffa500';
+        ctx.fillText('Throw Adj', legendX + 30, legendY + 22);
+
+        // Final aim (green dashed)
+        ctx.strokeStyle = 'rgba(0, 255, 0, 0.9)';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([2, 2]);
+        ctx.beginPath();
+        ctx.moveTo(legendX, legendY + 36);
+        ctx.lineTo(legendX + 25, legendY + 36);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = '#00ff00';
+        ctx.fillText('Final (w/error)', legendX + 30, legendY + 40);
+
+        // Cut angle info
+        ctx.fillStyle = '#ffffff';
+        ctx.fillText(`Cut: ${vis.cutAngle.toFixed(1)}°`, legendX, legendY + 55);
     }
 }

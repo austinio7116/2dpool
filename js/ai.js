@@ -62,6 +62,19 @@ export class AI {
         // Game references (set by main.js)
         this.game = null;
         this.table = null;
+
+        // Visualization overlay data (persists until shot completes)
+        this.visualization = null;
+    }
+
+    // Clear visualization when shot completes
+    clearVisualization() {
+        this.visualization = null;
+    }
+
+    // Get current visualization for rendering
+    getVisualization() {
+        return this.visualization;
     }
 
     setDifficulty(difficulty) {
@@ -581,8 +594,12 @@ export class AI {
         const cutAngle = Math.acos(Math.max(-1, Math.min(1, Vec2.dot(cueBallToTarget, targetToPocket))));
         const cutAngleDeg = cutAngle * 180 / Math.PI;
 
-        // Reject shots with extreme cut angles (over 85 degrees is nearly impossible)
-        if (cutAngleDeg > 85) {
+        // Reject shots with extreme cut angles (over 60 degrees is very difficult)
+        // Exception: allow up to 75 degrees if ball is very close to pocket
+        const isNearPocket = distanceToPocket < ballRadius * 8; // Within ~4 ball widths
+        const maxCutAngle = isNearPocket ? 85 : 75;
+
+        if (cutAngleDeg > maxCutAngle) {
             return null;
         }
 
@@ -767,14 +784,16 @@ export class AI {
     checkPocketApproach(targetPos, pocket) {
         const approachAngle = this.calculatePocketApproachAngle(targetPos, pocket);
 
-        // Corner pockets accept balls from wider angles
-        // Side pockets are more restrictive but still fairly generous
+        // Corner pockets accept wide angles
+        // Side pockets need at least 30 degrees from the rail - shots along the
+        // rail toward the middle pocket will rattle in the jaws
         const maxAngle = pocket.type === 'corner' ? 80 : 60;
 
         return approachAngle <= maxAngle;
     }
 
     // Calculate the angle of approach to the pocket
+    // Returns 0 for ideal approach, higher for more difficult angles
     calculatePocketApproachAngle(targetPos, pocket) {
         const pocketPos = pocket.position;
         const tableCenter = this.table.center;
@@ -782,42 +801,112 @@ export class AI {
         // Direction from target to pocket (direction ball will travel)
         const shotDir = Vec2.normalize(Vec2.subtract(pocketPos, targetPos));
 
-        // Ideal direction for ball to enter pocket
-        // This should be the direction a ball would travel to go INTO the pocket
-        let idealDir;
         if (pocket.type === 'corner') {
             // For corners, ideal entry is from the table center direction toward the pocket
-            idealDir = Vec2.normalize(Vec2.subtract(pocketPos, tableCenter));
+            const idealDir = Vec2.normalize(Vec2.subtract(pocketPos, tableCenter));
+            const dot = Vec2.dot(shotDir, idealDir);
+            return Math.acos(Math.max(-1, Math.min(1, dot))) * 180 / Math.PI;
         } else {
-            // For side pockets, ideal entry is perpendicular to the long rail
-            // Top pocket (y < center): ball travels up (negative y)
-            // Bottom pocket (y > center): ball travels down (positive y)
-            idealDir = { x: 0, y: pocketPos.y < tableCenter.y ? -1 : 1 };
-        }
+            // For side pockets, measure angle FROM THE RAIL
+            // 0 degrees = along the rail (bad - will rattle)
+            // 90 degrees = perpendicular to rail (ideal)
+            // We want at least 30 degrees from the rail
 
-        const dot = Vec2.dot(shotDir, idealDir);
-        return Math.acos(Math.max(-1, Math.min(1, dot))) * 180 / Math.PI;
+            // Convert to angle from rail: 0 = along rail, 90 = perpendicular
+            const angleFromRail = Math.asin(Math.min(1, Math.abs(shotDir.y))) * 180 / Math.PI;
+
+            // Return angle as deviation from ideal (perpendicular)
+            // Perpendicular = 0 deviation, along rail = 90 deviation
+            // But we want shots at 30+ degrees from rail to be acceptable
+            // So: perpAngle = 90 - angleFromRail
+            // perpAngle of 0 = perpendicular (best)
+            // perpAngle of 60 = 30 degrees from rail (acceptable limit)
+            // perpAngle of 90 = along rail (worst, reject)
+            return 90 - angleFromRail;
+        }
     }
 
     // Calculate aim point between pocket jaws (not center)
-    // This adjusts the target point based on approach angle to aim between the cushion jaws
-    getPocketAimPoint(_targetPos, pocket) {
+    // Adjusts based on cue ball to pocket angle to avoid near jaw
+    // For corners: 45 degree approach is ideal (no adjustment)
+    // For sides: perpendicular approach is ideal (no adjustment)
+    getPocketAimPoint(targetPos, pocket) {
         const pocketPos = pocket.position;
         const pocketRadius = pocket.radius || 22;
+        const tableCenter = this.table.center;
+        const cueBallPos = this.game.cueBall?.position || targetPos;
 
         // Move the aim point inward from pocket center toward the table
-        // This places it between the jaws rather than at the back of the pocket
-        const jawOffset = pocketRadius * 0.4; // Aim point is 40% of radius inside the opening
+        const jawOffset = pocketRadius * 0.4;
+
+        // Calculate approach angle from CUE BALL to pocket (not target ball)
+        const cueToPocket = Vec2.subtract(pocketPos, cueBallPos);
 
         if (pocket.type === 'corner') {
-            // For corners, pull aim point diagonally toward table center
-            const tableCenter = this.table.center;
+            // Base aim point: pull toward table center
             const toCenter = Vec2.normalize(Vec2.subtract(tableCenter, pocketPos));
-            return Vec2.add(pocketPos, Vec2.multiply(toCenter, jawOffset));
+            let aimPoint = Vec2.add(pocketPos, Vec2.multiply(toCenter, jawOffset));
+
+            // For corners, 45 degrees is ideal - no adjustment needed
+            // Calculate angle of approach: atan2 gives angle from horizontal
+            const approachAngle = Math.atan2(cueToPocket.y, cueToPocket.x) * 180 / Math.PI;
+
+            // Determine which corner this is and what angle is "45 degrees" for it
+            const isLeft = pocketPos.x < tableCenter.x;
+            const isTop = pocketPos.y < tableCenter.y;
+
+            // Ideal angles for each corner (pointing INTO the pocket at 45 deg):
+            // Top-left: 135 deg (or -45), Top-right: 45 deg (or -135)
+            // Bottom-left: -135 deg (or 45), Bottom-right: -45 deg (or 135)
+            let idealAngle;
+            if (isTop && isLeft) idealAngle = -135;      // Top-left: approach from bottom-right
+            else if (isTop && !isLeft) idealAngle = -45; // Top-right: approach from bottom-left
+            else if (!isTop && isLeft) idealAngle = 135; // Bottom-left: approach from top-right
+            else idealAngle = 45;                         // Bottom-right: approach from top-left
+
+            // How far off from ideal 45-degree approach?
+            let angleDiff = approachAngle - idealAngle;
+            // Normalize to -180 to 180
+            while (angleDiff > 180) angleDiff -= 360;
+            while (angleDiff < -180) angleDiff += 360;
+
+            // If angle diff is significant, shift aim point
+            // Positive diff = coming more from one rail, negative = from other rail
+            if (Math.abs(angleDiff) > 10) {
+                // Shift perpendicular to the ideal 45-degree line
+                // The shift direction depends on which jaw is "near"
+                const shiftMagnitude = Math.min(Math.abs(angleDiff) / 45, 1) * pocketRadius * 0.35;
+
+                // Shift along the pocket opening (perpendicular to ideal approach)
+                // For a corner, this is along the 45-degree line rotated 90 degrees
+                const shiftAngle = (idealAngle + 90) * Math.PI / 180;
+                const shiftDir = angleDiff > 0 ? 1 : -1;
+
+                aimPoint.x += Math.cos(shiftAngle) * shiftMagnitude * shiftDir;
+                aimPoint.y += Math.sin(shiftAngle) * shiftMagnitude * shiftDir;
+            }
+
+            return aimPoint;
         } else {
-            // For side pockets, pull aim point perpendicular to the rail (into table)
-            const yDir = pocketPos.y < this.table.center.y ? 1 : -1;
-            return { x: pocketPos.x, y: pocketPos.y + jawOffset * yDir };
+            // For side pockets, perpendicular (along Y axis) is ideal
+            const yDir = pocketPos.y < tableCenter.y ? 1 : -1;
+            let aimPoint = { x: pocketPos.x, y: pocketPos.y + jawOffset * yDir };
+
+            // How much is approach along the rail vs perpendicular?
+            // Perpendicular would be cueToPocket.x ≈ 0
+            const approachAngle = Math.atan2(Math.abs(cueToPocket.y), Math.abs(cueToPocket.x)) * 180 / Math.PI;
+
+            // 90 degrees = perpendicular (ideal), lower = more along rail
+            // Shift needed when approaching at an angle (not perpendicular)
+            if (approachAngle < 80) {
+                // Coming at an angle - shift away from the near jaw
+                // If cue ball is to the left of pocket, shift aim point right
+                const shiftMagnitude = ((80 - approachAngle) / 50) * pocketRadius * 0.4;
+                const shiftDir = cueBallPos.x < pocketPos.x ? 1 : -1;
+                aimPoint.x += shiftMagnitude * shiftDir;
+            }
+
+            return aimPoint;
         }
     }
 
@@ -914,7 +1003,7 @@ export class AI {
     }
 
     // Score a shot (0-100 scale)
-    scoreShot(cutAngle, distanceToGhost, distanceToPocket, pocketType) {
+    scoreShot(cutAngle, distanceToGhost, distanceToPocket, _pocketType) {
         // Cut angle score: straight shots are easier
         const cutAngleScore = Math.max(0, 100 - (cutAngle / 90) * 100);
 
@@ -925,14 +1014,14 @@ export class AI {
         // Pocket distance score
         const pocketDistScore = Math.max(0, 100 - (distanceToPocket / maxDist) * 40);
 
-        // Pocket type bonus (corner pockets are easier)
-        const pocketBonus = pocketType === 'corner' ? 10 : 0;
+        // No pocket type penalty - side pockets are just as viable as corners
+        // Corner pockets have wider acceptance angle but side pockets are often
+        // closer and good for shots along the rail
 
         // Weighted average
         return cutAngleScore * 0.35 +
                distanceScore * 0.25 +
                pocketDistScore * 0.20 +
-               pocketBonus +
                15; // Base score for having a clear shot
     }
 
@@ -986,21 +1075,40 @@ export class AI {
         aiLog('Target:', ballName, '| Cut angle:', shot.cutAngle.toFixed(1) + '°', '| Base power:', shot.power.toFixed(1));
 
         const settings = DIFFICULTY_SETTINGS[this.difficulty];
+        const cueBallPos = this.game.cueBall.position;
+        const ballRadius = shot.target.radius || 12;
 
-        let direction = shot.direction;
+        // Store initial aim direction before any adjustments
+        const initialDirection = Vec2.clone(shot.direction);
+        let adjustedGhostBall = Vec2.clone(shot.ghostBall);
+        let directionAfterThrow = initialDirection;
 
         // Cut-induced throw compensation for shots > 5 degrees
-        // Throw causes object ball to deviate toward cut direction, so aim slightly thinner
+        // Instead of rotating aim angle (which affects long shots more),
+        // shift the ghost ball position by a fixed distance
         if (shot.cutAngle > 1) {
-            const throwCompensation = this.calculateThrowCompensation(shot);
-            const throwDegrees = (throwCompensation * 180 / Math.PI).toFixed(2);
-            aiLog('Throw compensation:', throwDegrees + '°', '(cut > 5°)');
-            direction = Vec2.rotate(direction, throwCompensation);
+            const throwShift = this.calculateThrowShift(shot, ballRadius);
+            aiLog('Throw compensation: shift ghost ball by', throwShift.toFixed(2), 'px');
+
+            // Shift ghost ball perpendicular to the shot line
+            const perpendicular = { x: -initialDirection.y, y: initialDirection.x };
+
+            // Determine shift direction based on cut direction
+            const cueToBall = Vec2.subtract(shot.target.position, cueBallPos);
+            const ballToPocket = Vec2.subtract(shot.pocket.position, shot.target.position);
+            const cross = cueToBall.x * ballToPocket.y - cueToBall.y * ballToPocket.x;
+            const shiftDir = cross > 0 ? -1 : 1; // Shift to aim thinner
+
+            adjustedGhostBall = Vec2.add(shot.ghostBall, Vec2.multiply(perpendicular, throwShift * shiftDir));
+            directionAfterThrow = Vec2.normalize(Vec2.subtract(adjustedGhostBall, cueBallPos));
         } else {
-            aiLog('No throw compensation (cut ≤ 5°)');
+            aiLog('No throw compensation (cut ≤ 1°)');
+            directionAfterThrow = Vec2.clone(initialDirection);
         }
 
-        // Apply aim error based on difficulty
+        let direction = directionAfterThrow;
+
+        // Apply aim error based on difficulty (still as angle, but this is intentional variance)
         const aimError = (Math.random() - 0.5) * 2 * settings.aimError * (Math.PI / 180);
         direction = Vec2.rotate(direction, aimError);
         direction = Vec2.normalize(direction);
@@ -1016,44 +1124,48 @@ export class AI {
         // Decide whether to use backspin
         const spin = this.calculateSpin(shot);
 
+        // Store visualization data for rendering overlay
+        const pocketAimPoint = this.getPocketAimPoint(shot.target.position, shot.pocket);
+        this.visualization = {
+            cueBallPos: Vec2.clone(cueBallPos),
+            ghostBall: shot.ghostBall,                    // Original ghost ball
+            adjustedGhostBall: adjustedGhostBall,         // After throw compensation
+            targetBallPos: Vec2.clone(shot.target.position),
+            pocketAimPoint: pocketAimPoint,
+            pocketPos: shot.pocket.position,
+            initialAimLine: initialDirection,       // Before throw compensation
+            throwAdjustedLine: directionAfterThrow, // After throw, before error
+            finalAimLine: direction,                // Final direction with error
+            cutAngle: shot.cutAngle
+        };
+
         aiLogGroupEnd();
         if (this.onShot) {
             this.onShot(direction, power, spin);
         }
     }
 
-    // Calculate throw compensation angle for cut shots
-    // Returns radians to adjust aim (negative = aim thinner/more cut)
-    calculateThrowCompensation(shot) {
+    // Calculate throw compensation as a DISTANCE to shift the ghost ball
+    // Returns pixels to shift (always positive, direction determined in executeShot)
+    // This is distance-independent - same shift regardless of shot length
+    calculateThrowShift(shot, ballRadius) {
         const cutAngleDeg = shot.cutAngle;
 
         // Throw is most significant between 15-45 degrees
         // At shallow cuts (<15°) throw is minimal
         // At steep cuts (>60°) throw is less relevant as the shot is harder anyway
-        // Compensate by aiming about 0.5-1.5 degrees thinner
 
-        let compensation = 0;
+        let shiftFactor = 0;
         if (cutAngleDeg > 5 && cutAngleDeg < 60) {
             // Peak compensation around 30 degrees, tapering at extremes
             const normalized = (cutAngleDeg - 5) / 55; // 0 to 1 over the range
-            const throwFactor = Math.sin(normalized * Math.PI); // Peaks at 0.5
-            compensation = throwFactor * 1.2; // Up to 1.2 degrees
+            shiftFactor = Math.sin(normalized * Math.PI); // Peaks at 0.5
         }
 
-        // Determine which direction to compensate
-        // We need to aim thinner (more toward the cut side)
-        const cueBall = this.game.cueBall;
-        const cueToBall = Vec2.subtract(shot.target.position, cueBall.position);
-        const ballToPocket = Vec2.subtract(shot.pocket.position, shot.target.position);
-
-        // Cross product sign tells us if cut is to left or right
-        const cross = cueToBall.x * ballToPocket.y - cueToBall.y * ballToPocket.x;
-
-        // If cross > 0, cut is to the right, compensate by aiming left (negative angle)
-        // If cross < 0, cut is to the left, compensate by aiming right (positive angle)
-        const sign = cross > 0 ? -1 : 1;
-
-        return sign * compensation * (Math.PI / 180);
+        // Shift is a fraction of ball radius - up to about 15% of ball radius
+        // This represents how much the contact point needs to move to compensate
+        const maxShift = ballRadius * 0.15;
+        return shiftFactor * maxShift;
     }
 
     // Calculate spin for the shot based on position play considerations

@@ -671,6 +671,7 @@ class PoolGame {
             if (!this.physics.areBallsMoving(this.game.balls)) {
                 this.game.onBallsStopped();
                 this.input.resetSpin();
+                this.ai.clearVisualization(); // Clear AI overlay when shot completes
             }
         }
 
@@ -700,7 +701,8 @@ class PoolGame {
             trajectory: this.trajectory,
             spin: aimState.spin,
             spinIndicator: aimState.spinIndicator,
-            showSpinIndicator: canShoot
+            showSpinIndicator: canShoot,
+            aiVisualization: this.ai.getVisualization()
         };
 
         this.renderer.render(renderState);

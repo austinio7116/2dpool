@@ -586,16 +586,17 @@ export class AI {
         const distanceToGhost = Vec2.distance(cueBallPos, ghostBall);
         const distanceToPocket = Vec2.distance(target.position, pocketAimPoint);
 
-        // Calculate cut angle (angle between cue ball approach and pocket direction)
+        // Calculate cut angle (angle between cue ball aim line and pocket direction)
+        // Must use ghostBall (where cue ball aims) not target center
         const targetToPocket = Vec2.normalize(Vec2.subtract(pocketAimPoint, target.position));
-        const cueBallToTarget = Vec2.normalize(Vec2.subtract(target.position, cueBallPos));
-        const cutAngle = Math.acos(Math.max(-1, Math.min(1, Vec2.dot(cueBallToTarget, targetToPocket))));
+        const cueBallToGhost = Vec2.normalize(Vec2.subtract(ghostBall, cueBallPos));
+        const cutAngle = Math.acos(Math.max(-1, Math.min(1, Vec2.dot(cueBallToGhost, targetToPocket))));
         const cutAngleDeg = cutAngle * 180 / Math.PI;
 
         // Reject shots with extreme cut angles (over 60 degrees is very difficult)
         // Exception: allow up to 75 degrees if ball is very close to pocket
-        const isNearPocket = distanceToPocket < ballRadius * 8; // Within ~4 ball widths
-        const maxCutAngle = isNearPocket ? 75 : 60;
+        const isNearPocket = distanceToPocket < ballRadius * 4; // Within ~4 ball widths
+        const maxCutAngle = isNearPocket ? 60 : 50;
 
         if (cutAngleDeg > maxCutAngle) {
             return null;
@@ -996,6 +997,14 @@ export class AI {
             const distToPocket = Vec2.distance(target.position, railHitPoint) + Vec2.distance(railHitPoint, pocketAimPoint);
             const cutAngle = this.calculateCutAngle(cueBallPos, target.position, mirroredTarget);
 
+            const cutAngleDeg = cutAngle * 180 / Math.PI;
+
+            const maxCutAngle = 40;
+
+            if (cutAngleDeg > maxCutAngle) {
+                continue;  // Too extreme cut angle for bank shot
+            }
+
             // Bank shots are harder, so reduce score
             const baseScore = this.scoreShot(cutAngle, distToGhost, distToPocket, pocket.type);
             const bankPenalty = 25; // Bank shots scored lower
@@ -1082,17 +1091,17 @@ export class AI {
 
         // Power scales with distance - need more power for longer shots
         // Typical table is ~800px wide, so 400px is a medium shot
-        // Base power of 12, scaling up with distance
-        let power = 12 + (totalDistance / 40);
+        // Base power of 15, scaling up with distance
+        let power = 15 + (totalDistance / 30);
 
         // Cut shots need more power because energy transfers less efficiently
         // At 45° cut, only ~70% of energy transfers to target ball
         // At 60° cut, only ~50% transfers
-        const cutFactor = 1 + (cutAngle / 60) * 0.8;
+        const cutFactor = 1 + (cutAngle / 60) * 1.5;
         power *= cutFactor;
 
         // Clamp to reasonable range - minimum 10, max 20
-        return Math.max(10, Math.min(20, power));
+        return Math.max(10, Math.min(50, power));
     }
 
     // Execute the chosen shot
@@ -1983,8 +1992,18 @@ export class AI {
                         continue; // Would hit wrong ball first - foul!
                     }
 
+                    // Calculate minimum power needed to reach the target ball
+                    const distanceToGhost = Vec2.distance(cueBall.position, ghostBall);
+                    // Based on calculatePower formula: power = 12 + distance/35
+                    // Need enough power to travel the distance with some margin
+                    const minPowerToReach = 8 + (distanceToGhost / 40);
+
                     // Try different power levels
-                    for (const power of [8, 12, 18]) {
+                    for (const power of [8, 12, 18, 24, 30]) {
+                        // Skip power levels that won't reach the target ball
+                        if (power < minPowerToReach) {
+                            continue;
+                        }
                         // Try with and without backspin
                         for (const spinY of [0, 0.5]) { // 0 = stun, 0.5 = backspin
                             // Predict where cue ball ends up
@@ -2266,7 +2285,7 @@ export class AI {
                     score += 10;
                 } else {
                     // Opponent has a makeable shot - bad position
-                    score -= 10;
+                    score -= 20;
                 }
             }
         }

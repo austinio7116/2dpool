@@ -147,7 +147,7 @@ export class AI {
 
         // For pool break shots, just use a standard kitchen position (center of kitchen)
         if (this.game.isBreakShot) {
-            return this.table.findValidKitchenPosition(this.game.balls, this.table.center.y);
+            return this.table.findValidKitchenPosition(this.game.balls, this.table.center.y + (Math.random() - 0.5) * 180);
         }
 
         const validTargets = this.getValidTargets();
@@ -224,8 +224,8 @@ export class AI {
             // (Brown is at the exact center between green and yellow)
             // Use 70/30 split to ensure we're far enough from brown (need > 2 ball radii)
             const position = {
-                x: (yellowAbsolute.x + greenAbsolute.x) / 2,
-                y: yellowAbsolute.y * 0.7 + greenAbsolute.y * 0.3  // 70% toward yellow
+                x: (yellowAbsolute.x + greenAbsolute.x) / 2 + (Math.random() - 0.5) * -3,
+                y: yellowAbsolute.y * 0.7 + greenAbsolute.y * 0.3 + (Math.random() - 0.5) * 3 // 70% toward yellow
             };
 
             // Verify position is valid before returning
@@ -248,7 +248,6 @@ export class AI {
         if (this.onThinkingStart) this.onThinkingStart();
 
         setTimeout(() => {
-            console.log('%c═══════════════════════════════════════════════════════════', 'color: #4CAF50');
             aiLog('AI TURN - Difficulty:', this.difficulty, '| Mode:', this.game.mode);
 
             // Special handling for break shot - just hit the rack hard
@@ -268,7 +267,6 @@ export class AI {
                 }
             }
 
-            console.log('%c═══════════════════════════════════════════════════════════', 'color: #4CAF50');
             this.isThinking = false;
             if (this.onThinkingEnd) this.onThinkingEnd();
         }, settings.thinkingDelay);
@@ -323,7 +321,7 @@ export class AI {
 
             // Adjust power based on table size (15 reds = full size, 6 reds = mini)
             const isFullSize = redBalls.length >= 15;
-            basePower = isFullSize ? 55 : 45;
+            basePower = isFullSize ? 55 : 46;
             aiLog('Table size:', isFullSize ? 'FULL (15 reds)' : 'MINI', '| Red count:', redBalls.length);
             aiLog('Target red:', `Ball at (${targetBall.position.x.toFixed(1)}, ${targetBall.position.y.toFixed(1)})`);
 
@@ -331,8 +329,8 @@ export class AI {
             // Thin cut on the right side of the ball
             // Full-size tables need thinner contact to avoid sending cue ball into the pack
             const ballRadius = targetBall.radius || 12;
-            const thinCutOffset = isFullSize ? ballRadius * 0.75 : ballRadius * 0.5;
-            aiLog('Thin cut offset:', thinCutOffset.toFixed(2), '(', isFullSize ? '0.75x' : '0.5x', 'ball radius)');
+            const thinCutOffset = isFullSize ? ballRadius * + 0.5 + (Math.random() - 0.5) * 0.01 : ballRadius * + 0.5 + (Math.random() - 0.5) * 0.01;
+            aiLog('Thin cut offset:', thinCutOffset.toFixed(2), '(', isFullSize ? '0.5x' : '0.5x', 'ball radius)');
 
             // Offset perpendicular to aim line
             const aimDir = Vec2.normalize(Vec2.subtract(targetBall.position, cueBall.position));
@@ -351,8 +349,8 @@ export class AI {
             const aimError = (Math.random() - 0.5) * settings.aimError * (Math.PI / 180);
             const adjustedDir = Vec2.rotate(direction, aimError);
 
-            // Add RIGHT-hand side spin for snooker break
-            const spin = { x: 0.6, y: 0 }; // Right side
+            // Add RIGHT-hand side spin for snooker break 
+            const spin = { x: 0.7 + (Math.random() - 0.5) * 0.2, y: (Math.random() - 0.5) * 0.2 }; // Right side
             aiLog('Break shot params:', { power: power.toFixed(1), spin, aimError: (aimError * 180 / Math.PI).toFixed(2) + '°' });
             aiLogGroupEnd();
 
@@ -922,7 +920,7 @@ export class AI {
 
                 // Extra margin for curved jaws on steep rail approaches
                 if (approachAngle < 50) {
-                    shiftMagnitude += curvedJawMargin * (50 - approachAngle) / 30;
+                    //shiftMagnitude += curvedJawMargin * (50 - approachAngle) / 30;
                 }
 
                 const shiftDir = cueBallPos.x < pocketPos.x ? 1 : -1;

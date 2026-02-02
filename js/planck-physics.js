@@ -100,6 +100,64 @@ export class PlanckPhysics {
         } else {
             this.createStraightRailChains();
         }
+
+        this.createPocketLiners();
+    }
+
+    createPocketLiners() {
+        const pockets = this.table.pockets;
+        const center = this.table.center; // Assumes {x, y}
+        const pocketRadius = this.getTablePocketRadius();
+        
+        // Push the liner back slightly (radius + margin) so the ball centers 
+        // pass the sink threshold before hitting the leather.
+        // 5 units is a safe buffer (approx 1/2 ball radius depending on your scale)
+        const linerRadius = pocketRadius + 5; 
+        
+        const toM = (px) => px / SCALE;
+
+        for (const pocket of pockets) {
+            // 1. Calculate the angle from table center to pocket center
+            const dx = pocket.position.x - center.x;
+            const dy = pocket.position.y - center.y;
+            const angle = Math.atan2(dy, dx);
+
+            // 2. Generate an arc for the back of the pocket
+            // We create a semi-circle (PI) centered on the pocket's outward angle
+            const segments = 8;
+            const arcSpan = Math.PI * 0.85; // Slightly less than 180 degrees to avoid hitting rails
+            const startAngle = angle - (arcSpan / 2);
+            const angleStep = arcSpan / segments;
+            
+            const vertices = [];
+
+            for (let i = 0; i <= segments; i++) {
+                const theta = startAngle + (i * angleStep);
+                // Calculate point on the circumference
+                const px = pocket.position.x + Math.cos(theta) * linerRadius;
+                const py = pocket.position.y + Math.sin(theta) * linerRadius;
+                vertices.push(planck.Vec2(toM(px), toM(py)));
+            }
+
+            // 3. Create the Body
+            const body = this.world.createBody({
+                type: 'static',
+                position: planck.Vec2(0, 0)
+            });
+
+            body.createFixture({
+                shape: planck.Chain(vertices, false),
+                // Soft Leather Properties:
+                friction: 0.8,      // High friction to grab the ball (stop spin)
+                restitution: 0.05,  // Almost zero bounce (absorb energy)
+                density: 1.0
+            });
+
+            // Use a distinct railType so you can play a "thud" sound instead of a "clack"
+            body.setUserData({ type: 'rail', railType: 'pocket-liner' });
+            
+            this.railBodies.push(body);
+        }
     }
 
     // Generate points for a bezier curve

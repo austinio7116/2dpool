@@ -938,6 +938,7 @@ export class AI {
         }
     }
 
+
     // Calculate a bank shot off the rail
     calculateBankShot(cueBallPos, target, pocket) {
         const bounds = this.table.bounds;
@@ -1092,12 +1093,12 @@ export class AI {
         // Power scales with distance - need more power for longer shots
         // Typical table is ~800px wide, so 400px is a medium shot
         // Base power of 15, scaling up with distance
-        let power = 15 + (totalDistance / 30);
+        let power = 15 + (totalDistance / 40);
 
         // Cut shots need more power because energy transfers less efficiently
         // At 45° cut, only ~70% of energy transfers to target ball
         // At 60° cut, only ~50% transfers
-        const cutFactor = 1 + (cutAngle / 60) * 1.5;
+        const cutFactor = 1 + (cutAngle / 60) * 0.5;
         power *= cutFactor;
 
         // Clamp to reasonable range - minimum 10, max 20
@@ -1154,11 +1155,17 @@ export class AI {
         let power = shot.power;
         const powerError = (Math.random() - 0.5) * 2 * settings.powerError;
         power = power * (1 + powerError);
-        power = Math.max(2, Math.min(20, power));
-        aiLog('Final power:', power.toFixed(1), '(error:', (powerError * 100).toFixed(1) + '%)');
-
+        
         // Decide whether to use backspin
         const spin = this.calculateSpin(shot);
+
+        if (spin.y > 0.05) {
+            const drawStrength = Math.min(1, Math.abs(spin.y)); // 0..1
+            power *= (1 + 0.20 * drawStrength); // +0%..+20%
+        }
+        //power = Math.max(2, Math.min(20, power));
+        aiLog('Final power:', power.toFixed(1), '(error:', (powerError * 100).toFixed(1) + '%)');
+
 
         // Store visualization data for rendering overlay
         const pocketAimPoint = this.getPocketAimPoint(shot.target.position, shot.pocket);
@@ -1186,22 +1193,21 @@ export class AI {
     // This is distance-independent - same shift regardless of shot length
     calculateThrowShift(shot, ballRadius) {
         const cutAngleDeg = shot.cutAngle;
+        if (cutAngleDeg < 1 || cutAngleDeg > 65) return 0;
 
-        // Throw is most significant between 15-45 degrees
-        // At shallow cuts (<15°) throw is minimal
-        // At steep cuts (>60°) throw is less relevant as the shot is harder anyway
+        const thetaRad = cutAngleDeg * Math.PI / 180;
+        // Friction constant: usually 0.1
+        const friction = 0.2; 
+        
+        // Normalized power: map your power (10-50) to a relative speed factor
+        const speedFactor = Math.max(0.5, shot.power / 20);
 
-        let shiftFactor = 0;
-        if (cutAngleDeg > 5 && cutAngleDeg < 60) {
-            // Peak compensation around 30 degrees, tapering at extremes
-            const normalized = (cutAngleDeg - 5) / 55; // 0 to 1 over the range
-            shiftFactor = Math.sin(normalized * Math.PI); // Peaks at 0.5
-        }
+        // CIT formula: (R * mu * sin(2*theta)) / Speed
+        // High speed = less throw; 30-degree cut = max throw
+        let throwAmount = (ballRadius * friction * Math.sin(2 * thetaRad)) / speedFactor;
 
-        // Shift is a fraction of ball radius - up to about 15% of ball radius
-        // This represents how much the contact point needs to move to compensate
-        const maxShift = ballRadius * 0.15;
-        return shiftFactor * maxShift;
+        // Clamp to 15% of ball radius (maximum physically likely throw)
+        return Math.min(throwAmount, ballRadius * 0.50);
     }
 
     // Calculate spin for the shot based on position play considerations
@@ -1288,101 +1294,95 @@ export class AI {
         return { x: 0, y: spinY };
     }
 
-    // Predict where cueball will go after contact (simplified)
-    // spinY: positive = topspin/follow, negative = backspin/draw, 0 = stun
+    // Predict where cueball will go after contact
+    // spinY: Positive = Backspin, Negative = Topspin, 0 = Stun
     predictCueBallPath(shot, spinY = 0) {
         const target = shot.target;
-
-        // Direction cue ball is traveling
-        const cueBallDir = shot.direction;
+        const ghostPos = shot.ghostBall; // Deflection starts at ghost ball position
 
         // Direction target ball will travel (toward pocket)
         const targetDir = Vec2.normalize(Vec2.subtract(shot.pocket.position, target.position));
+        const cueBallIncomingDir = shot.direction;
 
-        // After collision, cue ball deflects roughly perpendicular to target direction
-        // For a cut shot, the cue ball continues roughly in its original direction
-        // but deflected away from the line of the target ball's path
+        let cueBallAfterDir;
 
-        let cueBallAfter;
-
-        // Spin affects cue ball behavior after contact:
-        // - Backspin (spinY < 0): cue ball pulls back or stops
-        // - Topspin (spinY > 0): cue ball follows through more
-        // - Stun (spinY = 0): cue ball deflects along tangent line
-
-        if (spinY < -0.3) {
-            // Strong backspin - cue ball pulls back toward shooter
-            // Reverse the incoming direction
-            cueBallAfter = Vec2.multiply(cueBallDir, -1);
-        } else if (shot.cutAngle < 10) {
-            if (spinY > 0.3) {
-                // Topspin on straight shot - strong follow through
-                cueBallAfter = targetDir;
-            } else if (spinY < -0.1) {
-                // Mild backspin on straight shot - stops or pulls back slightly
-                cueBallAfter = Vec2.multiply(cueBallDir, -0.3);
+        // Condition: Backspin (Positive spinY)
+        if (spinY > 0.3) {
+            // Draw: ball pulls back toward shooter
+            cueBallAfterDir = Vec2.multiply(cueBallIncomingDir, -1);
+        } 
+        // Condition: Straight shots (very small cut angle)
+        else if (shot.cutAngle < 5) {
+            if (spinY < -0.3) {
+                // Topspin: Follow through in target direction
+                cueBallAfterDir = targetDir;
             } else {
-                // Stun on straight shot - stops near contact point
-                cueBallAfter = { x: 0, y: 0 };
+                // Stun: stops dead (effectively no direction)
+                cueBallAfterDir = { x: 0, y: 0 };
             }
-        } else {
-            // Cut shot - cue ball deflects perpendicular (tangent line)
-            // Cross product determines which side
-            const cross = cueBallDir.x * targetDir.y - cueBallDir.y * targetDir.x;
+        } 
+        // Condition: Standard Cut Shot (Tangent Line / 90 degree rule)
+        else {
+            // The tangent line is perpendicular to the direction the object ball travels
+            // Cross product determines which side of the target ball path the cue ball goes
+            const cross = cueBallIncomingDir.x * targetDir.y - cueBallIncomingDir.y * targetDir.x;
             if (cross > 0) {
-                cueBallAfter = { x: -targetDir.y, y: targetDir.x };
+                cueBallAfterDir = { x: -targetDir.y, y: targetDir.x };
             } else {
-                cueBallAfter = { x: targetDir.y, y: -targetDir.x };
+                cueBallAfterDir = { x: targetDir.y, y: -targetDir.x };
             }
 
-            // Topspin makes cue ball follow through more (blend toward target direction)
-            if (spinY > 0.2) {
-                cueBallAfter = Vec2.normalize(Vec2.add(
-                    Vec2.multiply(cueBallAfter, 1 - spinY * 0.5),
-                    Vec2.multiply(targetDir, spinY * 0.5)
+            // Blend Topspin (Negative spinY)
+            // Topspin curves the ball forward from the tangent line toward the target direction
+            if (spinY < -0.1) {
+                const topspinStrength = Math.abs(spinY);
+                cueBallAfterDir = Vec2.normalize(Vec2.add(
+                    Vec2.multiply(cueBallAfterDir, 1 - topspinStrength * 0.7),
+                    Vec2.multiply(targetDir, topspinStrength * 0.7)
                 ));
             }
         }
 
-        // Normalize if not zero
-        if (Vec2.length(cueBallAfter) > 0.01) {
-            cueBallAfter = Vec2.normalize(cueBallAfter);
+        // Normalize if moving
+        if (Vec2.length(cueBallAfterDir) > 0.01) {
+            cueBallAfterDir = Vec2.normalize(cueBallAfterDir);
         }
 
-        // Project cue ball path and check if it goes near any pocket
-        const startPos = target.position; // Approximately where contact happens
-        const scratchRisk = this.checkPathNearPockets(startPos, cueBallAfter);
+        // Project and check scratch risk starting from Ghost Position
+        const scratchRisk = this.checkPathNearPockets(ghostPos, cueBallAfterDir);
 
         return {
-            direction: cueBallAfter,
+            direction: cueBallAfterDir,
             scratchRisk
         };
     }
 
     // Check if a path from position in direction goes near any pocket
     checkPathNearPockets(startPos, direction) {
+        if (direction.x === 0 && direction.y === 0) return false;
+
         const pockets = this.table.pockets;
         const ballRadius = this.game.cueBall?.radius || 12;
 
-        // Check each pocket
         for (const pocket of pockets) {
-            // Calculate closest approach to pocket along the path
-            const toPoсket = Vec2.subtract(pocket.position, startPos);
-            const projection = Vec2.dot(toPoсket, direction);
+            const toPocket = Vec2.subtract(pocket.position, startPos);
+            const projection = Vec2.dot(toPocket, direction);
 
-            // Only check if pocket is in front of us
+            // Pocket is behind the cue ball's path
             if (projection < 0) continue;
 
-            // Point of closest approach
-            const closest = Vec2.add(startPos, Vec2.multiply(direction, projection));
-            const distToPocket = Vec2.distance(closest, pocket.position);
+            // Point of closest approach to the pocket center
+            const closestPoint = Vec2.add(startPos, Vec2.multiply(direction, projection));
+            const distToPocketCenter = Vec2.distance(closestPoint, pocket.position);
 
-            // If we pass within pocket radius + small margin, scratch risk
-            if (distToPocket < pocket.radius + ballRadius) {
+            // SCRATCH LOGIC:
+            // A scratch occurs if the cue ball's edge overlaps the pocket radius.
+            // We also check projection distance; if the ball is very far away, 
+            // friction would stop it before it scratches, but here we assume a full hit.
+            if (distToPocketCenter < (pocket.radius + ballRadius * 0.5)) {
                 return true;
             }
         }
-
         return false;
     }
 
@@ -1514,9 +1514,14 @@ export class AI {
 
             // Apply power error
             let power = safetyShot.power;
+            let spin = safetyShot.spin;
             const powerError = (Math.random() - 0.5) * 2 * settings.powerError;
             power = power * (1 + powerError);
-            power = Math.max(5, Math.min(25, power));
+            if (spin.y > 0.05) {
+                const drawStrength = Math.min(1, Math.abs(spin.y)); // 0..1
+                power *= (1 + 0.20 * drawStrength); // +0%..+20%
+            }
+            //power = Math.max(5, Math.min(25, power));
 
             aiLogGroupEnd();
             if (this.onShot) {

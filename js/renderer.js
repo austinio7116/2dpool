@@ -138,7 +138,7 @@ export class Renderer {
 
         // Draw AI visualization overlay (if present)
         if (state.aiVisualization) {
-            // this.drawAIVisualization(state.aiVisualization);
+        //     this.drawAIVisualization(state.aiVisualization);
         }
 
         if (state.showSpinIndicator) {
@@ -1088,16 +1088,61 @@ export class Renderer {
     }
 
     // Draw AI visualization overlay showing aiming calculations
+    // Draw AI visualization overlay showing aiming calculations
     drawAIVisualization(vis) {
         const ctx = this.ctx;
         const lineLength = 300; // Length to extend aim lines
+        const ballRadius = Constants.BALL_RADIUS || 12; // Ensure we have radius
 
-        // 1. Draw pocket aim point (target on pocket)
-        ctx.fillStyle = 'rgba(255, 0, 255, 0.8)';
-        ctx.strokeStyle = '#ff00ff';
+        // 1. Draw The "Ball Path" (Solid line with thickness of ball)
+        // This helps visualize if the ball physically fits through the jaw gap
+        const dist = Vec2.distance(vis.targetBallPos, vis.pocketAimPoint);
+        const angle = Math.atan2(vis.pocketAimPoint.y - vis.targetBallPos.y, vis.pocketAimPoint.x - vis.targetBallPos.x);
+        
+        ctx.save();
+        
+        // Draw the "Swath" (The area the ball occupies)
+        ctx.lineWidth = ballRadius * 2; // Full ball diameter
+        ctx.lineCap = 'round';
+        ctx.strokeStyle = 'rgba(255, 255, 0, 0.15)'; // Faint yellow
+        ctx.beginPath();
+        ctx.moveTo(vis.targetBallPos.x, vis.targetBallPos.y);
+        ctx.lineTo(vis.pocketAimPoint.x, vis.pocketAimPoint.y);
+        ctx.stroke();
+
+        // Draw the "Whiskers" (The edges of the ball path)
+        // This makes it very obvious if an edge hits a rail
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = 'rgba(255, 255, 0, 0.3)';
+        ctx.beginPath();
+        
+        // Left Whisker
+        const wx = Math.cos(angle + Math.PI/2) * ballRadius;
+        const wy = Math.sin(angle + Math.PI/2) * ballRadius;
+        ctx.moveTo(vis.targetBallPos.x + wx, vis.targetBallPos.y + wy);
+        ctx.lineTo(vis.pocketAimPoint.x + wx, vis.pocketAimPoint.y + wy);
+        
+        // Right Whisker
+        ctx.moveTo(vis.targetBallPos.x - wx, vis.targetBallPos.y - wy);
+        ctx.lineTo(vis.pocketAimPoint.x - wx, vis.pocketAimPoint.y - wy);
+        ctx.stroke();
+        
+        // Centerline (The precision aim path)
+        ctx.strokeStyle = 'rgba(255, 255, 0, 0.8)';
+        ctx.setLineDash([4, 4]);
+        ctx.beginPath();
+        ctx.moveTo(vis.targetBallPos.x, vis.targetBallPos.y);
+        ctx.lineTo(vis.pocketAimPoint.x, vis.pocketAimPoint.y);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.restore();
+
+        // 2. Draw pocket aim point (The Calculated Sweet Spot)
+        ctx.fillStyle = '#ff00ff'; // Magenta
+        ctx.strokeStyle = '#ffffff';
         ctx.lineWidth = 2;
         ctx.beginPath();
-        ctx.arc(vis.pocketAimPoint.x, vis.pocketAimPoint.y, 6, 0, Math.PI * 2);
+        ctx.arc(vis.pocketAimPoint.x, vis.pocketAimPoint.y, 4, 0, Math.PI * 2);
         ctx.fill();
         ctx.stroke();
 
@@ -1105,55 +1150,44 @@ export class Renderer {
         ctx.fillStyle = '#ff00ff';
         ctx.font = 'bold 10px Arial';
         ctx.textAlign = 'center';
-        ctx.fillText('POCKET TARGET', vis.pocketAimPoint.x, vis.pocketAimPoint.y - 12);
+        ctx.fillText('OPTIMAL', vis.pocketAimPoint.x, vis.pocketAimPoint.y - 10);
 
-        // 2. Draw original ghost ball position (before throw adjustment)
-        ctx.fillStyle = 'rgba(0, 255, 255, 0.2)';
-        ctx.strokeStyle = 'rgba(0, 255, 255, 0.5)';
+        // 3. Draw original ghost ball position (before throw adjustment)
+        ctx.fillStyle = 'rgba(0, 255, 255, 0.1)';
+        ctx.strokeStyle = 'rgba(0, 255, 255, 0.4)';
         ctx.lineWidth = 1;
         ctx.setLineDash([3, 3]);
         ctx.beginPath();
-        ctx.arc(vis.ghostBall.x, vis.ghostBall.y, 12, 0, Math.PI * 2);
+        ctx.arc(vis.ghostBall.x, vis.ghostBall.y, ballRadius, 0, Math.PI * 2);
         ctx.fill();
         ctx.stroke();
         ctx.setLineDash([]);
 
-        // 2b. Draw adjusted ghost ball (after throw compensation) - solid orange
+        // 4. Draw adjusted ghost ball (after throw compensation)
         if (vis.adjustedGhostBall) {
-            ctx.fillStyle = 'rgba(255, 165, 0, 0.4)';
+            ctx.fillStyle = 'rgba(255, 165, 0, 0.3)'; // Orange
             ctx.strokeStyle = '#ffa500';
             ctx.lineWidth = 2;
             ctx.beginPath();
-            ctx.arc(vis.adjustedGhostBall.x, vis.adjustedGhostBall.y, 12, 0, Math.PI * 2);
+            ctx.arc(vis.adjustedGhostBall.x, vis.adjustedGhostBall.y, ballRadius, 0, Math.PI * 2);
             ctx.fill();
             ctx.stroke();
 
             // Label for adjusted ghost ball
             ctx.fillStyle = '#ffa500';
-            ctx.fillText('GHOST (adj)', vis.adjustedGhostBall.x, vis.adjustedGhostBall.y - 18);
+            ctx.fillText('THROW ADJ', vis.adjustedGhostBall.x, vis.adjustedGhostBall.y - 18);
         } else {
-            // Label for original ghost ball if no adjustment
             ctx.fillStyle = '#00ffff';
             ctx.fillText('GHOST', vis.ghostBall.x, vis.ghostBall.y - 18);
         }
 
-        // 3. Draw line from target ball to pocket (object ball path)
-        ctx.strokeStyle = 'rgba(255, 255, 0, 0.6)';
-        ctx.lineWidth = 2;
-        ctx.setLineDash([4, 4]);
-        ctx.beginPath();
-        ctx.moveTo(vis.targetBallPos.x, vis.targetBallPos.y);
-        ctx.lineTo(vis.pocketAimPoint.x, vis.pocketAimPoint.y);
-        ctx.stroke();
-        ctx.setLineDash([]);
-
-        // 4. Draw initial aim line (before throw compensation) - WHITE
+        // 5. Draw initial aim line (before throw compensation) - WHITE
         const initialEnd = {
             x: vis.cueBallPos.x + vis.initialAimLine.x * lineLength,
             y: vis.cueBallPos.y + vis.initialAimLine.y * lineLength
         };
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
-        ctx.lineWidth = 2;
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+        ctx.lineWidth = 1;
         ctx.setLineDash([8, 4]);
         ctx.beginPath();
         ctx.moveTo(vis.cueBallPos.x, vis.cueBallPos.y);
@@ -1161,25 +1195,25 @@ export class Renderer {
         ctx.stroke();
         ctx.setLineDash([]);
 
-        // 5. Draw throw-adjusted aim line (after compensation, before error) - ORANGE
+        // 6. Draw throw-adjusted aim line - ORANGE
         const throwEnd = {
             x: vis.cueBallPos.x + vis.throwAdjustedLine.x * lineLength,
             y: vis.cueBallPos.y + vis.throwAdjustedLine.y * lineLength
         };
-        ctx.strokeStyle = 'rgba(255, 165, 0, 0.9)';
+        ctx.strokeStyle = 'rgba(255, 165, 0, 0.8)';
         ctx.lineWidth = 3;
         ctx.beginPath();
         ctx.moveTo(vis.cueBallPos.x, vis.cueBallPos.y);
         ctx.lineTo(throwEnd.x, throwEnd.y);
         ctx.stroke();
 
-        // 6. Draw final aim line (with error applied) - GREEN
+        // 7. Draw final aim line (with error applied) - GREEN
         const finalEnd = {
             x: vis.cueBallPos.x + vis.finalAimLine.x * lineLength,
             y: vis.cueBallPos.y + vis.finalAimLine.y * lineLength
         };
-        ctx.strokeStyle = 'rgba(0, 255, 0, 0.9)';
-        ctx.lineWidth = 2;
+        ctx.strokeStyle = 'rgba(0, 255, 0, 0.8)';
+        ctx.lineWidth = 1;
         ctx.setLineDash([2, 2]);
         ctx.beginPath();
         ctx.moveTo(vis.cueBallPos.x, vis.cueBallPos.y);
@@ -1187,16 +1221,22 @@ export class Renderer {
         ctx.stroke();
         ctx.setLineDash([]);
 
-        // 7. Draw legend
+        // 8. Legend
+        this.drawAILegend(vis);
+    }
+
+    drawAILegend(vis) {
+        const ctx = this.ctx;
         const legendX = 20;
         const legendY = this.table.canvasHeight - 80;
+        
         ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
         ctx.fillRect(legendX - 5, legendY - 15, 140, 70);
 
         ctx.font = 'bold 10px Arial';
         ctx.textAlign = 'left';
 
-        // Initial aim (white dashed)
+        // Initial Aim
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
         ctx.setLineDash([4, 2]);
         ctx.beginPath();
@@ -1207,19 +1247,19 @@ export class Renderer {
         ctx.fillStyle = '#ffffff';
         ctx.fillText('Initial Aim', legendX + 30, legendY + 4);
 
-        // Throw adjusted (orange solid)
+        // Throw Adj
         ctx.strokeStyle = 'rgba(255, 165, 0, 0.9)';
         ctx.lineWidth = 3;
         ctx.beginPath();
         ctx.moveTo(legendX, legendY + 18);
         ctx.lineTo(legendX + 25, legendY + 18);
         ctx.stroke();
+        ctx.lineWidth = 1; // Reset
         ctx.fillStyle = '#ffa500';
         ctx.fillText('Throw Adj', legendX + 30, legendY + 22);
 
-        // Final aim (green dashed)
+        // Final
         ctx.strokeStyle = 'rgba(0, 255, 0, 0.9)';
-        ctx.lineWidth = 2;
         ctx.setLineDash([2, 2]);
         ctx.beginPath();
         ctx.moveTo(legendX, legendY + 36);
@@ -1229,7 +1269,7 @@ export class Renderer {
         ctx.fillStyle = '#00ff00';
         ctx.fillText('Final (w/error)', legendX + 30, legendY + 40);
 
-        // Cut angle info
+        // Cut Angle
         ctx.fillStyle = '#ffffff';
         ctx.fillText(`Cut: ${vis.cutAngle.toFixed(1)}°`, legendX, legendY + 55);
     }

@@ -28,6 +28,11 @@ class PoolGame {
         this.audio = new Audio();
         this.ai = new AI();
 
+        this.ai.setGameReferences(this.game, this.table);
+        this.ai.setPhysics(this.physics);
+        this.ai.initializePocketGeometry(this.physics);
+
+
         // Set canvas size for input positioning
         this.input.setCanvasSize(this.table.canvasWidth, this.table.canvasHeight);
 
@@ -106,8 +111,15 @@ class PoolGame {
             // 4. Update the physics collision shapes (for curved vs straight pockets)
             this.physics.setTableStyle(tableNum);
 
-            // 5. Update game for table-specific ball sets
+            // 5. Update game and AI
             this.game.setTableStyle(tableNum);
+            
+            // ---------------------------------------------------------------
+            // FIX: Re-scan geometry because physics.setTableStyle just changed the rails
+            // ---------------------------------------------------------------
+            this.ai.setPhysics(this.physics);
+            this.ai.initializePocketGeometry(this.physics);
+            // ---------------------------------------------------------------
 
             // 6. Update the audio context (Audio)
             // If tableNum is 8 or 9, set to snooker, otherwise default to pool
@@ -159,6 +171,9 @@ class PoolGame {
 
         this.audio.init();
         this.physics.reset();  // Clear old ball bodies before creating new game
+
+        this.ai.setGameReferences(this.game, this.table);
+        this.ai.initializePocketGeometry(this.physics);
 
         // Get the selected ball set from UI
         const selectedBallSet = this.ui.getSelectedBallSet();

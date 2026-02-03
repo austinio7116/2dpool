@@ -62,6 +62,7 @@ export class AI {
         // Game references (set by main.js)
         this.game = null;
         this.table = null;
+        this.physics = null;
 
         // Visualization overlay data (persists until shot completes)
         this.visualization = null;
@@ -86,10 +87,141 @@ export class AI {
     setEnabled(enabled) {
         this.enabled = enabled;
     }
+    
+    setPhysics(physics) {
+        this.physics = physics;
+        this.initializePocketGeometry(this.physics);
+    }
 
     setGameReferences(game, table) {
         this.game = game;
         this.table = table;
+    }
+
+    // Scans physics bodies to find the exact vertices defining pocket jaws
+    // Identifies which physics vertices belong to the "knuckles" of each pocket
+    // In ai.js
+
+    initializePocketGeometry(physicsEngine) {
+        if (!physicsEngine || !physicsEngine.railBodies) {
+            console.error("AI: Physics engine missing or empty");
+            return;
+        }
+
+        const railBodies = physicsEngine.railBodies;
+        this.pocketJaws = [];
+        
+        // Ensure scale is defined (default to 100 if missing)
+        const scale = this.physicsScale || 100;
+        
+        // Diagnostic Log 1: Check inputs
+        console.log(`AI: Geometry Scan. Scale=${scale}. Bodies=${railBodies.length}`);
+
+        const pockets = this.table.pockets;
+        const KNUCKLE_SEARCH_RADIUS = 100; 
+
+        pockets.forEach((pocket, index) => {
+            const pocketPos = pocket.position;
+            const jawGroups = new Map();
+            let debugClosestDist = Infinity;
+            let bodiesChecked = 0;
+            let verticesChecked = 0;
+
+            for (const body of railBodies) {
+                let fixture = body.getFixtureList();
+                const uData = body.getUserData();
+                
+                while (fixture) {
+                    const shape = fixture.getShape();
+                    const type = shape.getType();
+                    
+                    // Filter for 'chain' rails
+                    if (type === 'chain' && uData?.railType === 'chain') {
+                        bodiesChecked++;
+                        
+                        // TRY METHOD 1: m_vertices (Internal property)
+                        let vertices = shape.m_vertices;
+                        
+                        // TRY METHOD 2: getVertex() (Public API) if Method 1 failed
+                        if (!vertices || vertices.length === 0) {
+                            vertices = [];
+                            // Try to iterate using child count
+                            const count = shape.getChildCount ? shape.getChildCount() : (shape.m_count || 0);
+                            for (let i = 0; i < count; i++) {
+                                // Chain shape vertices are technically 1 more than child count usually, 
+                                // but let's try getVertex if available
+                                if (shape.getVertex) vertices.push(shape.getVertex(i));
+                            }
+                        }
+
+                        if (vertices && vertices.length > 0) {
+                            const validVertices = [];
+                            
+                            for (const v of vertices) {
+                                verticesChecked++;
+                                
+                                // Robust coordinate extraction
+                                const vx = (v.x !== undefined) ? v.x : 0;
+                                const vy = (v.y !== undefined) ? v.y : 0;
+
+                                // Convert to pixels
+                                const gx = vx * scale;
+                                const gy = vy * scale;
+                                
+                                // Check for NaN issues
+                                if (isNaN(gx) || isNaN(gy)) {
+                                    if (verticesChecked === 1) console.error("AI: NaN Vertex detected!", v, scale);
+                                    continue;
+                                }
+
+                                const dist = Math.hypot(gx - pocketPos.x, gy - pocketPos.y);
+
+                                if (dist < debugClosestDist) debugClosestDist = dist;
+
+                                if (dist < KNUCKLE_SEARCH_RADIUS) {
+                                    validVertices.push({ x: gx, y: gy });
+                                }
+                            }
+
+                            if (validVertices.length > 0) {
+                                // Create unique ID for this rail chunk
+                                const firstV = validVertices[0];
+                                const groupId = `rail_${Math.floor(firstV.x)}_${Math.floor(firstV.y)}`;
+                                jawGroups.set(groupId, validVertices);
+                            }
+                        }
+                    }
+                    fixture = fixture.getNext();
+                }
+            }
+
+            // 
+            // We expect exactly 2 distinct clusters (Left Rail and Right Rail)
+            const jaws = Array.from(jawGroups.values());
+            
+            if (jaws.length === 2) {
+                this.pocketJaws[index] = {
+                    isValid: true,
+                    railA: jaws[0],
+                    railB: jaws[1],
+                    center: pocketPos
+                };
+            } else {
+                // Detailed failure logging
+                this.pocketJaws[index] = { isValid: false, center: pocketPos };
+                
+                // Only log if we completely failed to find anything close
+                if (index === 0) { 
+                    console.warn(`AI: Pocket 0 Scan Failed.`);
+                    console.warn(`   -> Bodies Checked: ${bodiesChecked}`);
+                    console.warn(`   -> Vertices Checked: ${verticesChecked}`);
+                    console.warn(`   -> Closest Vertex Dist: ${debugClosestDist} (Target < ${KNUCKLE_SEARCH_RADIUS})`);
+                    if (debugClosestDist === Infinity && verticesChecked > 0) {
+                        console.error("AI: Vertices were checked but distance is Infinity. This implies NaN math.");
+                    }
+                }
+            }
+        });
     }
 
     // Called when it's the AI's turn (player 2)
@@ -825,117 +957,110 @@ export class AI {
         }
     }
 
-    // Calculate aim point between pocket jaws (not center)
-    // Adjusts based on cue ball to pocket angle to avoid near jaw
-    // For corners: 45 degree approach is ideal (no adjustment)
-    // For sides: perpendicular approach is ideal (no adjustment)
+    /**
+     * Calculates the "Optical Center" of the pocket opening from the perspective 
+     * of the target ball.
+     * * It finds the angular window between the left and right rail knuckles and 
+     * shoots exactly down the middle of that window.
+     */
+    // In ai.js
+
     getPocketAimPoint(targetPos, pocket) {
-        const pocketPos = pocket.position;
-        const pocketRadius = pocket.radius || 22;
-        const tableCenter = this.table.center;
-        const cueBallPos = this.game.cueBall?.position || targetPos;
+        if (!targetPos) return pocket.position;
 
-        // Move the aim point inward from pocket center toward the table
-        const jawOffset = pocketRadius * 0.4;
+        const pocketIndex = this.table.pockets.indexOf(pocket);
+        const jaws = this.pocketJaws[pocketIndex];
 
-        // Extra margin for curved pocket jaws (tables 7, 8, 9 have curved pockets)
-        const tableStyle = this.table?.tableStyle || 1;
-        const hasCurvedPockets = tableStyle >= 7 && tableStyle <= 9;
-        const curvedJawMargin = hasCurvedPockets ? 8 : 0;
+        // Fallback
+        if (!jaws || !jaws.isValid) return pocket.position;
 
-        // Calculate approach angle from CUE BALL to pocket (not target ball)
-        const cueToPocket = Vec2.subtract(pocketPos, cueBallPos);
+        // Constants
+        const ballRadius = 12; // Constants.BALL_RADIUS
+        const margin = 2;      // The "Fraction" we want to miss by (Safety Margin)
+        const effectiveRadius = ballRadius + margin;
 
-        if (pocket.type === 'corner') {
-            // Base aim point: pull toward table center
-            const toCenter = Vec2.normalize(Vec2.subtract(tableCenter, pocketPos));
-            let aimPoint = Vec2.add(pocketPos, Vec2.multiply(toCenter, jawOffset));
+        // 1. Establish Reference Frame
+        // Direction from ball to rough pocket center (Angle 0)
+        const refVec = Vec2.subtract(pocket.position, targetPos);
+        const refAngle = Math.atan2(refVec.y, refVec.x);
 
-            // For corners, 45 degrees is ideal - no adjustment needed
-            // Calculate angle of approach: atan2 gives angle from horizontal
-            const approachAngle = Math.atan2(cueToPocket.y, cueToPocket.x) * 180 / Math.PI;
+        // Helper: Get angle of a vertex relative to our reference line
+        // Returns angle in [-PI, +PI]. Positive = Left, Negative = Right.
+        const getRelAngle = (v) => {
+            const a = Math.atan2(v.y - targetPos.y, v.x - targetPos.x);
+            let diff = a - refAngle;
+            while (diff > Math.PI) diff -= Math.PI * 2;
+            while (diff < -Math.PI) diff += Math.PI * 2;
+            return diff;
+        };
 
-            // Determine which corner this is and what angle is "45 degrees" for it
-            const isLeft = pocketPos.x < tableCenter.x;
-            const isTop = pocketPos.y < tableCenter.y;
+        // 2. Sort Rails into "Left" and "Right"
+        // We check the average angle of the points to decide which rail is which.
+        let sumA = 0;
+        jaws.railA.forEach(v => sumA += getRelAngle(v));
+        const isALeft = sumA >= 0;
 
-            // Ideal angles for each corner (pointing INTO the pocket at 45 deg):
-            // Top-left: 135 deg (or -45), Top-right: 45 deg (or -135)
-            // Bottom-left: -135 deg (or 45), Bottom-right: -45 deg (or 135)
-            let idealAngle;
-            if (isTop && isLeft) idealAngle = -135;      // Top-left: approach from bottom-right
-            else if (isTop && !isLeft) idealAngle = -45; // Top-right: approach from bottom-left
-            else if (!isTop && isLeft) idealAngle = 135; // Bottom-left: approach from top-right
-            else idealAngle = 45;                         // Bottom-right: approach from top-left
+        const leftRailPoints = isALeft ? jaws.railA : jaws.railB;
+        const rightRailPoints = isALeft ? jaws.railB : jaws.railA;
 
-            // How far off from ideal 45-degree approach?
-            let angleDiff = approachAngle - idealAngle;
-            // Normalize to -180 to 180
-            while (angleDiff > 180) angleDiff -= 360;
-            while (angleDiff < -180) angleDiff += 360;
+        // 3. Scan LEFT Rail for the Upper Limit
+        // We want the ball to pass to the RIGHT of these points.
+        // The Ball's Left Edge touches the rail at: AngleToPoint - BallWidth
+        // We want the MINIMUM of these angles (the one closest to the center).
+        let upperLimit = Infinity;
 
-            // If angle diff is significant, shift aim point
-            // Positive diff = coming more from one rail, negative = from other rail
-            if (Math.abs(angleDiff) > 10) {
-                // Shift perpendicular to the ideal 45-degree line
-                // The shift direction depends on which jaw is "near"
-                let shiftMagnitude = Math.min(Math.abs(angleDiff) / 45, 1) * pocketRadius * 0.35;
+        for (const v of leftRailPoints) {
+            const dist = Math.hypot(v.x - targetPos.x, v.y - targetPos.y);
+            // Ignore points inside the ball (impossible geometry)
+            if (dist <= effectiveRadius) continue;
 
-                // Extra margin for curved jaws when coming along the rail
-                // The more extreme the angle, the more we need to avoid the curved lip
-                if (Math.abs(angleDiff) > 30) {
-                    shiftMagnitude += curvedJawMargin * (Math.abs(angleDiff) - 30) / 30;
-                }
+            const ang = getRelAngle(v);
+            // How wide is the ball at this distance? (Angular radius)
+            const angularRadius = Math.asin(effectiveRadius / dist);
+            
+            // The angle of the clear path's left edge
+            const limit = ang - angularRadius;
 
-                // Shift along the pocket opening (perpendicular to ideal approach)
-                // For a corner, this is along the 45-degree line rotated 90 degrees
-                const shiftAngle = (idealAngle + 90) * Math.PI / 180;
-                const shiftDir = angleDiff > 0 ? 1 : -1;
-
-                aimPoint.x += Math.cos(shiftAngle) * shiftMagnitude * shiftDir;
-                aimPoint.y += Math.sin(shiftAngle) * shiftMagnitude * shiftDir;
-            }
-
-            // Additional inward pull for very steep rail angles to clear curved jaw
-            if (Math.abs(angleDiff) > 50) {
-                const extraInward = curvedJawMargin * (Math.abs(angleDiff) - 50) / 40;
-                aimPoint = Vec2.add(aimPoint, Vec2.multiply(toCenter, extraInward));
-            }
-
-            return aimPoint;
-        } else {
-            // For side pockets, perpendicular (along Y axis) is ideal
-            const yDir = pocketPos.y < tableCenter.y ? 1 : -1;
-            let aimPoint = { x: pocketPos.x, y: pocketPos.y + jawOffset * yDir };
-
-            // How much is approach along the rail vs perpendicular?
-            // Perpendicular would be cueToPocket.x ≈ 0
-            const approachAngle = Math.atan2(Math.abs(cueToPocket.y), Math.abs(cueToPocket.x)) * 180 / Math.PI;
-
-            // 90 degrees = perpendicular (ideal), lower = more along rail
-            // Shift needed when approaching at an angle (not perpendicular)
-            if (approachAngle < 80) {
-                // Coming at an angle - shift away from the near jaw
-                // If cue ball is to the left of pocket, shift aim point right
-                let shiftMagnitude = ((80 - approachAngle) / 50) * pocketRadius * 0.4;
-
-                // Extra margin for curved jaws on steep rail approaches
-                if (approachAngle < 50) {
-                    //shiftMagnitude += curvedJawMargin * (50 - approachAngle) / 30;
-                }
-
-                const shiftDir = cueBallPos.x < pocketPos.x ? 1 : -1;
-                aimPoint.x += shiftMagnitude * shiftDir;
-            }
-
-            // Additional inward pull for very steep angles
-            if (approachAngle < 40) {
-                const extraInward = curvedJawMargin * (40 - approachAngle) / 40;
-                aimPoint.y += extraInward * yDir;
-            }
-
-            return aimPoint;
+            // We want the tightest constraint (lowest angle on the left side)
+            if (limit < upperLimit) upperLimit = limit;
         }
+
+        // 4. Scan RIGHT Rail for the Lower Limit
+        // We want the ball to pass to the LEFT of these points.
+        // The Ball's Right Edge touches the rail at: AngleToPoint + BallWidth
+        // We want the MAXIMUM of these angles (the one closest to the center).
+        let lowerLimit = -Infinity;
+
+        for (const v of rightRailPoints) {
+            const dist = Math.hypot(v.x - targetPos.x, v.y - targetPos.y);
+            if (dist <= effectiveRadius) continue;
+
+            const ang = getRelAngle(v);
+            const angularRadius = Math.asin(effectiveRadius / dist);
+            
+            const limit = ang + angularRadius;
+
+            // We want the tightest constraint (highest angle on the right side)
+            if (limit > lowerLimit) lowerLimit = limit;
+        }
+
+        // Handle blocked shots (if Lower > Upper, the gap is closed)
+        // Default to aiming at center if calculation fails
+        if (upperLimit === Infinity) upperLimit = 0.1;
+        if (lowerLimit === -Infinity) lowerLimit = -0.1;
+
+        // 5. Bisect the Window
+        // Aim exactly between the Lower Limit (Near/Right Jaw) and Upper Limit (Far/Left Jaw)
+        const bestRelAngle = (upperLimit + lowerLimit) / 2;
+        const finalAngle = refAngle + bestRelAngle;
+
+        // Project out to pocket distance to get specific coordinate
+        const distToPocket = Vec2.length(refVec);
+        
+        return {
+            x: targetPos.x + Math.cos(finalAngle) * distToPocket,
+            y: targetPos.y + Math.sin(finalAngle) * distToPocket
+        };
     }
 
 
@@ -1197,10 +1322,10 @@ export class AI {
 
         const thetaRad = cutAngleDeg * Math.PI / 180;
         // Friction constant: usually 0.1
-        const friction = 0.2; 
+        const friction = 0.1; 
         
         // Normalized power: map your power (10-50) to a relative speed factor
-        const speedFactor = Math.max(0.5, shot.power / 50);
+        const speedFactor = Math.max(0.5, shot.power / 20);
 
         // CIT formula: (R * mu * sin(2*theta)) / Speed
         // High speed = less throw; 30-degree cut = max throw

@@ -110,8 +110,6 @@ export class AI {
         const scale = this.physicsScale || 100;
         const bounds = this.table.bounds;
 
-        console.log(`AI: Geometry Scan. Scale=${scale}. Bodies=${railBodies.length}`);
-
         // -----------------------------
         // Helpers
         // -----------------------------
@@ -803,7 +801,7 @@ export class AI {
         // Reject shots with extreme cut angles (over 60 degrees is very difficult)
         // Exception: allow up to 75 degrees if ball is very close to pocket
         const isNearPocket = distanceToPocket < ballRadius * 4; // Within ~4 ball widths
-        const maxCutAngle = isNearPocket ? 60 : 50;
+        const maxCutAngle = isNearPocket ? 70 : 60;
 
         if (cutAngleDeg > maxCutAngle) {
             return null;
@@ -1033,27 +1031,20 @@ export class AI {
     }
 
     /**
-     * getPocketAimPoint using pocket-local rail identity from initializePocketGeometry()
+     * Improved getPocketAimPoint:
+     * - For thin approaches: hug the near jaw (your current good behavior).
+     * - For wider approaches (~35°+): find first-touch angle to BOTH rails (railA & railB),
+     *   then aim at the angular midpoint (center of the window).
      *
-     * Requires initializePocketGeometry() to have stored:
-     *   this.pocketJaws[pocketIndex] = {
+     * Requires initializePocketGeometry() to store:
+     *   pocketJaws[pocketIndex] = {
      *     railA: [...full polyline verts...],
      *     railB: [...full polyline verts...],
-     *     railAInfo: { axis: 'horizontal'|'vertical', centroid: {x,y}, ... },
-     *     railBInfo: { axis: 'horizontal'|'vertical', centroid: {x,y}, ... }
+     *     railAInfo: { axis:'horizontal'|'vertical', centroid:{x,y}, ... },
+     *     railBInfo: { axis:'horizontal'|'vertical', centroid:{x,y}, ... }
      *   }
      *
-     * Logic (per your spec):
-     * 1) For this pocket, we have exactly two rail pieces by proximity: railA & railB.
-     * 2) "Near" rail = shallower angle between (rail line) and (target->pocket) line.
-     *    - horizontal rail line => angle = asin(|refDir.y|)
-     *    - vertical rail line   => angle = asin(|refDir.x|)
-     * 3) Start 30° from the FAR side (open side away from near rail), sweep toward near rail,
-     *    and find the first angle where a thick scan ray (ballRadius + margin corridor)
-     *    first touches the near rail geometry.
-     * 4) Aim point = point on that ray closest to pocket center (projection), clamped to [0, distToPocket].
-     *
-     * Coordinate system: x right, y down.
+     * Coords: x right, y down.
      */
     getPocketAimPoint(targetPos, pocket, ballRadius) {
         if (!targetPos) return pocket.position;
@@ -1067,11 +1058,11 @@ export class AI {
 
         const pocketPos = pocket.position;
 
-        // Thickness of the scan corridor
+        // Corridor thickness: "thick scan line"
         const margin = 2;
         const thickR = ballRadius + margin;
 
-        // Reference direction: target -> pocket center
+        // Reference: target -> pocket center
         const refVec = Vec2.subtract(pocketPos, targetPos);
         const distToPocket = Vec2.length(refVec);
         if (distToPocket < 1e-6) return pocketPos;
@@ -1079,124 +1070,152 @@ export class AI {
         const refDir = Vec2.normalize(refVec);
         const refAngle = Math.atan2(refVec.y, refVec.x);
 
-        // Wrap angle to [-PI, PI]
+        // Wrap to [-PI, PI]
         const wrapPI = (a) => {
             while (a > Math.PI) a -= 2 * Math.PI;
             while (a < -Math.PI) a += 2 * Math.PI;
             return a;
         };
 
-        // Relative angle of a point around target vs reference direction
+        // Relative angle of a point around target vs refAngle
         const relAngleToPoint = (p) => {
             const a = Math.atan2(p.y - targetPos.y, p.x - targetPos.x);
             return wrapPI(a - refAngle);
         };
 
-        // Angle between refDir and a rail *line direction* given the rail axis
-        // (this is your "simple angle check")
+        // Simple angle check between refDir and a rail LINE direction (your rule)
         const angleToRailLine = (axis) => {
-            // horizontal rail line is (1,0) => angle = asin(|refDir.y|)
-            // vertical   rail line is (0,1) => angle = asin(|refDir.x|)
+            // horizontal rail line (1,0) => asin(|refDir.y|)
+            // vertical rail line (0,1)   => asin(|refDir.x|)
             return axis === 'horizontal'
                 ? Math.asin(Math.min(1, Math.abs(refDir.y)))
                 : Math.asin(Math.min(1, Math.abs(refDir.x)));
         };
 
-        // 1) Pick near rail (shallower angle) among the two pocket-adjacent rails
+        // Choose near rail by shallower angle
         const angA = angleToRailLine(jaws.railAInfo.axis);
         const angB = angleToRailLine(jaws.railBInfo.axis);
 
-        let nearVerts, nearCentroid;
+        let nearVerts, nearCentroid, nearAngle;
+        let farVerts,  farCentroid,  farAngle;
+
         if (angA < angB) {
-            nearVerts = jaws.railA;
-            nearCentroid = jaws.railAInfo.centroid;
+            nearVerts = jaws.railA; nearCentroid = jaws.railAInfo.centroid; nearAngle = angA;
+            farVerts  = jaws.railB; farCentroid  = jaws.railBInfo.centroid; farAngle  = angB;
         } else if (angB < angA) {
-            nearVerts = jaws.railB;
-            nearCentroid = jaws.railBInfo.centroid;
+            nearVerts = jaws.railB; nearCentroid = jaws.railBInfo.centroid; nearAngle = angB;
+            farVerts  = jaws.railA; farCentroid  = jaws.railAInfo.centroid; farAngle  = angA;
         } else {
-            // Tie: pick whichever rail piece is closer to the pocket center
+            // Tie: pick near by which centroid is closer to pocket center
             const cA = jaws.railAInfo.centroid;
             const cB = jaws.railBInfo.centroid;
             const dA = Math.hypot(cA.x - pocketPos.x, cA.y - pocketPos.y);
             const dB = Math.hypot(cB.x - pocketPos.x, cB.y - pocketPos.y);
             if (dA <= dB) {
-                nearVerts = jaws.railA;
-                nearCentroid = cA;
+                nearVerts = jaws.railA; nearCentroid = cA; nearAngle = angA;
+                farVerts  = jaws.railB; farCentroid  = cB; farAngle  = angB;
             } else {
-                nearVerts = jaws.railB;
-                nearCentroid = cB;
+                nearVerts = jaws.railB; nearCentroid = cB; nearAngle = angB;
+                farVerts  = jaws.railA; farCentroid  = cA; farAngle  = angA;
             }
         }
 
-        if (!nearVerts || nearVerts.length < 2) return pocketPos;
+        if (!nearVerts || nearVerts.length < 2 || !farVerts || farVerts.length < 2) return pocketPos;
 
-        // 2) Determine which side (CW vs CCW) we must rotate to move toward the NEAR rail.
-        // Use the centroid direction: if we rotate the ray toward where the near rail sits, we should "hit" it.
-        // We decide the sweep direction by the sign of cross(refDir, toNear).
-        const toNear = Vec2.normalize(Vec2.subtract(nearCentroid, targetPos));
-        const cross = refDir.x * toNear.y - refDir.y * toNear.x;
+        // Helper: find "first touch" relative angle when sweeping toward a rail
+        // Sweep direction is chosen so that we rotate toward the rail centroid (in angular sense).
+        const firstTouchTowardRail = (railVerts, railCentroid) => {
+            const toRail = Vec2.normalize(Vec2.subtract(railCentroid, targetPos));
+            const cross = refDir.x * toRail.y - refDir.y * toRail.x;
+            const sweepSign = (cross >= 0) ? +1 : -1; // + => CCW, - => CW
 
-        // cross > 0 => toNear is CCW from refDir => sweep CCW (increasing relative angle)
-        // cross < 0 => toNear is CW  from refDir => sweep CW  (decreasing relative angle)
-        const sweepSign = (cross >= 0) ? +1 : -1;
+            // Start 30° on the OPEN side (opposite the rail side)
+            const startRel = -sweepSign * (30 * Math.PI / 180);
 
-        // 3) Start 30° on the FAR (open) side: opposite the direction toward near rail
-        const startRel = -sweepSign * (30 * Math.PI / 180);
+            let touchRel = null;
 
-        // 4) Find first touch angle using angular blocked-interval entry (vertex-based)
-        // Each vertex v blocks [ang-width, ang+width] where width=asin(thickR/dist).
-        let touchRel = null;
+            if (sweepSign > 0) {
+                // sweeping CCW (increasing)
+                let best = Infinity;
+                for (const v of railVerts) {
+                    const dx = v.x - targetPos.x;
+                    const dy = v.y - targetPos.y;
+                    const d = Math.hypot(dx, dy);
+                    if (d <= thickR + 1e-6) continue;
 
-        if (sweepSign > 0) {
-            // sweeping CCW (increasing angle)
-            let best = Infinity;
+                    const ang = relAngleToPoint(v);
+                    const width = Math.asin(Math.min(1, thickR / d));
+                    const enter = ang - width; // entry boundary when increasing
 
-            for (const v of nearVerts) {
-                const dx = v.x - targetPos.x;
-                const dy = v.y - targetPos.y;
-                const d = Math.hypot(dx, dy);
-                if (d <= thickR + 1e-6) continue;
+                    if (enter >= startRel && enter < best) best = enter;
+                }
+                if (best !== Infinity) touchRel = best;
+            } else {
+                // sweeping CW (decreasing)
+                let best = -Infinity;
+                for (const v of railVerts) {
+                    const dx = v.x - targetPos.x;
+                    const dy = v.y - targetPos.y;
+                    const d = Math.hypot(dx, dy);
+                    if (d <= thickR + 1e-6) continue;
 
-                const ang = relAngleToPoint(v);
-                const width = Math.asin(Math.min(1, thickR / d));
+                    const ang = relAngleToPoint(v);
+                    const width = Math.asin(Math.min(1, thickR / d));
+                    const enter = ang + width; // entry boundary when decreasing
 
-                // As we increase angle, we enter at (ang - width)
-                const enter = ang - width;
-
-                if (enter >= startRel && enter < best) best = enter;
+                    if (enter <= startRel && enter > best) best = enter;
+                }
+                if (best !== -Infinity) touchRel = best;
             }
 
-            if (best !== Infinity) touchRel = best;
+            return touchRel; // may be null
+        };
+
+        // Decide whether we are in "thin" mode or "window-center" mode.
+        const THIN_DEG_CORNER = 35;
+        const THIN_DEG_SIDE   = 45;
+
+        const thinThreshold = (pocket.type === 'side')
+            ? THIN_DEG_SIDE
+            : THIN_DEG_CORNER;
+        const thinMode = (nearAngle * 180 / Math.PI) < thinThreshold;
+
+        let chosenRel = null;
+
+        if (thinMode) {
+            // --- Thin: hug the near jaw (what already works well)
+            chosenRel = firstTouchTowardRail(nearVerts, nearCentroid);
+            if (chosenRel === null) return pocketPos;
         } else {
-            // sweeping CW (decreasing angle)
-            let best = -Infinity;
+            // --- Wider: compute both jaw limits and aim through the center
+            const touchA = firstTouchTowardRail(jaws.railA, jaws.railAInfo.centroid);
+            const touchB = firstTouchTowardRail(jaws.railB, jaws.railBInfo.centroid);
 
-            for (const v of nearVerts) {
-                const dx = v.x - targetPos.x;
-                const dy = v.y - targetPos.y;
-                const d = Math.hypot(dx, dy);
-                if (d <= thickR + 1e-6) continue;
+            if (touchA === null || touchB === null) {
+                // If one side fails, fall back to near-jaw (still better than wrong)
+                chosenRel = firstTouchTowardRail(nearVerts, nearCentroid);
+                if (chosenRel === null) return pocketPos;
+            } else {
+                // These represent the two window boundaries (in relative angle space)
+                const lower = Math.min(touchA, touchB);
+                const upper = Math.max(touchA, touchB);
 
-                const ang = relAngleToPoint(v);
-                const width = Math.asin(Math.min(1, thickR / d));
-
-                // As we decrease angle, we enter at (ang + width)
-                const enter = ang + width;
-
-                if (enter <= startRel && enter > best) best = enter;
+                // If bounds collapse or invert, fall back safely
+                if (upper - lower < 1e-4) {
+                    chosenRel = (lower + upper) * 0.5;
+                } else {
+                    // Aim down the middle of the window
+                    const bias = 0.5;
+                    chosenRel = lower + (upper - lower) * bias;
+                }
             }
-
-            if (best !== -Infinity) touchRel = best;
         }
 
-        if (touchRel === null) return pocketPos;
-
-        // 5) Convert touch angle to a scan ray
-        const finalAngle = refAngle + touchRel;
+        // Build scan ray direction at chosenRel
+        const finalAngle = refAngle + chosenRel;
         const scanDir = { x: Math.cos(finalAngle), y: Math.sin(finalAngle) };
 
-        // 6) Return point on that ray closest to the pocket center (projection),
-        // clamped between target and pocket center distance.
+        // Point on that ray closest to the pocket center: projection
         const t = Math.max(0, Math.min(distToPocket, Vec2.dot(refVec, scanDir)));
 
         return {
@@ -1204,6 +1223,7 @@ export class AI {
             y: targetPos.y + scanDir.y * t
         };
     }
+
 
 
 
@@ -1465,26 +1485,30 @@ export class AI {
         }
     }
 
-    // Calculate throw compensation as a DISTANCE to shift the ghost ball
-    // Returns pixels to shift (always positive, direction determined in executeShot)
-    // This is distance-independent - same shift regardless of shot length
     calculateThrowShift(shot, ballRadius) {
         const cutAngleDeg = shot.cutAngle;
-        if (cutAngleDeg < 1 || cutAngleDeg > 65) return 0;
+        // Throw is negligible on very full or extremely thin shots
+        if (cutAngleDeg < 1 || cutAngleDeg > 75) return 0;
 
         const thetaRad = cutAngleDeg * Math.PI / 180;
-        // Friction constant: usually 0.1
-        const friction = 0.1; 
         
-        // Normalized power: map your power (10-50) to a relative speed factor
-        const speedFactor = Math.max(0.5, shot.power / 20);
+        // Typical coefficient of friction for pool balls is ~0.06
+        const friction = 0.05; 
+        
+        // CIT is inversely proportional to speed. 
+        // We map your power (5-50) to a speed factor.
+        const speedFactor = Math.max(0.5, shot.power / 15);
 
-        // CIT formula: (R * mu * sin(2*theta)) / Speed
-        // High speed = less throw; 30-degree cut = max throw
-        let throwAmount = (ballRadius * friction * Math.sin(2 * thetaRad)) / speedFactor;
+        // Angle of throw (radians) ≈ (friction * sin(2 * theta)) / speed
+        // This peaks the throw effect around a 30-45 degree cut.
+        const throwAngleRad = (friction * Math.sin(2 * thetaRad)) / speedFactor;
 
-        // Clamp to 15% of ball radius (maximum physically likely throw)
-        return Math.min(throwAmount, ballRadius * 0.50);
+        // Convert the angular deviation into a lateral shift distance for the ghost ball.
+        // We use the distance from contact to target center (2 * ballRadius)
+        const shiftDistance = (ballRadius * 2) * Math.tan(throwAngleRad);
+
+        // Physical limit: throw rarely exceeds 15-20% of the ball's radius
+        return Math.min(shiftDistance, ballRadius * 0.25);
     }
 
     // Calculate spin for the shot based on position play considerations

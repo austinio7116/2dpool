@@ -190,6 +190,105 @@ export class Table {
                y <= this.bounds.bottom;
     }
 
+    // Check if a position is within the D zone (snooker baulk area)
+    // The D is a semicircle at the baulk line (kitchenLine)
+    isInD(x, y) {
+        const dGeometry = this.getDGeometry();
+        if (!dGeometry) return this.isInKitchen(x, y);  // Fallback
+
+        const { baulkX, centerY, radius } = dGeometry;
+
+        // Must be on or behind the baulk line (kitchen side)
+        if (x > baulkX) return false;
+
+        // Must be within table bounds
+        if (y < this.bounds.top || y > this.bounds.bottom) return false;
+        if (x < this.bounds.left) return false;
+
+        // Must be within the semicircle (D shape)
+        const dx = x - baulkX;
+        const dy = y - centerY;
+        const distSquared = dx * dx + dy * dy;
+
+        // Inside the D means within the semicircle radius
+        return distSquared <= radius * radius;
+    }
+
+    // Get the geometry of the D zone for drawing and placement
+    getDGeometry() {
+        if (!this.spots) return null;
+
+        // The D is centered on the brown spot (center of baulk line)
+        // Yellow and green spots define the edges of the D
+        const yellowSpot = this.spots.yellow;
+        const greenSpot = this.spots.green;
+        const brownSpot = this.spots.brown;
+
+        if (!yellowSpot || !greenSpot || !brownSpot) return null;
+
+        // Convert relative spots to absolute positions
+        const centerY = this.center.y + brownSpot.y;
+        const baulkX = this.center.x + brownSpot.x;
+
+        // D radius is the distance from brown spot to yellow/green spots
+        const yellowY = this.center.y + yellowSpot.y;
+        const radius = Math.abs(yellowY - centerY);
+
+        return {
+            baulkX: baulkX,
+            centerY: centerY,
+            radius: radius
+        };
+    }
+
+    // Find a valid position within the D zone (for snooker ball-in-hand)
+    findValidDPosition(balls, preferredY = null) {
+        const dGeometry = this.getDGeometry();
+        if (!dGeometry) {
+            // Fallback to kitchen position if no D geometry
+            return this.findValidKitchenPosition(balls, preferredY);
+        }
+
+        const { baulkX, centerY, radius } = dGeometry;
+        const ballRadius = this.getBallRadius();
+
+        // Start at center of D (brown spot position)
+        const startX = baulkX - radius / 2;
+        const startY = preferredY || centerY;
+
+        // Check if starting position is valid
+        if (this.isInD(startX, startY) && this.isPositionValid(startX, startY, balls, ballRadius)) {
+            return Vec2.create(startX, startY);
+        }
+
+        // Spiral search within the D
+        for (let r = ballRadius; r < radius; r += ballRadius * 0.5) {
+            for (let angle = 0; angle < Math.PI * 2; angle += Math.PI / 12) {
+                const x = startX + Math.cos(angle) * r;
+                const y = startY + Math.sin(angle) * r;
+
+                if (this.isInD(x, y) && this.isPositionValid(x, y, balls, ballRadius)) {
+                    return Vec2.create(x, y);
+                }
+            }
+        }
+
+        // If no valid position in spiral, try along the baulk line within D
+        for (let dy = 0; dy <= radius; dy += ballRadius * 0.5) {
+            for (const sign of [1, -1]) {
+                const y = centerY + sign * dy;
+                const x = baulkX - ballRadius;
+
+                if (this.isInD(x, y) && this.isPositionValid(x, y, balls, ballRadius)) {
+                    return Vec2.create(x, y);
+                }
+            }
+        }
+
+        // Last resort: center of D
+        return Vec2.create(baulkX - radius / 2, centerY);
+    }
+
     isOnTable(x, y) {
         return x >= this.bounds.left &&
                x <= this.bounds.right &&

@@ -453,6 +453,36 @@
                 </div>
             </div>
 
+            <!-- Snooker Decision Panel (Foul and a Miss) -->
+            <div id="snooker-decision-panel" class="snooker-decision-panel hidden">
+                <div class="decision-content">
+                    <h3>Foul Committed</h3>
+                    <p class="penalty-text" id="decision-penalty-text"></p>
+                    <p class="decision-info" id="decision-info-text"></p>
+                    <div class="decision-buttons">
+                        <button id="btn-play-on" class="decision-btn">Play On</button>
+                        <button id="btn-make-replay" class="decision-btn">Make Opponent Replay</button>
+                        <button id="btn-restore-position" class="decision-btn hidden">Restore & Replay</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Snooker Nomination Modal -->
+            <div id="snooker-nomination-modal" class="snooker-nomination-modal hidden">
+                <div class="nomination-content">
+                    <h3>Nominate a Color</h3>
+                    <p>Select which color ball you intend to pot:</p>
+                    <div class="nomination-balls">
+                        <button class="nom-ball yellow" data-color="yellow" title="Yellow (2)"></button>
+                        <button class="nom-ball green" data-color="green" title="Green (3)"></button>
+                        <button class="nom-ball brown" data-color="brown" title="Brown (4)"></button>
+                        <button class="nom-ball blue" data-color="blue" title="Blue (5)"></button>
+                        <button class="nom-ball pink" data-color="pink" title="Pink (6)"></button>
+                        <button class="nom-ball black" data-color="black" title="Black (7)"></button>
+                    </div>
+                </div>
+            </div>
+
             <div id="game-hud" class="hidden">
                 <!-- Left Panel - 25% - Game Info -->
                 <div id="hud-info-panel" class="hud-panel">
@@ -467,6 +497,7 @@
                     <span id="hud-two-shot" class="hud-badge hidden">2 shots</span>
                     <span id="hud-snooker-break" class="hud-badge snooker-break-badge hidden">Break: 0</span>
                     <span id="hud-snooker-target" class="hud-target hidden"></span>
+                    <span id="hud-snooker-nomination" class="hud-nomination hidden"></span>
                 </div>
 
                 <!-- Right Panel - 75% - Players & Scores -->

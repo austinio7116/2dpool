@@ -355,6 +355,11 @@ export class AI {
             return this.table.findValidKitchenPosition(this.game.balls, this.table.center.y + (Math.random() - 0.5) * 180);
         }
 
+        // For snooker ball-in-hand (after foul), must place in D-zone
+        if (this.game.mode === GameMode.SNOOKER) {
+            return this.findBestDZonePosition();
+        }
+
         const validTargets = this.getValidTargets();
         if (validTargets.length === 0) {
             return this.table.findValidCueBallPosition(this.game.balls, this.table.center.y);
@@ -366,6 +371,12 @@ export class AI {
 
         // Check if kitchen only (break shot or UK 8-ball)
         const kitchenOnly = this.game.isBreakShot || this.game.mode === GameMode.UK_EIGHT_BALL;
+
+        // Determine placement mode
+        let placementMode = 'anywhere';
+        if (kitchenOnly) {
+            placementMode = 'kitchen';
+        }
 
         // Sample positions to find best placement
         const sampleCount = 20;
@@ -387,7 +398,7 @@ export class AI {
             const pos = { x, y };
 
             // Check if valid position
-            if (!this.game.canPlaceCueBall(pos, kitchenOnly)) continue;
+            if (!this.game.canPlaceCueBall(pos, placementMode)) continue;
 
             // Score this position based on shot opportunities
             let score = 0;
@@ -441,6 +452,153 @@ export class AI {
 
         // Fallback to default kitchen position
         return this.table.findValidKitchenPosition(this.game.balls, this.table.center.y);
+    }
+
+    // Find best position within the D-zone for snooker ball-in-hand
+    findBestDZonePosition() {
+        const validTargets = this.getValidTargets();
+        const dGeometry = this.table.getDGeometry();
+
+        if (!dGeometry) {
+            return this.table.findValidDPosition(this.game.balls, this.table.center.y);
+        }
+
+        const { baulkX, centerY, radius } = dGeometry;
+        const pockets = this.table.pockets;
+        let bestPosition = null;
+        let bestScore = -Infinity;
+
+        // Sample positions within the D
+        const sampleCount = 30;
+        for (let i = 0; i < sampleCount; i++) {
+            // Generate random point in D (semicircle)
+            const r = Math.random() * radius * 0.9; // Stay slightly inside D
+            const angle = Math.PI / 2 + Math.random() * Math.PI; // 90 to 270 degrees (left semicircle)
+            const x = baulkX + Math.cos(angle) * r;
+            const y = centerY + Math.sin(angle) * r;
+            const pos = { x, y };
+
+            // Check if valid position
+            if (!this.game.canPlaceCueBall(pos, 'dzone')) continue;
+
+            // Score this position based on shot opportunities
+            let score = 0;
+            for (const target of validTargets) {
+                for (const pocket of pockets) {
+                    const shot = this.evaluatePotentialShot(pos, target, pocket);
+                    if (shot && shot.score > score) {
+                        score = shot.score;
+                    }
+                }
+            }
+
+            if (score > bestScore) {
+                bestScore = score;
+                bestPosition = pos;
+            }
+        }
+
+        return bestPosition || this.table.findValidDPosition(this.game.balls, this.table.center.y);
+    }
+
+    // Make decision after opponent commits a foul (WPBSA rules)
+    makeSnookerFoulDecision(foulInfo) {
+        aiLog('Making snooker foul decision:', foulInfo);
+
+        // Simple AI decision logic:
+        // 1. If we have good shots available, play on
+        // 2. If position is bad and restore is available, restore
+        // 3. Otherwise play on
+
+        const validTargets = this.getValidTargets();
+        const cueBallPos = this.game.cueBall?.position;
+
+        if (!cueBallPos || validTargets.length === 0) {
+            // No valid targets, prefer restore if available
+            if (foulInfo.canRestore) {
+                aiLog('Decision: restore (no good shots)');
+                return 'restore';
+            }
+            aiLog('Decision: play (no restore available)');
+            return 'play';
+        }
+
+        // Evaluate current position
+        let bestShotScore = 0;
+        const pockets = this.table.pockets;
+
+        for (const target of validTargets) {
+            for (const pocket of pockets) {
+                const shot = this.evaluatePotentialShot(cueBallPos, target, pocket);
+                if (shot && shot.score > bestShotScore) {
+                    bestShotScore = shot.score;
+                }
+            }
+        }
+
+        aiLog('Best shot score from current position:', bestShotScore);
+
+        // If we have a reasonable shot (score > 50), play on
+        if (bestShotScore > 50) {
+            aiLog('Decision: play (good shot available)');
+            return 'play';
+        }
+
+        // Position is bad - consider restore if available
+        if (foulInfo.canRestore) {
+            aiLog('Decision: restore (bad position)');
+            return 'restore';
+        }
+
+        // No restore available, must play on
+        aiLog('Decision: play (no restore available)');
+        return 'play';
+    }
+
+    // Choose which color to nominate when targeting colors
+    chooseColorNomination(balls) {
+        // AI strategy: nominate the highest value color that's pottable
+        const colorOrder = ['black', 'pink', 'blue', 'brown', 'green', 'yellow'];
+        const colorValues = { yellow: 2, green: 3, brown: 4, blue: 5, pink: 6, black: 7 };
+
+        const cueBallPos = this.game.cueBall?.position;
+        if (!cueBallPos) return 'black'; // Default to black
+
+        const pockets = this.table.pockets;
+        let bestColor = null;
+        let bestScore = -Infinity;
+
+        for (const colorName of colorOrder) {
+            const colorBall = balls.find(b => b.isColor && b.colorName === colorName && !b.pocketed);
+            if (!colorBall) continue;
+
+            // Check if we can pot this color
+            for (const pocket of pockets) {
+                const shot = this.evaluatePotentialShot(cueBallPos, colorBall, pocket);
+                if (shot) {
+                    // Weight by color value and shot quality
+                    const weightedScore = shot.score * (colorValues[colorName] / 7);
+                    if (weightedScore > bestScore) {
+                        bestScore = weightedScore;
+                        bestColor = colorName;
+                    }
+                }
+            }
+        }
+
+        // If no good shot found, just nominate the highest available color
+        if (!bestColor) {
+            for (const colorName of colorOrder) {
+                const colorBall = balls.find(b => b.isColor && b.colorName === colorName && !b.pocketed);
+                if (colorBall) {
+                    bestColor = colorName;
+                    break;
+                }
+            }
+        }
+
+        aiLog('AI nominated color:', bestColor || 'black');
+        return bestColor || 'black';
     }
 
     // Main shot planning and execution

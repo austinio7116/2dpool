@@ -154,6 +154,15 @@ class PoolGame {
         this.ai.onBallPlacement = (position) => this.placeCueBall(position);
         this.ai.onThinkingStart = () => this.ui.showAIThinking();
         this.ai.onThinkingEnd = () => this.ui.hideAIThinking();
+
+        // Snooker WPBSA rules callbacks
+        this.game.onFoulDecision = (foulInfo) => this.handleSnookerFoulDecision(foulInfo);
+        this.game.onNominationRequired = () => this.handleNominationRequired();
+        this.game.onNominationChange = (colorName) => this.ui.updateNominatedColor(colorName);
+
+        // UI snooker callbacks
+        this.ui.onSnookerDecision = (decision) => this.applySnookerDecision(decision);
+        this.ui.onColorNomination = (colorName) => this.handleColorNomination(colorName);
     }
 
     async startGame(mode, options = {}) {
@@ -405,17 +414,34 @@ class PoolGame {
                 power,
                 this.game.balls
             );
+
+            // Dynamic nomination for snooker when targeting a color
+            if (this.game.mode === GameMode.SNOOKER &&
+                this.game.snookerTarget === 'color' &&
+                this.trajectory && this.trajectory.firstHit) {
+                // Find the ball that would be hit first
+                const hitBallNum = this.trajectory.firstHit.targetBallNumber;
+                const hitBall = this.game.balls.find(b => b.number === hitBallNum);
+
+                if (hitBall && hitBall.isColor && hitBall.colorName) {
+                    // Automatically nominate the color we're aiming at
+                    this.game.setNominatedColor(hitBall.colorName);
+                }
+            }
         }
     }
 
     placeCueBall(position) {
-        // Break shot: always kitchen only (behind the baulk line)
-        // UK 8-ball fouls: kitchen only
-        // Other fouls: ball in hand anywhere
-        const kitchenOnly = this.game.isBreakShot || this.game.mode === GameMode.UK_EIGHT_BALL;
+        // Determine placement mode based on game type
+        let placementMode = 'anywhere';
+        if (this.game.mode === GameMode.SNOOKER) {
+            placementMode = 'dzone';
+        } else if (this.game.isBreakShot || this.game.mode === GameMode.UK_EIGHT_BALL) {
+            placementMode = 'kitchen';
+        }
 
-        if (this.game.canPlaceCueBall(position, kitchenOnly)) {
-            this.game.placeCueBall(position, kitchenOnly);
+        if (this.game.canPlaceCueBall(position, placementMode)) {
+            this.game.placeCueBall(position, placementMode);
             this.input.exitBallInHandMode();
             this.input.setCanShoot(true);
             this.input.resetSpin();
@@ -429,14 +455,29 @@ class PoolGame {
         const isAITurn = this.ai.enabled && this.game.currentPlayer === 2;
 
         if (state === GameState.BALL_IN_HAND) {
-            // Break shot: always kitchen only (behind the baulk line)
-            // UK 8-ball fouls: kitchen only
-            // Other fouls: ball in hand anywhere
-            const kitchenOnly = this.game.isBreakShot || this.game.mode === GameMode.UK_EIGHT_BALL;
+            // Determine placement mode based on game type
+            // - Snooker: always D-zone
+            // - UK 8-ball: always kitchen
+            // - US 8-ball break: kitchen
+            // - US 8-ball foul: anywhere
+            // - 9-ball: anywhere
+            let placementMode = 'anywhere';
+            if (this.game.mode === GameMode.SNOOKER) {
+                placementMode = 'dzone';
+            } else if (this.game.isBreakShot || this.game.mode === GameMode.UK_EIGHT_BALL) {
+                placementMode = 'kitchen';
+            }
 
-            const validPos = kitchenOnly
-                ? this.table.findValidKitchenPosition(this.game.balls, this.table.center.y)
-                : this.table.findValidCueBallPosition(this.game.balls, this.table.center.y);
+            // Find valid position based on mode
+            let validPos;
+            if (placementMode === 'dzone') {
+                validPos = this.table.findValidDPosition(this.game.balls, this.table.center.y);
+            } else if (placementMode === 'kitchen') {
+                validPos = this.table.findValidKitchenPosition(this.game.balls, this.table.center.y);
+            } else {
+                validPos = this.table.findValidCueBallPosition(this.game.balls, this.table.center.y);
+            }
+
             this.game.cueBall.setPosition(validPos.x, validPos.y);
             this.game.cueBall.pocketed = false;
             this.game.cueBall.sinking = false;
@@ -450,7 +491,7 @@ class PoolGame {
             } else {
                 // Human player places ball
                 this.input.enterBallInHandMode(this.game.cueBall, (pos) => {
-                    return this.game.canPlaceCueBall(pos, kitchenOnly);
+                    return this.game.canPlaceCueBall(pos, placementMode);
                 });
             }
         } else if (state === GameState.PLAYING) {
@@ -469,6 +510,12 @@ class PoolGame {
                 // Human player's turn
                 this.input.setCanShoot(true);
             }
+        } else if (state === GameState.AWAITING_DECISION) {
+            // Snooker: waiting for opponent's decision after foul
+            this.input.setCanShoot(false);
+
+            // The decision callback will be triggered from game.js via onFoulDecision
+            // which shows the UI panel (human) or auto-decides (AI)
         }
     }
 
@@ -493,6 +540,52 @@ class PoolGame {
 
     handleBallPocketed(_ball) {
         // Additional handling if needed
+    }
+
+    // Handle snooker foul decision request
+    handleSnookerFoulDecision(foulInfo) {
+        // The decision maker is the OPPONENT of the player who fouled
+        // At this point, currentPlayer is still the fouling player
+        const foulingPlayer = this.game.currentPlayer;
+        const decisionMaker = foulingPlayer === 1 ? 2 : 1;
+        const isAIDecision = this.ai.enabled && decisionMaker === 2;
+
+        if (isAIDecision) {
+            // AI makes the decision
+            setTimeout(() => {
+                const decision = this.ai.makeSnookerFoulDecision(foulInfo);
+                this.applySnookerDecision(decision);
+            }, 500);
+        } else {
+            // Human player makes the decision via UI
+            this.ui.showDecisionPanel(foulInfo);
+        }
+    }
+
+    // Apply the chosen snooker foul decision
+    applySnookerDecision(decision) {
+        this.ui.hideDecisionPanel();
+        this.game.applySnookerDecision(decision);
+    }
+
+    // Handle request for color nomination (when shooting without aiming at a color)
+    handleNominationRequired() {
+        const isAITurn = this.ai.enabled && this.game.currentPlayer === 2;
+
+        if (isAITurn) {
+            // AI nominates a color (default to highest available)
+            const nomination = this.ai.chooseColorNomination(this.game.balls);
+            this.handleColorNomination(nomination);
+        } else {
+            // Human player nominates via modal
+            this.ui.showNominationModal();
+        }
+    }
+
+    // Handle color nomination from UI or AI
+    handleColorNomination(colorName) {
+        this.ui.hideNominationModal();
+        this.game.setNominatedColor(colorName);
     }
 
     // Start the next frame in a match
@@ -706,6 +799,10 @@ class PoolGame {
         const aimState = this.input.getAimState();
         const canShoot = this.game.state === GameState.PLAYING && !this.input.isPlacingBall();
 
+        // Show D-zone for snooker ball-in-hand
+        const showDZone = this.game.state === GameState.BALL_IN_HAND &&
+                          this.game.mode === GameMode.SNOOKER;
+
         const renderState = {
             balls: this.game.balls,
             cueBall: this.game.cueBall,
@@ -717,7 +814,8 @@ class PoolGame {
             spin: aimState.spin,
             spinIndicator: aimState.spinIndicator,
             showSpinIndicator: canShoot,
-            aiVisualization: this.ai.getVisualization()
+            aiVisualization: this.ai.getVisualization(),
+            showDZone: showDZone
         };
 
         this.renderer.render(renderState);
@@ -732,8 +830,15 @@ class PoolGame {
         const cueBall = this.game.cueBall;
         const mousePos = this.input.mousePos;
 
-        // International rules: ball in hand anywhere after foul
-        const isValid = this.game.canPlaceCueBall(mousePos, false);
+        // Determine placement mode for validation
+        let placementMode = 'anywhere';
+        if (this.game.mode === GameMode.SNOOKER) {
+            placementMode = 'dzone';
+        } else if (this.game.isBreakShot || this.game.mode === GameMode.UK_EIGHT_BALL) {
+            placementMode = 'kitchen';
+        }
+
+        const isValid = this.game.canPlaceCueBall(mousePos, placementMode);
 
         ctx.globalAlpha = 0.5;
         ctx.beginPath();

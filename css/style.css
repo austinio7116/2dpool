@@ -2526,3 +2526,235 @@ body {
     font-size: 14px;
     margin-top: 8px;
 }
+
+/* ============================================
+   SNOOKER DECISION PANEL (Foul and a Miss)
+   ============================================ */
+
+.snooker-decision-panel {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 1000;
+    pointer-events: auto;
+}
+
+.snooker-decision-panel.hidden {
+    display: none;
+}
+
+.snooker-decision-panel .decision-content {
+    background: rgba(26, 26, 46, 0.98);
+    border: 2px solid #ffd700;
+    border-radius: 12px;
+    padding: 20px 30px;
+    text-align: center;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8);
+    min-width: 300px;
+}
+
+.snooker-decision-panel h3 {
+    color: #ff6b6b;
+    font-size: 1.4rem;
+    margin: 0 0 10px 0;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.snooker-decision-panel .penalty-text {
+    color: #ffd700;
+    font-size: 1.1rem;
+    margin: 0 0 8px 0;
+}
+
+.snooker-decision-panel .decision-info {
+    color: #aaa;
+    font-size: 0.85rem;
+    margin: 0 0 15px 0;
+}
+
+.snooker-decision-panel .decision-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.snooker-decision-panel .decision-btn {
+    background: linear-gradient(135deg, #2d5a27 0%, #1e3d1a 100%);
+    color: #fff;
+    border: 2px solid #3d7a37;
+    padding: 12px 20px;
+    font-size: 0.95rem;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.snooker-decision-panel .decision-btn:hover {
+    background: linear-gradient(135deg, #3d7a37 0%, #2d5a27 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(45, 90, 39, 0.4);
+}
+
+.snooker-decision-panel .decision-btn.hidden {
+    display: none;
+}
+
+/* ============================================
+   SNOOKER NOMINATION MODAL
+   ============================================ */
+
+.snooker-nomination-modal {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 1000;
+    pointer-events: auto;
+}
+
+.snooker-nomination-modal.hidden {
+    display: none;
+}
+
+.snooker-nomination-modal .nomination-content {
+    background: rgba(26, 26, 46, 0.98);
+    border: 2px solid #4a4a6a;
+    border-radius: 12px;
+    padding: 20px 25px;
+    text-align: center;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8);
+}
+
+.snooker-nomination-modal h3 {
+    color: #ffd700;
+    font-size: 1.2rem;
+    margin: 0 0 8px 0;
+}
+
+.snooker-nomination-modal p {
+    color: #aaa;
+    font-size: 0.85rem;
+    margin: 0 0 15px 0;
+}
+
+.snooker-nomination-modal .nomination-balls {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.snooker-nomination-modal .nom-ball {
+    width: 45px;
+    height: 45px;
+    border-radius: 50%;
+    border: 3px solid rgba(255, 255, 255, 0.3);
+    cursor: pointer;
+    transition: all 0.2s;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+.snooker-nomination-modal .nom-ball:hover {
+    transform: scale(1.15);
+    border-color: #ffd700;
+    box-shadow: 0 6px 16px rgba(255, 215, 0, 0.4);
+}
+
+.snooker-nomination-modal .nom-ball.yellow { background: radial-gradient(circle at 30% 30%, #ffe066, #FFD700, #b8860b); }
+.snooker-nomination-modal .nom-ball.green { background: radial-gradient(circle at 30% 30%, #5fa85f, #228B22, #145214); }
+.snooker-nomination-modal .nom-ball.brown { background: radial-gradient(circle at 30% 30%, #a86b3d, #8B4513, #5a2d0a); }
+.snooker-nomination-modal .nom-ball.blue { background: radial-gradient(circle at 30% 30%, #6495ed, #0066cc, #003d7a); }
+.snooker-nomination-modal .nom-ball.pink { background: radial-gradient(circle at 30% 30%, #ffb6c1, #FF69B4, #c94c7a); }
+.snooker-nomination-modal .nom-ball.black { background: radial-gradient(circle at 30% 30%, #444, #1a1a1a, #000); }
+
+/* ============================================
+   SNOOKER NOMINATION INDICATOR (HUD)
+   ============================================ */
+
+.hud-nomination {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+    font-size: 0.65rem;
+    color: #ccc;
+}
+
+.hud-nomination.hidden {
+    display: none;
+}
+
+.hud-nomination .nom-color-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    border: 1px solid rgba(255, 255, 255, 0.4);
+}
+
+.hud-nomination .nom-color-dot.yellow { background: #FFD700; }
+.hud-nomination .nom-color-dot.green { background: #228B22; }
+.hud-nomination .nom-color-dot.brown { background: #8B4513; }
+.hud-nomination .nom-color-dot.blue { background: #0066cc; }
+.hud-nomination .nom-color-dot.pink { background: #FF69B4; }
+.hud-nomination .nom-color-dot.black { background: #1a1a1a; border-color: #666; }
+
+/* ============================================
+   MOBILE RESPONSIVE - SNOOKER DECISION/NOMINATION
+   ============================================ */
+
+@media (max-width: 1024px) and (orientation: landscape) {
+    .snooker-decision-panel .decision-content {
+        padding: 15px 20px;
+        min-width: 250px;
+    }
+
+    .snooker-decision-panel h3 {
+        font-size: 1.1rem;
+    }
+
+    .snooker-decision-panel .penalty-text {
+        font-size: 0.95rem;
+    }
+
+    .snooker-decision-panel .decision-info {
+        font-size: 0.75rem;
+    }
+
+    .snooker-decision-panel .decision-btn {
+        padding: 10px 16px;
+        font-size: 0.8rem;
+    }
+
+    .snooker-nomination-modal .nomination-content {
+        padding: 15px 20px;
+    }
+
+    .snooker-nomination-modal h3 {
+        font-size: 1rem;
+    }
+
+    .snooker-nomination-modal p {
+        font-size: 0.75rem;
+    }
+
+    .snooker-nomination-modal .nom-ball {
+        width: 38px;
+        height: 38px;
+    }
+
+    .hud-nomination {
+        padding: 1px 6px;
+        font-size: 0.55rem;
+    }
+
+    .hud-nomination .nom-color-dot {
+        width: 8px;
+        height: 8px;
+    }
+}

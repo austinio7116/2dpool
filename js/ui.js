@@ -176,6 +176,16 @@ export class UI {
         this.tableSaturationValue = document.getElementById('table-saturation-value');
         this.tableBrightnessValue = document.getElementById('table-brightness-value');
 
+        // Snooker decision panel and nomination elements
+        this.snookerDecisionPanel = document.getElementById('snooker-decision-panel');
+        this.decisionPenaltyText = document.getElementById('decision-penalty-text');
+        this.decisionInfoText = document.getElementById('decision-info-text');
+        this.btnPlayOn = document.getElementById('btn-play-on');
+        this.btnMakeReplay = document.getElementById('btn-make-replay');
+        this.btnRestorePosition = document.getElementById('btn-restore-position');
+        this.snookerNominationModal = document.getElementById('snooker-nomination-modal');
+        this.hudSnookerNomination = document.getElementById('hud-snooker-nomination');
+
         // Callbacks
         this.onGameStart = null;
         this.onPlayAgain = null;
@@ -188,6 +198,8 @@ export class UI {
         this.onResumeMatch = null;
         this.onBallsUpright = null;
         this.onConcedeFrame = null;
+        this.onSnookerDecision = null;        // Snooker foul decision callback
+        this.onColorNomination = null;         // Snooker color nomination callback
 
         // Current game mode
         this.currentMode = null;
@@ -589,6 +601,40 @@ export class UI {
 
         this.importTablesInput?.addEventListener('change', (e) => {
             this.handleTableImport(e);
+        });
+
+        // Snooker decision panel buttons
+        this.btnPlayOn?.addEventListener('click', () => {
+            this.hideDecisionPanel();
+            if (this.onSnookerDecision) {
+                this.onSnookerDecision('play');
+            }
+        });
+
+        this.btnMakeReplay?.addEventListener('click', () => {
+            this.hideDecisionPanel();
+            if (this.onSnookerDecision) {
+                this.onSnookerDecision('replay');
+            }
+        });
+
+        this.btnRestorePosition?.addEventListener('click', () => {
+            this.hideDecisionPanel();
+            if (this.onSnookerDecision) {
+                this.onSnookerDecision('restore');
+            }
+        });
+
+        // Snooker nomination modal buttons
+        const nomBalls = this.snookerNominationModal?.querySelectorAll('.nom-ball');
+        nomBalls?.forEach(ball => {
+            ball.addEventListener('click', () => {
+                const color = ball.dataset.color;
+                this.hideNominationModal();
+                if (this.onColorNomination) {
+                    this.onColorNomination(color);
+                }
+            });
         });
     }
 
@@ -2913,5 +2959,90 @@ export class UI {
         if (this.aiThinkingOverlay) {
             this.aiThinkingOverlay.classList.add('hidden');
         }
+    }
+
+    // ============================================
+    // SNOOKER DECISION & NOMINATION METHODS
+    // ============================================
+
+    // Show snooker foul decision panel
+    showDecisionPanel(foulInfo) {
+        if (!this.snookerDecisionPanel) return;
+
+        // Update penalty text
+        if (this.decisionPenaltyText) {
+            this.decisionPenaltyText.textContent = `${foulInfo.penalty} points awarded to opponent`;
+        }
+
+        // Update info text
+        if (this.decisionInfoText) {
+            let infoText = '';
+            if (foulInfo.wasScratched) {
+                infoText = 'Cue ball was pocketed.';
+            } else if (foulInfo.missRuleApplies) {
+                infoText = 'Miss called - no legal ball was hit.';
+            } else {
+                infoText = 'Foul committed.';
+            }
+            this.decisionInfoText.textContent = infoText;
+        }
+
+        // Show/hide restore button based on whether restore is available
+        if (this.btnRestorePosition) {
+            this.btnRestorePosition.classList.toggle('hidden', !foulInfo.canRestore);
+        }
+
+        this.snookerDecisionPanel.classList.remove('hidden');
+    }
+
+    // Hide snooker foul decision panel
+    hideDecisionPanel() {
+        if (this.snookerDecisionPanel) {
+            this.snookerDecisionPanel.classList.add('hidden');
+        }
+    }
+
+    // Show snooker color nomination modal
+    showNominationModal() {
+        if (this.snookerNominationModal) {
+            this.snookerNominationModal.classList.remove('hidden');
+        }
+    }
+
+    // Hide snooker color nomination modal
+    hideNominationModal() {
+        if (this.snookerNominationModal) {
+            this.snookerNominationModal.classList.add('hidden');
+        }
+    }
+
+    // Update the nominated color indicator in HUD
+    updateNominatedColor(colorName) {
+        if (!this.hudSnookerNomination) return;
+
+        if (!colorName) {
+            this.hudSnookerNomination.classList.add('hidden');
+            return;
+        }
+
+        // Color mapping for visual indicator
+        const colorMap = {
+            'yellow': '#ffff00',
+            'green': '#00aa00',
+            'brown': '#8b4513',
+            'blue': '#0000ff',
+            'pink': '#ff69b4',
+            'black': '#000000'
+        };
+
+        const colorHex = colorMap[colorName] || '#ffffff';
+
+        // Update the indicator
+        this.hudSnookerNomination.classList.remove('hidden');
+        this.hudSnookerNomination.innerHTML = `
+            <span class="nomination-label">Nominated:</span>
+            <span class="nomination-ball" style="background-color: ${colorHex}; border: 2px solid ${colorName === 'yellow' ? '#ccc' : '#fff'}"></span>
+            <span class="nomination-name">${colorName.charAt(0).toUpperCase() + colorName.slice(1)}</span>
+        `;
     }
 }

@@ -128,6 +128,11 @@ export class Renderer {
         // Draw colorize overlay with HSB filters (if available)
         this.drawColorizeOverlay();
 
+        // Draw D zone for snooker ball-in-hand
+        if (state.showDZone) {
+            this.drawDZone();
+        }
+
         // DEBUG: Draw pocket detection circles (uncomment to visualize)
         // this.drawPocketDebug();
 
@@ -138,7 +143,7 @@ export class Renderer {
 
         // Draw AI visualization overlay (if present)
         if (state.aiVisualization) {
-            // this.drawAIVisualization(state.aiVisualization);
+             this.drawAIVisualization(state.aiVisualization);
         }
 
         if (state.showSpinIndicator) {
@@ -229,6 +234,70 @@ export class Renderer {
         ctx.filter = filterString;
 
         ctx.drawImage(overlay, 0, 0, this.canvas.width, this.canvas.height);
+
+        ctx.restore();
+    }
+
+    // Draw the D zone for snooker ball-in-hand placement
+    drawDZone() {
+        const dGeometry = this.table.getDGeometry();
+        if (!dGeometry) return;
+
+        const ctx = this.ctx;
+        const { baulkX, centerY, radius } = dGeometry;
+
+        ctx.save();
+
+        // Draw baulk line (full vertical line)
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(baulkX, this.table.bounds.top);
+        ctx.lineTo(baulkX, this.table.bounds.bottom);
+        ctx.stroke();
+
+        // Draw the D (semicircle opening towards baulk cushion)
+        ctx.strokeStyle = 'rgba(100, 200, 255, 0.6)';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        // Arc from bottom to top, opening to the left (towards baulk cushion)
+        ctx.arc(baulkX, centerY, radius, Math.PI / 2, -Math.PI / 2, false);
+        ctx.stroke();
+
+        // Fill the D zone with a subtle highlight
+        ctx.fillStyle = 'rgba(100, 200, 255, 0.1)';
+        ctx.beginPath();
+        ctx.arc(baulkX, centerY, radius, Math.PI / 2, -Math.PI / 2, false);
+        ctx.lineTo(baulkX, centerY - radius);
+        ctx.closePath();
+        ctx.fill();
+
+        // Draw the color spots on the baulk line (yellow, brown, green)
+        const spots = this.table.spots;
+        if (spots) {
+            const spotColors = {
+                yellow: '#FFD700',
+                brown: '#8B4513',
+                green: '#228B22'
+            };
+
+            for (const [name, color] of Object.entries(spotColors)) {
+                const spot = spots[name];
+                if (spot) {
+                    const spotX = this.table.center.x + spot.x;
+                    const spotY = this.table.center.y + spot.y;
+
+                    ctx.fillStyle = color;
+                    ctx.beginPath();
+                    ctx.arc(spotX, spotY, 4, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+                    ctx.lineWidth = 1;
+                    ctx.stroke();
+                }
+            }
+        }
 
         ctx.restore();
     }

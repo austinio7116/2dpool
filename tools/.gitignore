@@ -1,0 +1,12 @@
+# Python virtual environment
+venv/
+
+# Generated model files (can be regenerated from data)
+angle_model.js
+
+# Shot data files (user-specific)
+ai_shot_data_*.json
+
+# Python cache
+__pycache__/
+*.pyc

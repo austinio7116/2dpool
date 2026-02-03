@@ -7,6 +7,31 @@ import { GameMode, GameState } from './game.js';
 // Debug logging - set to true to see AI decision making
 const AI_DEBUG = false;
 
+// Trained angle error prediction model (loaded dynamically if available)
+let angleModel = null;
+let angleModelLoaded = false;
+
+// Try to load the trained angle model
+async function loadAngleModel() {
+    try {
+        const module = await import('./angle-model.js');
+        if (module.predictAngleError && typeof module.predictAngleError === 'function') {
+            angleModel = module;
+            angleModelLoaded = true;
+            console.log('[AI] Loaded trained angle model:', module.ANGLE_MODEL_INFO || 'no metadata');
+        }
+    } catch (e) {
+        // Model not available - will use fallback calculateThrowShift
+        angleModelLoaded = false;
+        if (AI_DEBUG) {
+            console.log('[AI] No trained angle model found, using default throw compensation');
+        }
+    }
+}
+
+// Attempt to load model on module init
+loadAngleModel();
+
 function aiLog(...args) {
     if (AI_DEBUG) {
         console.log('%c[AI]', 'color: #4CAF50; font-weight: bold', ...args);
@@ -66,6 +91,10 @@ export class AI {
 
         // Visualization overlay data (persists until shot completes)
         this.visualization = null;
+
+        // Shot tracking for data collection
+        this.pendingShot = null;  // Current shot being tracked
+        this.shotHistory = [];    // All tracked shots
     }
 
     // Clear visualization when shot completes
@@ -1795,24 +1824,42 @@ export class AI {
         let adjustedGhostBall = Vec2.clone(shot.ghostBall);
         let directionAfterThrow = initialDirection;
 
-        // Cut-induced throw compensation for shots > 5 degrees
-        // Instead of rotating aim angle (which affects long shots more),
-        // shift the ghost ball position by a fixed distance
+        // Calculate spin early so we can use it for model prediction
+        const spin = this.calculateSpin(shot);
+
+        // Throw/angle compensation for cut shots
         if (shot.cutAngle > 1) {
-            const throwShift = this.calculateThrowShift(shot, ballRadius);
-            aiLog('Throw compensation: shift ghost ball by', throwShift.toFixed(2), 'px');
-
-            // Shift ghost ball perpendicular to the shot line
-            const perpendicular = { x: -initialDirection.y, y: initialDirection.x };
-
-            // Determine shift direction based on cut direction
+            // Determine cut direction for compensation sign
             const cueToBall = Vec2.subtract(shot.target.position, cueBallPos);
             const ballToPocket = Vec2.subtract(shot.pocket.position, shot.target.position);
             const cross = cueToBall.x * ballToPocket.y - cueToBall.y * ballToPocket.x;
-            const shiftDir = cross > 0 ? -1 : 1; // Shift to aim thinner
+            const cutSign = cross > 0 ? -1 : 1;
 
-            adjustedGhostBall = Vec2.add(shot.ghostBall, Vec2.multiply(perpendicular, throwShift * shiftDir));
-            directionAfterThrow = Vec2.normalize(Vec2.subtract(adjustedGhostBall, cueBallPos));
+            if (angleModelLoaded && angleModel) {
+                // Use trained model to predict angle error
+                const predictedError = angleModel.predictAngleError(shot.cutAngle, spin.y, shot.power);
+                const adjustmentRad = (predictedError * Math.PI / 180) * cutSign;
+
+                aiLog('Model-based compensation:', predictedError.toFixed(2), '° (cut sign:', cutSign, ')');
+
+                // Rotate the aim direction to compensate
+                directionAfterThrow = Vec2.rotate(initialDirection, -adjustmentRad);
+                directionAfterThrow = Vec2.normalize(directionAfterThrow);
+
+                // Update ghost ball position to match rotated direction (for visualization)
+                const distToGhost = Vec2.distance(cueBallPos, shot.ghostBall);
+                adjustedGhostBall = Vec2.add(cueBallPos, Vec2.multiply(directionAfterThrow, distToGhost));
+            } else {
+                // Fallback: use physics-based throw shift calculation
+                const throwShift = this.calculateThrowShift(shot, ballRadius);
+                aiLog('Throw compensation (fallback): shift ghost ball by', throwShift.toFixed(2), 'px');
+
+                // Shift ghost ball perpendicular to the shot line
+                const perpendicular = { x: -initialDirection.y, y: initialDirection.x };
+
+                adjustedGhostBall = Vec2.add(shot.ghostBall, Vec2.multiply(perpendicular, throwShift * cutSign));
+                directionAfterThrow = Vec2.normalize(Vec2.subtract(adjustedGhostBall, cueBallPos));
+            }
         } else {
             aiLog('No throw compensation (cut ≤ 1°)');
             directionAfterThrow = Vec2.clone(initialDirection);
@@ -1830,10 +1877,8 @@ export class AI {
         let power = shot.power;
         const powerError = (Math.random() - 0.5) * 2 * settings.powerError;
         power = power * (1 + powerError);
-        
-        // Decide whether to use backspin
-        const spin = this.calculateSpin(shot);
 
+        // Adjust power for spin (spin was calculated earlier for model prediction)
         if (spin.y > 0.05) {
             const drawStrength = Math.min(1, Math.abs(spin.y)); // 0..1
             power *= (1 + 0.20 * drawStrength); // +0%..+20%
@@ -1855,6 +1900,24 @@ export class AI {
             throwAdjustedLine: directionAfterThrow, // After throw, before error
             finalAimLine: direction,                // Final direction with error
             cutAngle: shot.cutAngle
+        };
+
+        // Record pending shot data for tracking
+        const cueBallToTargetDist = Vec2.distance(cueBallPos, shot.target.position);
+        const targetToPocketDir = Vec2.normalize(Vec2.subtract(pocketAimPoint, shot.target.position));
+        const intendedAngle = Math.atan2(targetToPocketDir.y, targetToPocketDir.x) * 180 / Math.PI;
+
+        this.pendingShot = {
+            timestamp: Date.now(),
+            targetBall: shot.target,
+            targetBallPos: Vec2.clone(shot.target.position),
+            pocketAimPoint: Vec2.clone(pocketAimPoint),
+            intendedAngle: intendedAngle,  // Angle from target ball to pocket aim point
+            power: power,
+            spinY: spin.y,
+            cutAngle: shot.cutAngle,
+            cueBallToTargetDist: cueBallToTargetDist,
+            difficulty: this.difficulty
         };
 
         aiLogGroupEnd();
@@ -3049,6 +3112,136 @@ export class AI {
         const perpDist = Vec2.distance(ball.position, closestPoint);
 
         return perpDist < blockRadius;
+    }
+
+    // ==========================================
+    // Shot Tracking Methods (for data collection)
+    // ==========================================
+
+    /**
+     * Called when the cue ball collides with a target ball during an AI shot.
+     * Records the actual ball trajectory for comparison with intended trajectory.
+     * @param {Object} targetBall - The ball that was hit
+     * @param {Object} targetVelocity - The velocity vector of the target ball after collision {x, y}
+     */
+    recordShotCollision(targetBall, targetVelocity) {
+        if (!this.pendingShot) return;
+
+        // Only record if this is the target ball we were aiming at
+        if (targetBall !== this.pendingShot.targetBall) return;
+
+        // Calculate actual travel angle from velocity vector
+        const actualAngle = Math.atan2(targetVelocity.y, targetVelocity.x) * 180 / Math.PI;
+
+        // Calculate angle error (difference between intended and actual)
+        let angleError = actualAngle - this.pendingShot.intendedAngle;
+        // Normalize to -180 to 180
+        while (angleError > 180) angleError -= 360;
+        while (angleError < -180) angleError += 360;
+
+        // Complete the shot record
+        const shotRecord = {
+            timestamp: this.pendingShot.timestamp,
+            intendedAngle: this.pendingShot.intendedAngle,
+            actualAngle: actualAngle,
+            angleError: angleError,
+            power: this.pendingShot.power,
+            spinY: this.pendingShot.spinY,
+            cutAngle: this.pendingShot.cutAngle,
+            cueBallToTargetDist: this.pendingShot.cueBallToTargetDist,
+            difficulty: this.pendingShot.difficulty,
+            targetBallVelocity: { x: targetVelocity.x, y: targetVelocity.y }
+        };
+
+        this.shotHistory.push(shotRecord);
+        console.log('[AI Shot Tracker] Recorded shot:', shotRecord);
+
+        // Clear pending shot
+        this.pendingShot = null;
+    }
+
+    /**
+     * Get all recorded shot data
+     * @returns {Array} Array of shot records
+     */
+    getShotHistory() {
+        return this.shotHistory;
+    }
+
+    /**
+     * Clear all recorded shot data
+     */
+    clearShotHistory() {
+        this.shotHistory = [];
+        console.log('[AI Shot Tracker] History cleared');
+    }
+
+    /**
+     * Export shot data as JSON string
+     * @returns {string} JSON string of shot data
+     */
+    exportShotDataJSON() {
+        return JSON.stringify(this.shotHistory, null, 2);
+    }
+
+    /**
+     * Export shot data as CSV string
+     * @returns {string} CSV string of shot data
+     */
+    exportShotDataCSV() {
+        if (this.shotHistory.length === 0) return '';
+
+        const headers = [
+            'timestamp',
+            'intendedAngle',
+            'actualAngle',
+            'angleError',
+            'power',
+            'spinY',
+            'cutAngle',
+            'cueBallToTargetDist',
+            'difficulty',
+            'targetVelocityX',
+            'targetVelocityY'
+        ];
+
+        const rows = this.shotHistory.map(shot => [
+            shot.timestamp,
+            shot.intendedAngle.toFixed(4),
+            shot.actualAngle.toFixed(4),
+            shot.angleError.toFixed(4),
+            shot.power.toFixed(4),
+            shot.spinY.toFixed(4),
+            shot.cutAngle.toFixed(4),
+            shot.cueBallToTargetDist.toFixed(4),
+            shot.difficulty,
+            shot.targetBallVelocity.x.toFixed(4),
+            shot.targetBallVelocity.y.toFixed(4)
+        ].join(','));
+
+        return [headers.join(','), ...rows].join('\n');
+    }
+
+    /**
+     * Download shot data as a file
+     * @param {string} format - 'json' or 'csv'
+     */
+    downloadShotData(format = 'json') {
+        const data = format === 'csv' ? this.exportShotDataCSV() : this.exportShotDataJSON();
+        const mimeType = format === 'csv' ? 'text/csv' : 'application/json';
+        const filename = `ai_shot_data_${Date.now()}.${format}`;
+
+        const blob = new Blob([data], { type: mimeType });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        console.log(`[AI Shot Tracker] Downloaded ${this.shotHistory.length} shots as ${filename}`);
     }
 
     // Randomize who breaks (called at game start when AI is enabled)

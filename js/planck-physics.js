@@ -766,6 +766,18 @@ export class PlanckPhysics {
         return false;
     }
 
+    /**
+     * Get the current velocity of a ball in pixels/second
+     * @param {Object} ball - The ball object
+     * @returns {Object|null} Velocity {x, y} in pixels/sec, or null if not found
+     */
+    getBallVelocity(ball) {
+        const body = this.ballToBody.get(ball);
+        if (!body) return null;
+        const v = body.getLinearVelocity();
+        return { x: v.x * SCALE, y: v.y * SCALE };
+    }
+
     setSpeedMultiplier(multiplier) {
         this.speedMultiplier = Math.max(0.1, Math.min(3.0, multiplier));
     }

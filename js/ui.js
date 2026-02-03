@@ -181,9 +181,12 @@ export class UI {
         this.decisionPenaltyText = document.getElementById('decision-penalty-text');
         this.decisionInfoText = document.getElementById('decision-info-text');
         this.btnPlayOn = document.getElementById('btn-play-on');
+        this.btnFreeBall = document.getElementById('btn-free-ball');
         this.btnMakeReplay = document.getElementById('btn-make-replay');
         this.btnRestorePosition = document.getElementById('btn-restore-position');
         this.snookerNominationModal = document.getElementById('snooker-nomination-modal');
+        this.freeBallNominationModal = document.getElementById('free-ball-nomination-modal');
+        this.freeBallOptionsContainer = document.getElementById('free-ball-options');
         this.hudSnookerNomination = document.getElementById('hud-snooker-nomination');
 
         // Callbacks
@@ -200,6 +203,7 @@ export class UI {
         this.onConcedeFrame = null;
         this.onSnookerDecision = null;        // Snooker foul decision callback
         this.onColorNomination = null;         // Snooker color nomination callback
+        this.onFreeBallNomination = null;      // Snooker free ball nomination callback
 
         // Current game mode
         this.currentMode = null;
@@ -608,6 +612,13 @@ export class UI {
             this.hideDecisionPanel();
             if (this.onSnookerDecision) {
                 this.onSnookerDecision('play');
+            }
+        });
+
+        this.btnFreeBall?.addEventListener('click', () => {
+            this.hideDecisionPanel();
+            if (this.onSnookerDecision) {
+                this.onSnookerDecision('free_ball');
             }
         });
 
@@ -2121,9 +2132,9 @@ export class UI {
     }
 
     // Show foul indicator
-    showFoul(reason) {
+    showFoul(reason, isMiss = false) {
         this.foulIndicator.classList.remove('hidden');
-        this.foulIndicator.textContent = 'FOUL';
+        this.foulIndicator.textContent = isMiss ? 'FOUL & MISS' : 'FOUL';
 
         // Show reason as message
         this.showMessage(reason, 3000);
@@ -2445,6 +2456,22 @@ export class UI {
                 } else {
                     const colorName = gameInfo.snookerTarget.charAt(0).toUpperCase() + gameInfo.snookerTarget.slice(1);
                     this.hudSnookerTarget.innerHTML = `<span class="target-dot target-${gameInfo.snookerTarget}"></span> ${colorName}`;
+                }
+            }
+
+            // Show/hide nomination based on target
+            // Only show nomination when player needs to nominate a color (target === 'color')
+            // or when free ball is active (future feature)
+            if (this.hudSnookerNomination) {
+                if (gameInfo.snookerTarget === 'color') {
+                    // Nomination is relevant - show if there's a nominated color
+                    if (gameInfo.nominatedColor) {
+                        this.updateNominatedColor(gameInfo.nominatedColor);
+                    }
+                    // If no color nominated yet, updateNominatedColor(null) will hide it
+                } else {
+                    // On reds or specific color in sequence - hide nomination
+                    this.hudSnookerNomination.classList.add('hidden');
                 }
             }
         } else {
@@ -2979,17 +3006,28 @@ export class UI {
             let infoText = '';
             if (foulInfo.wasScratched) {
                 infoText = 'Cue ball was pocketed.';
-            } else if (foulInfo.missRuleApplies) {
+            } else if (foulInfo.isMiss) {
                 infoText = 'Miss called - no legal ball was hit.';
             } else {
                 infoText = 'Foul committed.';
             }
+
+            // Add free ball info if applicable
+            if (foulInfo.isFreeBall) {
+                infoText += ' Free ball available (opponent snookered).';
+            }
+
             this.decisionInfoText.textContent = infoText;
         }
 
         // Show/hide restore button based on whether restore is available
         if (this.btnRestorePosition) {
             this.btnRestorePosition.classList.toggle('hidden', !foulInfo.canRestore);
+        }
+
+        // Show/hide free ball button based on whether free ball is available
+        if (this.btnFreeBall) {
+            this.btnFreeBall.classList.toggle('hidden', !foulInfo.isFreeBall);
         }
 
         this.snookerDecisionPanel.classList.remove('hidden');
@@ -3014,6 +3052,80 @@ export class UI {
         if (this.snookerNominationModal) {
             this.snookerNominationModal.classList.add('hidden');
         }
+    }
+
+    // Show free ball nomination modal with available balls
+    showFreeBallNominationModal(balls) {
+        if (!this.freeBallNominationModal || !this.freeBallOptionsContainer) return;
+
+        // Clear previous options
+        this.freeBallOptionsContainer.innerHTML = '';
+
+        // Color mapping for snooker balls
+        const snookerColors = {
+            'red': '#cc0000',
+            'yellow': '#ffff00',
+            'green': '#00aa00',
+            'brown': '#8b4513',
+            'blue': '#0000ff',
+            'pink': '#ff69b4',
+            'black': '#000000'
+        };
+
+        // Filter to non-pocketed, non-cue balls
+        const availableBalls = balls.filter(b => !b.pocketed && !b.isCueBall);
+
+        // Create ball buttons
+        for (const ball of availableBalls) {
+            const btn = document.createElement('button');
+            btn.className = 'nom-ball free-ball-option';
+
+            // Determine ball color
+            let bgColor;
+            if (ball.colorName) {
+                bgColor = snookerColors[ball.colorName] || '#ffffff';
+            } else {
+                bgColor = ball.color || '#ffffff';
+            }
+
+            btn.style.backgroundColor = bgColor;
+
+            // Add border for visibility on light colors
+            if (ball.colorName === 'yellow') {
+                btn.style.border = '2px solid #999';
+            }
+
+            // Label/title
+            const label = ball.colorName
+                ? `${ball.colorName.charAt(0).toUpperCase() + ball.colorName.slice(1)} (${this.getSnookerBallValue(ball.colorName)})`
+                : `Ball ${ball.number}`;
+            btn.title = label;
+
+            // Click handler
+            btn.addEventListener('click', () => {
+                this.hideFreeBallNominationModal();
+                if (this.onFreeBallNomination) {
+                    this.onFreeBallNomination(ball);
+                }
+            });
+
+            this.freeBallOptionsContainer.appendChild(btn);
+        }
+
+        this.freeBallNominationModal.classList.remove('hidden');
+    }
+
+    // Hide free ball nomination modal
+    hideFreeBallNominationModal() {
+        if (this.freeBallNominationModal) {
+            this.freeBallNominationModal.classList.add('hidden');
+        }
+    }
+
+    // Get snooker ball point value for display
+    getSnookerBallValue(colorName) {
+        const values = { 'red': 1, 'yellow': 2, 'green': 3, 'brown': 4, 'blue': 5, 'pink': 6, 'black': 7 };
+        return values[colorName] || 0;
     }
 
     // Update the nominated color indicator in HUD

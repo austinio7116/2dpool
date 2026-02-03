@@ -137,7 +137,7 @@ class PoolGame {
 
         // Game callbacks
         this.game.onStateChange = (state) => this.handleStateChange(state);
-        this.game.onFoul = (reason) => this.handleFoul(reason);
+        this.game.onFoul = (reason, isMiss) => this.handleFoul(reason, isMiss);
         this.game.onGameOver = (winner, reason, match) => this.handleGameOver(winner, reason, match);
         this.game.onBallPocketed = (ball) => this.handleBallPocketed(ball);
 
@@ -159,10 +159,13 @@ class PoolGame {
         this.game.onFoulDecision = (foulInfo) => this.handleSnookerFoulDecision(foulInfo);
         this.game.onNominationRequired = () => this.handleNominationRequired();
         this.game.onNominationChange = (colorName) => this.ui.updateNominatedColor(colorName);
+        this.game.onFreeBallAwarded = () => this.handleFreeBallAwarded();
+        this.game.onFreeBallNominated = (ball) => this.handleFreeBallNominated(ball);
 
         // UI snooker callbacks
         this.ui.onSnookerDecision = (decision) => this.applySnookerDecision(decision);
         this.ui.onColorNomination = (colorName) => this.handleColorNomination(colorName);
+        this.ui.onFreeBallNomination = (ball) => this.handleFreeBallNomination(ball);
     }
 
     async startGame(mode, options = {}) {
@@ -519,8 +522,8 @@ class PoolGame {
         }
     }
 
-    handleFoul(reason) {
-        this.ui.showFoul(reason);
+    handleFoul(reason, isMiss = false) {
+        this.ui.showFoul(reason, isMiss);
         this.audio.playScratch();
     }
 
@@ -554,11 +557,30 @@ class PoolGame {
             // AI makes the decision
             setTimeout(() => {
                 const decision = this.ai.makeSnookerFoulDecision(foulInfo);
+                // Show what the AI decided
+                const decisionText = this.getDecisionText(decision);
+                this.ui.showMessage(`Decision: ${decisionText}`, 3000);
                 this.applySnookerDecision(decision);
             }, 500);
         } else {
             // Human player makes the decision via UI
             this.ui.showDecisionPanel(foulInfo);
+        }
+    }
+
+    // Get readable text for a snooker foul decision
+    getDecisionText(decision) {
+        switch (decision) {
+            case 'play':
+                return 'Play on';
+            case 'free_ball':
+                return 'Free ball';
+            case 'replay':
+                return 'Pass turn';
+            case 'restore':
+                return 'Pass and replace';
+            default:
+                return decision;
         }
     }
 
@@ -586,6 +608,33 @@ class PoolGame {
     handleColorNomination(colorName) {
         this.ui.hideNominationModal();
         this.game.setNominatedColor(colorName);
+    }
+
+    // Handle free ball awarded (after foul leaves player snookered)
+    handleFreeBallAwarded() {
+        const isAITurn = this.ai.enabled && this.game.currentPlayer === 2;
+
+        if (isAITurn) {
+            // AI nominates the best free ball
+            this.ai.nominateFreeBall();
+        } else {
+            // Human player selects via modal
+            this.ui.showFreeBallNominationModal(this.game.balls);
+        }
+    }
+
+    // Handle free ball nomination from UI
+    handleFreeBallNomination(ball) {
+        this.ui.hideFreeBallNominationModal();
+        this.game.setFreeBallNomination(ball);
+    }
+
+    // Handle free ball nominated (callback from game)
+    handleFreeBallNominated(ball) {
+        // Update UI to show which ball was nominated as free ball
+        if (ball && ball.colorName) {
+            this.ui.updateNominatedColor(ball.colorName);
+        }
     }
 
     // Start the next frame in a match

@@ -74,6 +74,10 @@ export class Game {
         this.consecutiveMisses = 0;         // Track consecutive misses (for frame-loss warning)
         this.pendingFoulDecision = null;    // Stores foul info while awaiting decision
 
+        // Free ball rule
+        this.isFreeBall = false;            // True when free ball is in effect
+        this.freeBallNomination = null;     // The ball nominated as free ball
+
         // Match state (frame scoring)
         this.match = {
             bestOf: 1,
@@ -99,6 +103,8 @@ export class Game {
         this.onFoulDecision = null;         // Snooker: callback for foul decision UI
         this.onNominationRequired = null;   // Snooker: callback when nomination is needed
         this.onNominationChange = null;     // Snooker: callback when nominated color changes
+        this.onFreeBallAwarded = null;      // Snooker: callback when free ball is awarded
+        this.onFreeBallNominated = null;    // Snooker: callback when free ball nomination is made
     }
 
     // Initialize match with bestOf format
@@ -986,6 +992,8 @@ export class Game {
             info.pointsDeficit = this.getSnookerPointsDeficit();
             info.nominatedColor = this.nominatedColor;
             info.pendingFoulDecision = this.pendingFoulDecision;
+            info.isFreeBall = this.isFreeBall;
+            info.freeBallNomination = this.freeBallNomination;
         }
 
         return info;
@@ -1084,9 +1092,13 @@ export class Game {
         if (!isFoul) {
             for (const b of pocketed) {
                 if (b.isCueBall) continue;
-                turnScore += this.getSnookerBallValue(b);
+                turnScore += this.getSnookerPotValue(b);  // Uses free ball scoring if applicable
             }
         }
+
+        // Clear free ball state after shot (whether valid or foul)
+        this.isFreeBall = false;
+        this.freeBallNomination = null;
 
         // 5. Execute Game Logic
 
@@ -1097,6 +1109,11 @@ export class Game {
             // Respot colors that were pocketed on foul
             this.respotSnookerBalls(pocketed, true);
 
+            // Check if incoming player is snookered (for free ball)
+            // Note: We need to temporarily switch perspective to check from incoming player's view
+            // The cue ball position after foul determines if free ball applies
+            const isSnookeredAfterFoul = this.isPlayerSnookered();
+
             // Store foul info for decision
             this.pendingFoulDecision = {
                 penalty: foulValue,
@@ -1104,7 +1121,8 @@ export class Game {
                 wasScratched: cueBallPocketed,
                 foulReason: this.foulReason,
                 offendingPlayer: this.currentPlayer,
-                canRestore: isMiss && this.preShotState !== null
+                canRestore: isMiss && this.preShotState !== null,
+                isFreeBall: isSnookeredAfterFoul && !cueBallPocketed  // Free ball if snookered (not on scratch)
             };
 
             // Award penalty points to opponent
@@ -1118,7 +1136,7 @@ export class Game {
             }
 
             if (this.onFoul) {
-                this.onFoul(this.foulReason + ` (${foulValue} points)`);
+                this.onFoul(this.foulReason + ` (${foulValue} points)`, isMiss);
             }
 
             // Set state to await decision from opponent
@@ -1186,10 +1204,12 @@ export class Game {
     applySnookerDecision(decision) {
         if (!this.pendingFoulDecision) return;
 
-        const { wasScratched, offendingPlayer, canRestore } = this.pendingFoulDecision;
+        const { wasScratched, offendingPlayer, canRestore, isFreeBall } = this.pendingFoulDecision;
 
         // Clear nomination on any decision
         this.nominatedColor = null;
+        this.isFreeBall = false;
+        this.freeBallNomination = null;
 
         switch (decision) {
             case 'play':
@@ -1202,6 +1222,26 @@ export class Game {
                     this.state = GameState.BALL_IN_HAND;
                 } else {
                     this.state = GameState.PLAYING;
+                }
+                break;
+
+            case 'free_ball':
+                // Opponent plays with free ball advantage
+                if (isFreeBall) {
+                    this.isFreeBall = true;
+                    this.switchPlayer();
+                    this.handleSnookerTargetAfterFoul();
+
+                    if (wasScratched) {
+                        this.state = GameState.BALL_IN_HAND;
+                    } else {
+                        this.state = GameState.PLAYING;
+                    }
+
+                    // Notify UI that free ball nomination is needed
+                    if (this.onFreeBallAwarded) {
+                        this.onFreeBallAwarded();
+                    }
                 }
                 break;
 
@@ -1234,6 +1274,16 @@ export class Game {
 
         if (this.onStateChange) {
             this.onStateChange(this.state);
+        }
+    }
+
+    // Set the free ball nomination
+    setFreeBallNomination(ball) {
+        if (this.isFreeBall && ball && !ball.pocketed && !ball.isCueBall) {
+            this.freeBallNomination = ball;
+            if (this.onFreeBallNominated) {
+                this.onFreeBallNominated(ball);
+            }
         }
     }
 
@@ -1278,11 +1328,20 @@ export class Game {
     isValidSnookerHit(ball) {
         if (!ball) return false;
 
+        // Free ball: nominated ball counts as ball on
+        if (this.isFreeBall && this.freeBallNomination) {
+            // Can hit either the nominated free ball OR any legal target
+            if (ball === this.freeBallNomination) {
+                return true;
+            }
+            // Also valid to hit actual ball on (gives up free ball advantage)
+        }
+
         // 1. Target is Red
         if (this.snookerTarget === 'red') {
             return ball.isRed;
         }
-        
+
         // 2. Target is "Any Color" (Nomination phase after a red)
         if (this.snookerTarget === 'color') {
             return ball.isColor; // Any color is valid to HIT in this phase
@@ -1296,6 +1355,11 @@ export class Game {
     isValidSnookerPot(ball) {
         if (ball.isCueBall) return false;
 
+        // Free ball: nominated ball can be potted (scores as ball on)
+        if (this.isFreeBall && this.freeBallNomination && ball === this.freeBallNomination) {
+            return true; // Free ball pot is always valid
+        }
+
         // 1. Target Red
         if (this.snookerTarget === 'red') {
             return ball.isRed;
@@ -1304,14 +1368,34 @@ export class Game {
         // 2. Target "Any Color" (After Red)
         if (this.snookerTarget === 'color') {
             // If we hit a color, we must pot THAT color.
-            // If we hit multiple colors (rare/lucky), it's complex, 
+            // If we hit multiple colors (rare/lucky), it's complex,
             // but standard rule: You can only pot the nominated (first hit) color.
-            if (!this.firstBallHit) return false; 
+            if (!this.firstBallHit) return false;
             return ball.isColor && ball.colorName === this.firstBallHit.colorName;
         }
 
         // 3. Target Specific Color
         return ball.colorName === this.snookerTarget;
+    }
+
+    // Get the value of a potted ball (handles free ball scoring)
+    getSnookerPotValue(ball) {
+        // Free ball: scores as the ball on (not its actual value)
+        if (this.isFreeBall && this.freeBallNomination && ball === this.freeBallNomination) {
+            // Free ball scores as the ball on
+            if (this.snookerTarget === 'red') return 1;
+            if (this.snookerTarget === 'color') {
+                // When on colors after red, free ball = lowest available = 1
+                // (Actually per WPBSA rules, free ball when on "any color" = 1)
+                return 1;
+            }
+            // When on specific color in sequence, free ball = that color's value
+            const values = { 'yellow': 2, 'green': 3, 'brown': 4, 'blue': 5, 'pink': 6, 'black': 7 };
+            return values[this.snookerTarget] || 1;
+        }
+
+        // Normal ball value
+        return this.getSnookerBallValue(ball);
     }
 
     getActualRedsRemaining() {
@@ -1339,9 +1423,80 @@ export class Game {
     getCurrentTargetValue() {
         if (this.snookerTarget === 'red') return 1; // Foul on red is min 4 anyway
         if (this.snookerTarget === 'color') return 7; // Technically unknown, but standard logic maxes penalty
-        
+
         const values = { 'yellow': 2, 'green': 3, 'brown': 4, 'blue': 5, 'pink': 6, 'black': 7 };
         return values[this.snookerTarget] || 4;
+    }
+
+    // --- Helper: Check if player is snookered on all valid target balls ---
+    // Used to determine if free ball should be awarded after a foul
+    isPlayerSnookered() {
+        if (!this.cueBall || this.cueBall.pocketed) return false;
+
+        const cueBallPos = this.cueBall.position;
+        const cueBallRadius = this.cueBall.radius;
+
+        // Get all valid target balls based on current target
+        const targetBalls = this.getValidTargetBalls();
+        if (targetBalls.length === 0) return false;
+
+        // Get all potential blocking balls (everything except cue ball and target balls)
+        const blockerBalls = this.balls.filter(b =>
+            !b.pocketed && !b.isCueBall && !targetBalls.includes(b)
+        );
+
+        // Check each target ball - if ANY has a clear path, not snookered
+        for (const target of targetBalls) {
+            if (this.hasClearPath(cueBallPos, target.position, cueBallRadius, target.radius, blockerBalls)) {
+                return false; // At least one target is reachable
+            }
+        }
+
+        return true; // All targets are blocked - snookered
+    }
+
+    // Get the balls that are valid targets for the current snookerTarget
+    getValidTargetBalls() {
+        if (this.snookerTarget === 'red') {
+            return this.balls.filter(b => b.isRed && !b.pocketed);
+        } else if (this.snookerTarget === 'color') {
+            return this.balls.filter(b => b.isColor && !b.pocketed);
+        } else {
+            // Specific color in sequence
+            return this.balls.filter(b => b.colorName === this.snookerTarget && !b.pocketed);
+        }
+    }
+
+    // Check if there's a clear straight-line path between cue ball and target
+    // Must be able to hit BOTH extreme edges of the target ball
+    hasClearPath(cueBallPos, targetPos, cueBallRadius, targetRadius, blockerBalls) {
+        const direction = Vec2.subtract(targetPos, cueBallPos);
+        const distance = Vec2.length(direction);
+        if (distance < 1) return true;
+
+        const normalized = Vec2.normalize(direction);
+
+        // Check if any blocker ball is in the path
+        for (const blocker of blockerBalls) {
+            const blockerRadius = blocker.radius;
+            const toBall = Vec2.subtract(blocker.position, cueBallPos);
+            const projection = Vec2.dot(toBall, normalized);
+
+            // Blocker is behind cue ball or beyond target
+            if (projection < 0 || projection > distance - targetRadius) continue;
+
+            // Calculate perpendicular distance to path
+            const closestPoint = Vec2.add(cueBallPos, Vec2.multiply(normalized, projection));
+            const perpDist = Vec2.distance(blocker.position, closestPoint);
+
+            // Check if blocker is in the way (cue ball would collide)
+            const clearance = blockerRadius + cueBallRadius;
+            if (perpDist < clearance) {
+                return false; // Path is blocked
+            }
+        }
+
+        return true;
     }
 
     // --- Helper: Respotting Logic ---

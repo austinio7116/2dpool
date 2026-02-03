@@ -307,6 +307,149 @@ export class AI {
             this.handleBallInHand();
         } else if (this.game.state === GameState.PLAYING) {
             this.planAndExecuteShot();
+        } else if (this.game.state === GameState.AWAITING_DECISION) {
+            this.handleSnookerDecision();
+        }
+    }
+
+    // Handle snooker foul decision (play, restore, or put opponent back in)
+    handleSnookerDecision() {
+        const settings = DIFFICULTY_SETTINGS[this.difficulty];
+
+        this.isThinking = true;
+        if (this.onThinkingStart) this.onThinkingStart();
+
+        setTimeout(() => {
+            const foulInfo = this.game.pendingFoulDecision;
+            if (!foulInfo) {
+                this.isThinking = false;
+                if (this.onThinkingEnd) this.onThinkingEnd();
+                return;
+            }
+
+            aiLogGroup('Snooker Foul Decision');
+            aiLog('Foul Info:', foulInfo);
+
+            // Evaluate the table from the current cue ball position
+            const cueBallPos = this.game.cueBall?.position;
+            let currentShotScore = 0;
+
+            if (cueBallPos) {
+                const validTargets = this.getValidTargets();
+                const pockets = this.table.pockets;
+
+                for (const target of validTargets) {
+                    for (const pocket of pockets) {
+                        const shot = this.evaluatePotentialShot(cueBallPos, target, pocket);
+                        if (shot && shot.score > currentShotScore) {
+                            currentShotScore = shot.score;
+                        }
+                    }
+                }
+            }
+
+            aiLog('Current best shot score:', currentShotScore.toFixed(1));
+
+            // Evaluate free ball opportunities if available
+            let freeBallScore = 0;
+            if (foulInfo.isFreeBall && cueBallPos) {
+                // With free ball, we can nominate any ball - find best opportunity
+                const allBalls = this.game.balls.filter(b => !b.pocketed && !b.isCueBall);
+                const pockets = this.table.pockets;
+                for (const target of allBalls) {
+                    for (const pocket of pockets) {
+                        const shot = this.evaluatePotentialShot(cueBallPos, target, pocket);
+                        if (shot && shot.score > freeBallScore) {
+                            freeBallScore = shot.score;
+                        }
+                    }
+                }
+                aiLog('Free ball best shot score:', freeBallScore.toFixed(1));
+            }
+
+            let decision = 'play'; // Default: play from current position
+
+            // Decision logic:
+            // 1. If free ball gives significantly better opportunity, take it
+            if (foulInfo.isFreeBall && freeBallScore > currentShotScore + 15 && freeBallScore > 40) {
+                decision = 'free_ball';
+                aiLog('Decision: free_ball (better opportunity, score:', freeBallScore.toFixed(1) + ')');
+            }
+            // 2. If we have a good shot (score > 50), play on
+            else if (currentShotScore > 50) {
+                decision = 'play';
+                aiLog('Decision: play (good shot available, score:', currentShotScore.toFixed(1) + ')');
+            }
+            // 3. If free ball available and current position is mediocre, take free ball
+            else if (foulInfo.isFreeBall && freeBallScore > 40) {
+                decision = 'free_ball';
+                aiLog('Decision: free_ball (mediocre position but free ball helps, score:', freeBallScore.toFixed(1) + ')');
+            }
+            // 4. If position is bad and restore is available (miss rule), restore
+            else if (foulInfo.isMiss && foulInfo.canRestore && currentShotScore < 40) {
+                decision = 'restore';
+                aiLog('Decision: restore (bad position, score:', currentShotScore.toFixed(1) + ')');
+            }
+            // 5. If position is very bad (score < 30), put opponent back in
+            else if (currentShotScore < 30) {
+                decision = 'replay';
+                aiLog('Decision: replay (very bad position, score:', currentShotScore.toFixed(1) + ')');
+            }
+            else {
+                aiLog('Decision: play (default)');
+            }
+
+            aiLogGroupEnd();
+
+            // Apply the decision through the game
+            if (this.game.applySnookerDecision) {
+                this.game.applySnookerDecision(decision);
+            }
+
+            this.isThinking = false;
+            if (this.onThinkingEnd) this.onThinkingEnd();
+
+            // If we chose to play or free_ball, schedule the shot after state updates
+            if (decision === 'play' || decision === 'free_ball') {
+                setTimeout(() => {
+                    // If free ball was chosen, nominate the best target ball
+                    if (decision === 'free_ball' && this.game.isFreeBall) {
+                        this.nominateFreeBall();
+                    }
+
+                    if (this.game.state === GameState.PLAYING) {
+                        this.planAndExecuteShot();
+                    } else if (this.game.state === GameState.BALL_IN_HAND) {
+                        this.handleBallInHand();
+                    }
+                }, 300);
+            }
+        }, settings.thinkingDelay);
+    }
+
+    // Nominate the best ball for free ball
+    nominateFreeBall() {
+        const cueBallPos = this.game.cueBall?.position;
+        if (!cueBallPos) return;
+
+        const allBalls = this.game.balls.filter(b => !b.pocketed && !b.isCueBall);
+        const pockets = this.table.pockets;
+        let bestBall = null;
+        let bestScore = -Infinity;
+
+        for (const target of allBalls) {
+            for (const pocket of pockets) {
+                const shot = this.evaluatePotentialShot(cueBallPos, target, pocket);
+                if (shot && shot.score > bestScore) {
+                    bestScore = shot.score;
+                    bestBall = target;
+                }
+            }
+        }
+
+        if (bestBall && this.game.setFreeBallNomination) {
+            aiLog('AI nominates free ball:', bestBall.colorName || bestBall.number || 'ball');
+            this.game.setFreeBallNomination(bestBall);
         }
     }
 
@@ -622,10 +765,30 @@ export class AI {
 
                 if (shot) {
                     aiLog('Shot type: POTTING ATTEMPT');
+
+                    // Handle snooker color nomination before executing shot
+                    if (this.game.mode === GameMode.SNOOKER &&
+                        this.game.snookerTarget === 'color' &&
+                        shot.target.isColor) {
+                        aiLog('Nominating color:', shot.target.colorName);
+                        if (this.game.setNominatedColor) {
+                            this.game.setNominatedColor(shot.target.colorName);
+                        }
+                    }
+
                     this.executeShot(shot);
                 } else {
                     // No good shot found, play safety
                     aiLog('Shot type: SAFETY (no good pots)');
+
+                    // For snooker safety, still need to nominate if on colors
+                    if (this.game.mode === GameMode.SNOOKER && this.game.snookerTarget === 'color') {
+                        const nomination = this.chooseColorNomination(this.game.balls);
+                        if (this.game.setNominatedColor) {
+                            this.game.setNominatedColor(nomination);
+                        }
+                    }
+
                     this.playSafety();
                 }
             }

@@ -2671,6 +2671,28 @@ body {
 .snooker-nomination-modal .nom-ball.pink { background: radial-gradient(circle at 30% 30%, #ffb6c1, #FF69B4, #c94c7a); }
 .snooker-nomination-modal .nom-ball.black { background: radial-gradient(circle at 30% 30%, #444, #1a1a1a, #000); }
 
+/* Free ball option - dynamically styled balls */
+.snooker-nomination-modal .nom-ball.free-ball-option {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5), inset 0 2px 4px rgba(255, 255, 255, 0.3);
+}
+
+/* Free ball button styling */
+.decision-btn.free-ball-btn {
+    background: linear-gradient(135deg, #2d5a27, #1a3a15);
+    border-color: #4a8a40;
+}
+
+.decision-btn.free-ball-btn:hover {
+    background: linear-gradient(135deg, #3d7a37, #2a5a25);
+    border-color: #5a9a50;
+}
+
+/* Free ball nomination modal - allow wrapping for many balls */
+#free-ball-options {
+    flex-wrap: wrap;
+    max-width: 300px;
+}
+
 /* ============================================
    SNOOKER NOMINATION INDICATOR (HUD)
    ============================================ */

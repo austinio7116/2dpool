@@ -461,6 +461,7 @@
                     <p class="decision-info" id="decision-info-text"></p>
                     <div class="decision-buttons">
                         <button id="btn-play-on" class="decision-btn">Play On</button>
+                        <button id="btn-free-ball" class="decision-btn free-ball-btn hidden">Play On (Free Ball)</button>
                         <button id="btn-make-replay" class="decision-btn">Make Opponent Replay</button>
                         <button id="btn-restore-position" class="decision-btn hidden">Restore & Replay</button>
                     </div>
@@ -479,6 +480,17 @@
                         <button class="nom-ball blue" data-color="blue" title="Blue (5)"></button>
                         <button class="nom-ball pink" data-color="pink" title="Pink (6)"></button>
                         <button class="nom-ball black" data-color="black" title="Black (7)"></button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Free Ball Nomination Modal -->
+            <div id="free-ball-nomination-modal" class="snooker-nomination-modal hidden">
+                <div class="nomination-content">
+                    <h3>Free Ball - Nominate a Ball</h3>
+                    <p>Select any ball to act as the "ball on":</p>
+                    <div class="nomination-balls" id="free-ball-options">
+                        <!-- Balls will be dynamically populated -->
                     </div>
                 </div>
             </div>

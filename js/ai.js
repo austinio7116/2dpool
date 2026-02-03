@@ -3,7 +3,6 @@
 
 import { Vec2 } from './utils.js';
 import { GameMode, GameState } from './game.js';
-import { PlanckPhysics } from './planck-physics.js'; // Adjust path as necessary
 
 // Debug logging - set to true to see AI decision making
 const AI_DEBUG = false;
@@ -814,7 +813,7 @@ export class AI {
         }
 
         // Score the shot
-        const score = this.scoreShot(cutAngleDeg, distanceToGhost, distanceToPocket, pocket.type);
+        const score = this.scoreShot(cutAngleDeg, distanceToGhost, distanceToPocket, pocket.type, target);
 
         // Calculate power needed
         const power = this.calculatePower(distanceToGhost, distanceToPocket, cutAngleDeg);
@@ -1296,7 +1295,7 @@ export class AI {
             }
 
             // Bank shots are harder, so reduce score
-            const baseScore = this.scoreShot(cutAngle, distToGhost, distToPocket, pocket.type);
+            const baseScore = this.scoreShot(cutAngle, distToGhost, distToPocket, pocket.type, target);
             const bankPenalty = 25; // Bank shots scored lower
             const score = baseScore - bankPenalty;
 
@@ -1329,35 +1328,47 @@ export class AI {
     }
 
     // Score a shot (0-100 scale)
-    scoreShot(cutAngle, distanceToGhost, distanceToPocket, _pocketType) {
+    // Update the method signature and logic
+    scoreShot(cutAngle, distanceToGhost, distanceToPocket, _pocketType, targetBall) {
         // 1. Cut Angle Score
-        // Keep linear, but reduce overall impact in the final sum.
         const cutAngleScore = Math.max(0, 100 - (cutAngle / 90) * 100);
 
         // 2. Cue Ball Distance Score (Exponential Decay)
-        // Previous logic was too linear. This penalizes long shots significantly more.
         const maxDist = Math.max(this.table.width, this.table.height);
-        
-        // Normalize distance: 0 = close, 1 = max table distance
         const normalizedDist = distanceToGhost / maxDist;
-        
-        // Use a power curve (x^1.5) so short shots stay high-scoring, 
-        // but medium-long shots drop off faster than linear.
-        // Factor 90 ensures cross-table shots score very low (10/100).
         const distanceScore = Math.max(0, 100 - (Math.pow(normalizedDist, 1.2) * 90));
 
         // 3. Object Ball Distance Score (Target to Pocket)
-        // Similar to cue ball, longer travel = higher risk of missing/collision
         const pocketDistScore = Math.max(0, 100 - (distanceToPocket / maxDist) * 80);
 
-        // 4. Rebalanced Weights
-        // Old: Angle (0.35), CueDist (0.25), PocketDist (0.20)
-        // New: Angle (0.20), CueDist (0.45), PocketDist (0.25)
-        // This forces the AI to prefer being close to the ball above all else.
-        return cutAngleScore * 0.20 +
-               distanceScore * 0.15 +
-               pocketDistScore * 0.55 +
-               10; // Slightly lower base score to filter out truly bad shots
+        // Calculate Base Positional Score
+        let finalScore = cutAngleScore * 0.34 +
+                        distanceScore * 0.23 +
+                        pocketDistScore * 0.43 +
+                        10;
+
+        // --- SNOOKER VALUE MULTIPLIER ---
+        if (this.game.mode === GameMode.SNOOKER && targetBall) {
+            const values = {
+                'red': 1,
+                'yellow': 2,
+                'green': 3,
+                'brown': 4,
+                'blue': 5,
+                'pink': 6,
+                'black': 7
+            };
+            
+            const ballValue = values[targetBall.colorName] || 1;
+            
+            // We use a weighted multiplier. We don't want to multiply the whole score 
+            // by 7 (which would make AI take impossible black shots over easy reds).
+            // Instead, we add a "Value Bonus".
+            const valueBonus = (ballValue - 1) * 5; // Black adds +30 to the score
+            finalScore += valueBonus;
+        }
+
+        return finalScore;
     }
 
     // Select a shot based on difficulty
@@ -1403,85 +1414,80 @@ export class AI {
         return Math.max(5, Math.min(50, power));
     }
 
+    // Execute the chosen shot
     executeShot(shot) {
-        aiLogGroup('Executing Shot (Simulated)');
+        aiLogGroup('Executing Shot');
+        const ballName = shot.target.colorName || shot.target.number || 'ball';
+        aiLog('Target:', ballName, '| Cut angle:', shot.cutAngle.toFixed(1) + '°', '| Base power:', shot.power.toFixed(1));
+
         const settings = DIFFICULTY_SETTINGS[this.difficulty];
         const cueBallPos = this.game.cueBall.position;
-        const targetPos = shot.target.position;
         const ballRadius = shot.target.radius || 12;
-        const spin = this.calculateSpin(shot);
 
+        // Store initial aim direction before any adjustments
         const initialDirection = Vec2.clone(shot.direction);
-        let currentShift = 0; 
+        let adjustedGhostBall = Vec2.clone(shot.ghostBall);
         let directionAfterThrow = initialDirection;
 
-        // We still need this for rendering even if we simulate the throw
-        const pocketAimPoint = this.getPocketAimPoint(targetPos, shot.pocket, ballRadius);
+        // Cut-induced throw compensation for shots > 5 degrees
+        // Instead of rotating aim angle (which affects long shots more),
+        // shift the ghost ball position by a fixed distance
+        if (shot.cutAngle > 1) {
+            const throwShift = this.calculateThrowShift(shot, ballRadius);
+            aiLog('Throw compensation: shift ghost ball by', throwShift.toFixed(2), 'px');
 
-        if (shot.cutAngle > 0.5) {
-            const desiredVector = Vec2.normalize(Vec2.subtract(shot.pocket.position, targetPos));
-            const desiredAngle = Math.atan2(desiredVector.y, desiredVector.x);
-            
-            // Perpendicular vector relative to the line from Cue to Target
-            const perp = { x: -initialDirection.y, y: initialDirection.x };
+            // Shift ghost ball perpendicular to the shot line
+            const perpendicular = { x: -initialDirection.y, y: initialDirection.x };
 
-            // Convergence Loop
-            for (let i = 0; i < 50; i++) {
-                const testGhost = Vec2.add(shot.ghostBall, Vec2.multiply(perp, currentShift));
-                const testDir = Vec2.normalize(Vec2.subtract(testGhost, cueBallPos));
-                
-                const actualVel = this.testShotPhysics(cueBallPos, targetPos, testDir, shot.power, spin, ballRadius);
-                
-                if (actualVel) {
-                    const actualAngle = Math.atan2(actualVel.y, actualVel.x);
-                    let error = desiredAngle - actualAngle;
-                    
-                    while (error > Math.PI) error -= Math.PI * 2;
-                    while (error < -Math.PI) error += Math.PI * 2;
+            // Determine shift direction based on cut direction
+            const cueToBall = Vec2.subtract(shot.target.position, cueBallPos);
+            const ballToPocket = Vec2.subtract(shot.pocket.position, shot.target.position);
+            const cross = cueToBall.x * ballToPocket.y - cueToBall.y * ballToPocket.x;
+            const shiftDir = cross > 0 ? -1 : 1; // Shift to aim thinner
 
-                    if (Math.abs(error) < 0.00005) break; 
-
-                    // Leverage a constant multiplier for stability
-                    const gain = (ballRadius * 2) * 0.3; 
-                    const correction = error * gain;
-                    
-                    // --- THE CRITICAL CHANGE ---
-                    // Switch from += to -= (or vice-versa)
-                    // Based on your diverging logs, you need to NEGATE the correction 
-                    // to counteract the physics engine's throw direction.
-                    currentShift -= correction; 
-                    
-                    aiLog(`Sim ${i + 1}: Error ${(error * 180 / Math.PI).toFixed(2)}°, Total Shift: ${currentShift.toFixed(2)}px`);
-                } else { break; }
-            }
-            
-            const finalGhost = Vec2.add(shot.ghostBall, Vec2.multiply(perp, currentShift));
-            directionAfterThrow = Vec2.normalize(Vec2.subtract(finalGhost, cueBallPos));
+            adjustedGhostBall = Vec2.add(shot.ghostBall, Vec2.multiply(perpendicular, throwShift * shiftDir));
+            directionAfterThrow = Vec2.normalize(Vec2.subtract(adjustedGhostBall, cueBallPos));
+        } else {
+            aiLog('No throw compensation (cut ≤ 1°)');
+            directionAfterThrow = Vec2.clone(initialDirection);
         }
 
-        // Apply difficulty error
-        const aimError = (Math.random() - 0.5) * 2 * settings.aimError * (Math.PI / 180);
-        const direction = Vec2.rotate(directionAfterThrow, aimError);
+        let direction = directionAfterThrow;
 
-        // Apply power error (restoring this logic from your original code)
+        // Apply aim error based on difficulty (still as angle, but this is intentional variance)
+        const aimError = (Math.random() - 0.5) * 2 * settings.aimError * (Math.PI / 180);
+        direction = Vec2.rotate(direction, aimError);
+        direction = Vec2.normalize(direction);
+        aiLog('Aim error applied:', (aimError * 180 / Math.PI).toFixed(2) + '°');
+
+        // Apply power error
         let power = shot.power;
         const powerError = (Math.random() - 0.5) * 2 * settings.powerError;
         power = power * (1 + powerError);
-        if (spin.y > 0.05) {
-            power *= (1 + 0.20 * Math.min(1, Math.abs(spin.y)));
-        }
+        
+        // Decide whether to use backspin
+        const spin = this.calculateSpin(shot);
 
-        // RESTORED: All visualization properties required by drawAIVisualization
+        if (spin.y > 0.05) {
+            const drawStrength = Math.min(1, Math.abs(spin.y)); // 0..1
+            power *= (1 + 0.20 * drawStrength); // +0%..+20%
+        }
+        //power = Math.max(2, Math.min(20, power));
+        aiLog('Final power:', power.toFixed(1), '(error:', (powerError * 100).toFixed(1) + '%)');
+
+
+        // Store visualization data for rendering overlay
+        const pocketAimPoint = this.getPocketAimPoint(shot.target.position, shot.pocket, ballRadius);
         this.visualization = {
             cueBallPos: Vec2.clone(cueBallPos),
-            ghostBall: shot.ghostBall, // Original geometric position
-            adjustedGhostBall: Vec2.add(shot.ghostBall, Vec2.multiply({x: -initialDirection.y, y: initialDirection.x}, currentShift)),
-            targetBallPos: Vec2.clone(targetPos),
-            pocketAimPoint: pocketAimPoint, // RESTORED - Fixes the undefined 'x' error
+            ghostBall: shot.ghostBall,                    // Original ghost ball
+            adjustedGhostBall: adjustedGhostBall,         // After throw compensation
+            targetBallPos: Vec2.clone(shot.target.position),
+            pocketAimPoint: pocketAimPoint,
             pocketPos: shot.pocket.position,
-            initialAimLine: initialDirection,
-            throwAdjustedLine: directionAfterThrow,
-            finalAimLine: direction,
+            initialAimLine: initialDirection,       // Before throw compensation
+            throwAdjustedLine: directionAfterThrow, // After throw, before error
+            finalAimLine: direction,                // Final direction with error
             cutAngle: shot.cutAngle
         };
 
@@ -1499,7 +1505,7 @@ export class AI {
         const thetaRad = cutAngleDeg * Math.PI / 180;
         
         // Typical coefficient of friction for pool balls is ~0.06
-        const friction = 0.06; 
+        const friction = 0.15; 
         
         // CIT is inversely proportional to speed. 
         // We map your power (5-50) to a speed factor.
@@ -1515,61 +1521,6 @@ export class AI {
 
         // Physical limit: throw rarely exceeds 15-20% of the ball's radius
         return Math.min(shiftDistance, ballRadius * 0.25);
-    }
-
-    testShotPhysics(cueBallPos, targetBallPos, aimDir, power, spin, ballRadius) {
-        // 1. Create headless instance
-        const tempPhysics = new PlanckPhysics(this.table);
-        
-        // 2. Define balls using your standard JS objects
-        // Note: We set the velocity here so syncBallsToPlanck handles the Box2D conversion
-        const VELOCITY_SCALE = 60; 
-        const SCALE = 100;
-
-        const tempCueBall = { 
-            position: { x: cueBallPos.x, y: cueBallPos.y }, 
-            velocity: { 
-                x: (aimDir.x * power * VELOCITY_SCALE) / SCALE, 
-                y: (aimDir.y * power * VELOCITY_SCALE) / SCALE 
-            }, 
-            radius: ballRadius, 
-            number: 0, 
-            spinZ: spin.x, 
-            spin: { x: 0, y: spin.y },
-            forceSync: true // Ensure the physics engine pulls these values
-        };
-        
-        const tempTargetBall = { 
-            position: { x: targetBallPos.x, y: targetBallPos.y }, 
-            velocity: { x: 0, y: 0 }, 
-            radius: ballRadius, 
-            number: 1, 
-            spinZ: 0, 
-            spin: { x: 0, y: 0 },
-            forceSync: true
-        };
-
-        const balls = [tempCueBall, tempTargetBall];
-
-        // 3. Initialize the headless world
-        tempPhysics.syncBallsToPlanck(balls);
-
-        let targetVelocity = null;
-
-        // 4. Run simulation steps
-        // We step for about 1 second worth of frames or until contact
-        for (let i = 0; i < 100; i++) {
-            tempPhysics.update(balls, 16.67);
-            
-            // Detection: Did the target ball pick up velocity?
-            if (Math.abs(tempTargetBall.velocity.x) > 0.01 || Math.abs(tempTargetBall.velocity.y) > 0.01) {
-                targetVelocity = { x: tempTargetBall.velocity.x, y: tempTargetBall.velocity.y };
-                break;
-            }
-        }
-
-        tempPhysics.reset(); 
-        return targetVelocity;
     }
 
     // Calculate spin for the shot based on position play considerations

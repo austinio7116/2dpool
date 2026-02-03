@@ -684,7 +684,8 @@ export class AI {
         }
     }
 
-    // 8-Ball: Must hit own group, or 8-ball if group cleared
+    // 8-Ball: Must hit own group (1-7 or 9-15), or 8-ball if group cleared
+    // FIX: Uses numeric ranges instead of visual properties (solid/stripe)
     getValidTargets8Ball(balls) {
         const playerGroup = this.game.currentPlayer === 1 ? this.game.player1Group : this.game.player2Group;
 
@@ -694,8 +695,10 @@ export class AI {
         }
 
         const groupBalls = balls.filter(b => {
-            if (playerGroup === 'solid') return b.isSolid;
-            if (playerGroup === 'stripe') return b.isStripe;
+            // 'solid' group maps to numbers 1-7
+            if (playerGroup === 'solid') return b.number >= 1 && b.number <= 7;
+            // 'stripe' group maps to numbers 9-15
+            if (playerGroup === 'stripe') return b.number >= 9 && b.number <= 15;
             return false;
         });
 
@@ -714,6 +717,7 @@ export class AI {
     }
 
     // UK 8-Ball: Similar to 8-ball but with group1/group2
+    // FIX: Uses numeric ranges to ensure AI targets specific balls regardless of color
     getValidTargetsUK8Ball(balls) {
         const playerGroup = this.game.currentPlayer === 1 ? this.game.player1Group : this.game.player2Group;
 
@@ -722,8 +726,10 @@ export class AI {
         }
 
         const groupBalls = balls.filter(b => {
-            if (playerGroup === 'group1') return b.isGroup1;
-            if (playerGroup === 'group2') return b.isGroup2;
+            // Group 1 (typically Reds) maps to 1-7
+            if (playerGroup === 'group1') return b.number >= 1 && b.number <= 7;
+            // Group 2 (typically Yellows) maps to 9-15
+            if (playerGroup === 'group2') return b.number >= 9 && b.number <= 15;
             return false;
         });
 
@@ -1059,7 +1065,7 @@ export class AI {
         const pocketPos = pocket.position;
 
         // Corridor thickness: "thick scan line"
-        const margin = 2;
+        const margin = 3;
         const thickR = ballRadius + margin;
 
         // Reference: target -> pocket center
@@ -1099,24 +1105,63 @@ export class AI {
         let nearVerts, nearCentroid, nearAngle;
         let farVerts,  farCentroid,  farAngle;
 
-        if (angA < angB) {
-            nearVerts = jaws.railA; nearCentroid = jaws.railAInfo.centroid; nearAngle = angA;
-            farVerts  = jaws.railB; farCentroid  = jaws.railBInfo.centroid; farAngle  = angB;
-        } else if (angB < angA) {
-            nearVerts = jaws.railB; nearCentroid = jaws.railBInfo.centroid; nearAngle = angB;
-            farVerts  = jaws.railA; farCentroid  = jaws.railAInfo.centroid; farAngle  = angA;
-        } else {
-            // Tie: pick near by which centroid is closer to pocket center
-            const cA = jaws.railAInfo.centroid;
-            const cB = jaws.railBInfo.centroid;
-            const dA = Math.hypot(cA.x - pocketPos.x, cA.y - pocketPos.y);
-            const dB = Math.hypot(cB.x - pocketPos.x, cB.y - pocketPos.y);
-            if (dA <= dB) {
-                nearVerts = jaws.railA; nearCentroid = cA; nearAngle = angA;
-                farVerts  = jaws.railB; farCentroid  = cB; farAngle  = angB;
+        // DETECT SIDE POCKET (Same Axis)
+        if (jaws.railAInfo.axis === jaws.railBInfo.axis) {
+            // For side pockets, angles are identical. We must determine "Near"
+            // by looking at which side of the pocket the ball is coming from.
+            
+            // Project the rail offsets onto the shot direction (refVec).
+            // The "Near" rail will be the one opposing the shot vector (negative dot product relative to pocket),
+            // or simply the one "upstream" from the pocket.
+            
+            const vecToA = Vec2.subtract(jaws.railAInfo.centroid, pocketPos);
+            const vecToB = Vec2.subtract(jaws.railBInfo.centroid, pocketPos);
+            
+            // Dot product with Incoming Shot Vector (Target -> Pocket)
+            // Note: refVec points INTO the pocket.
+            // If coming from Left, refVec.x > 0. A rail on the Left has vecToRail.x < 0.
+            // So a Dot Product < 0 means that rail is on the incoming side (Near).
+            
+            const dotA = Vec2.dot(refVec, vecToA);
+            const dotB = Vec2.dot(refVec, vecToB);
+
+            // The rail with the lower (more negative) dot product is the one we are crossing first
+            if (dotA < dotB) {
+                nearVerts = jaws.railA; nearCentroid = jaws.railAInfo.centroid;
+                farVerts  = jaws.railB; farCentroid  = jaws.railBInfo.centroid;
             } else {
-                nearVerts = jaws.railB; nearCentroid = cB; nearAngle = angB;
-                farVerts  = jaws.railA; farCentroid  = cA; farAngle  = angA;
+                nearVerts = jaws.railB; nearCentroid = jaws.railBInfo.centroid;
+                farVerts  = jaws.railA; farCentroid  = jaws.railAInfo.centroid;
+            }
+            
+            // Recalculate angle for the chosen one (they are the same anyway)
+            nearAngle = angleToRailLine(jaws.railAInfo.axis);
+            farAngle = nearAngle;
+            
+        } else {
+            // CORNER POCKET (Different Axes) - Keep existing logic
+            const angA = angleToRailLine(jaws.railAInfo.axis);
+            const angB = angleToRailLine(jaws.railBInfo.axis);
+
+            if (angA < angB) {
+                nearVerts = jaws.railA; nearCentroid = jaws.railAInfo.centroid; nearAngle = angA;
+                farVerts  = jaws.railB; farCentroid  = jaws.railBInfo.centroid; farAngle  = angB;
+            } else if (angB < angA) {
+                nearVerts = jaws.railB; nearCentroid = jaws.railBInfo.centroid; nearAngle = angB;
+                farVerts  = jaws.railA; farCentroid  = jaws.railAInfo.centroid; farAngle  = angA;
+            } else {
+                // Tie-breaker (rare for corners, but fallback to distance)
+                const cA = jaws.railAInfo.centroid;
+                const cB = jaws.railBInfo.centroid;
+                const dA = Math.hypot(cA.x - pocketPos.x, cA.y - pocketPos.y);
+                const dB = Math.hypot(cB.x - pocketPos.x, cB.y - pocketPos.y);
+                if (dA <= dB) {
+                    nearVerts = jaws.railA; nearCentroid = cA; nearAngle = angA;
+                    farVerts  = jaws.railB; farCentroid  = cB; farAngle  = angB;
+                } else {
+                    nearVerts = jaws.railB; nearCentroid = cB; nearAngle = angB;
+                    farVerts  = jaws.railA; farCentroid  = cA; farAngle  = angA;
+                }
             }
         }
 
@@ -1173,7 +1218,7 @@ export class AI {
 
         // Decide whether we are in "thin" mode or "window-center" mode.
         const THIN_DEG_CORNER = 35;
-        const THIN_DEG_SIDE   = 70;
+        const THIN_DEG_SIDE   = 45;
 
         const thinThreshold = (pocket.type === 'side')
             ? THIN_DEG_SIDE
@@ -1505,7 +1550,7 @@ export class AI {
         const thetaRad = cutAngleDeg * Math.PI / 180;
         
         // Typical coefficient of friction for pool balls is ~0.06
-        const friction = 0.15; 
+        const friction = 0.05; 
         
         // CIT is inversely proportional to speed. 
         // We map your power (5-50) to a speed factor.
@@ -2203,6 +2248,7 @@ export class AI {
     }
 
     // Get opponent's target balls (what they need to hit)
+    // FIX: Updated to use numeric ranges so AI calculates safety shots correctly
     getOpponentTargets() {
         const mode = this.game.mode;
         const balls = this.game.balls.filter(b => !b.pocketed && !b.isCueBall);
@@ -2215,11 +2261,13 @@ export class AI {
                     // Groups not assigned - opponent can hit anything except 8-ball
                     return balls.filter(b => !b.isEightBall);
                 }
+                
                 const groupBalls = balls.filter(b => {
-                    if (opponentGroup === 'solid') return b.isSolid;
-                    if (opponentGroup === 'stripe') return b.isStripe;
+                    if (opponentGroup === 'solid') return b.number >= 1 && b.number <= 7;
+                    if (opponentGroup === 'stripe') return b.number >= 9 && b.number <= 15;
                     return false;
                 });
+                
                 // If opponent cleared their group, they're on the 8-ball
                 if (groupBalls.length === 0) {
                     return balls.filter(b => b.isEightBall);
@@ -2236,11 +2284,13 @@ export class AI {
                 if (!opponentGroup) {
                     return balls.filter(b => !b.isEightBall);
                 }
+                
                 const groupBalls = balls.filter(b => {
-                    if (opponentGroup === 'group1') return b.isGroup1;
-                    if (opponentGroup === 'group2') return b.isGroup2;
+                    if (opponentGroup === 'group1') return b.number >= 1 && b.number <= 7;
+                    if (opponentGroup === 'group2') return b.number >= 9 && b.number <= 15;
                     return false;
                 });
+
                 if (groupBalls.length === 0) {
                     return balls.filter(b => b.isEightBall);
                 }

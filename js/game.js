@@ -382,13 +382,15 @@ export class Game {
         }
     }
 
-    // 8-Ball shot evaluation
+    // 8-Ball shot evaluation - UPDATED to use Numbers (1-7 vs 9-15) instead of Visuals
     evaluateEightBallShot() {
         const cueBallPocketed = this.ballsPocketed.includes(this.cueBall);
 
-        // Filter pocketed balls by type
-        const solidsPocketed = this.ballsPocketed.filter(b => b.isSolid);
-        const stripesPocketed = this.ballsPocketed.filter(b => b.isStripe);
+        // Filter pocketed balls by Number Range (Generic for Spots/Stripes AND Reds/Yellows)
+        // Group 1 (Solids/Reds) = 1-7
+        // Group 2 (Stripes/Yellows) = 9-15
+        const lowGroupPocketed = this.ballsPocketed.filter(b => b.number >= 1 && b.number <= 7);
+        const highGroupPocketed = this.ballsPocketed.filter(b => b.number >= 9 && b.number <= 15);
         const eightBallPocketed = this.ballsPocketed.some(b => b.isEightBall);
 
         // Check for first ball hit foul
@@ -409,8 +411,15 @@ export class Game {
                 }
             } else {
                 // Must hit own group first - hitting 8-ball or opponent's ball is a foul
-                const hitOwnGroup = (currentGroup === 'solid' && this.firstBallHit.isSolid) ||
-                                   (currentGroup === 'stripe' && this.firstBallHit.isStripe);
+                
+                // Helper checks based on numbers
+                const hitLow = this.firstBallHit.number >= 1 && this.firstBallHit.number <= 7;
+                const hitHigh = this.firstBallHit.number >= 9 && this.firstBallHit.number <= 15;
+
+                // 'solid' string maps to Low (1-7), 'stripe' string maps to High (9-15)
+                const hitOwnGroup = (currentGroup === 'solid' && hitLow) ||
+                                   (currentGroup === 'stripe' && hitHigh);
+                                   
                 if (!hitOwnGroup) {
                     this.foul = true;
                     if (this.firstBallHit.isEightBall) {
@@ -429,7 +438,7 @@ export class Game {
             const groupCleared = currentGroup ? this.isGroupCleared(currentGroup) : false;
 
             if (this.isBreakShot) {
-                // 8-ball on break - re-spot or re-rack (we'll re-spot)
+                // 8-ball on break - re-spot
                 eightBall.pocketed = false;
                 eightBall.setPosition(this.table.footSpot.x, this.table.footSpot.y);
             } else if (this.foul || cueBallPocketed || !groupCleared) {
@@ -449,13 +458,17 @@ export class Game {
 
         // Assign groups if not yet assigned
         if (!this.player1Group && !this.isBreakShot) {
-            if (solidsPocketed.length > 0 && stripesPocketed.length === 0) {
-                // Determine what Player 1 gets based on who potted the Solid
+            // Logic: If Low (1-7) potted and High (9-15) NOT potted
+            if (lowGroupPocketed.length > 0 && highGroupPocketed.length === 0) {
+                // Determine what Player 1 gets based on who potted the Low ball
+                // We keep the internal string 'solid' to represent 1-7 for compatibility
                 const p1Group = this.currentPlayer === 1 ? 'solid' : 'stripe';
                 this.assignGroups(p1Group);
                 this.turnContinues = true;
-            } else if (stripesPocketed.length > 0 && solidsPocketed.length === 0) {
-                // Determine what Player 1 gets based on who potted the Stripe
+            } 
+            // Logic: If High (9-15) potted and Low (1-7) NOT potted
+            else if (highGroupPocketed.length > 0 && lowGroupPocketed.length === 0) {
+                // We keep the internal string 'stripe' to represent 9-15 for compatibility
                 const p1Group = this.currentPlayer === 1 ? 'stripe' : 'solid';
                 this.assignGroups(p1Group);
                 this.turnContinues = true;
@@ -463,8 +476,9 @@ export class Game {
         } else if (this.player1Group) {
             // Check if player pocketed their own ball
             const currentGroup = this.currentPlayer === 1 ? this.player1Group : this.player2Group;
-            const pocketedOwn = (currentGroup === 'solid' && solidsPocketed.length > 0) ||
-                               (currentGroup === 'stripe' && stripesPocketed.length > 0);
+            
+            const pocketedOwn = (currentGroup === 'solid' && lowGroupPocketed.length > 0) ||
+                               (currentGroup === 'stripe' && highGroupPocketed.length > 0);
 
             if (pocketedOwn && !this.foul) {
                 this.turnContinues = true;
@@ -670,22 +684,23 @@ export class Game {
         }
     }
 
-    // Check if a group is cleared (8-ball)
-    // If excludeJustPocketed is true, balls pocketed this turn are considered "not yet pocketed"
-    // This is used to determine if the group was cleared BEFORE this shot
+    // Check if a group is cleared (8-ball) - UPDATED to use Numbers
     isGroupCleared(group, excludeJustPocketed = false) {
         for (const ball of this.balls) {
             // Skip balls that were pocketed in previous turns
             if (ball.pocketed && !(excludeJustPocketed && this.ballsPocketed.includes(ball))) continue;
+            
             // If excludeJustPocketed, treat just-pocketed balls as still on table
             if (excludeJustPocketed && this.ballsPocketed.includes(ball)) {
-                // Ball was just pocketed - count it as still on table for this check
-                if (group === 'solid' && ball.isSolid) return false;
-                if (group === 'stripe' && ball.isStripe) return false;
+                // Check numbers instead of isSolid/isStripe
+                if (group === 'solid' && (ball.number >= 1 && ball.number <= 7)) return false;
+                if (group === 'stripe' && (ball.number >= 9 && ball.number <= 15)) return false;
                 continue;
             }
-            if (group === 'solid' && ball.isSolid) return false;
-            if (group === 'stripe' && ball.isStripe) return false;
+            
+            // Standard check using numbers
+            if (group === 'solid' && (ball.number >= 1 && ball.number <= 7)) return false;
+            if (group === 'stripe' && (ball.number >= 9 && ball.number <= 15)) return false;
         }
         return true;
     }
@@ -850,15 +865,15 @@ export class Game {
         }
     }
 
-    // Get remaining balls count for each group
+    // Get remaining balls count for each group - UPDATED to use Numbers
     getRemainingBalls() {
-        let solids = 0;
-        let stripes = 0;
+        let solids = 0; // Represents 1-7
+        let stripes = 0; // Represents 9-15
 
         for (const ball of this.balls) {
             if (ball.pocketed) continue;
-            if (ball.isSolid) solids++;
-            if (ball.isStripe) stripes++;
+            if (ball.number >= 1 && ball.number <= 7) solids++;
+            if (ball.number >= 9 && ball.number <= 15) stripes++;
         }
 
         return { solids, stripes };

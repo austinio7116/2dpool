@@ -71,7 +71,8 @@ export class Game {
         this.foulPenalty = 0;               // Points awarded to opponent on foul
         this.missRuleApplies = false;       // True if "Miss" can be called (didn't hit ball on)
         this.nominatedColor = null;         // Currently nominated color when target is 'color'
-        this.consecutiveMisses = 0;         // Track consecutive misses (for frame-loss warning)
+        this.consecutiveMisses = 0;         // Track consecutive misses (3 = frame forfeit)
+        this.wasSnookeredBeforeShot = false; // Track if player was snookered before taking shot
         this.pendingFoulDecision = null;    // Stores foul info while awaiting decision
 
         // Free ball rule
@@ -105,6 +106,7 @@ export class Game {
         this.onNominationChange = null;     // Snooker: callback when nominated color changes
         this.onFreeBallAwarded = null;      // Snooker: callback when free ball is awarded
         this.onFreeBallNominated = null;    // Snooker: callback when free ball nomination is made
+        this.onMissWarning = null;          // Snooker: callback when player has 2 consecutive misses (warning before frame forfeit)
     }
 
     // Initialize match with bestOf format
@@ -146,6 +148,8 @@ export class Game {
         this.snookerTarget = 'red';
         this.colorsPhase = false;
         this.nextColorInSequence = 'yellow';
+        this.consecutiveMisses = 0;
+        this.wasSnookeredBeforeShot = false;
 
         // Initialize match if bestOf provided in options
         if (options.bestOf !== undefined) {
@@ -284,6 +288,9 @@ export class Game {
         // Capture state BEFORE shot for Miss rule (snooker only)
         if (this.mode === GameMode.SNOOKER) {
             this.preShotState = this.serializeState();
+            // Track if player was snookered before shot (for 3 miss rule)
+            // Miss rule only applies if player had a clear shot available
+            this.wasSnookeredBeforeShot = this.isPlayerSnookered();
         }
 
         this.state = GameState.BALLS_MOVING;
@@ -732,6 +739,9 @@ export class Game {
     switchPlayer() {
         this.currentPlayer = this.currentPlayer === 1 ? 2 : 1;
 
+        // Reset consecutive misses when player changes (3 miss rule is per-player)
+        this.consecutiveMisses = 0;
+
         if (this.onTurnChange) {
             this.onTurnChange(this.currentPlayer);
         }
@@ -1128,12 +1138,34 @@ export class Game {
             // Award penalty points to opponent
             this.awardSnookerPoints(this.currentPlayer === 1 ? 2 : 1, foulValue);
 
-            // Track consecutive misses
-            if (isMiss) {
+            // Track consecutive misses (3 miss rule)
+            // Only count misses when player was NOT snookered (had a clear shot available)
+            if (isMiss && !this.wasSnookeredBeforeShot) {
                 this.consecutiveMisses++;
-            } else {
+
+                // Check for 3 miss rule - frame forfeit
+                if (this.consecutiveMisses >= 3) {
+                    // Player forfeits the frame after 3 consecutive misses
+                    this.winner = this.currentPlayer === 1 ? 2 : 1;
+                    this.gameOverReason = `Player ${this.currentPlayer} forfeits frame (3 consecutive misses)`;
+
+                    if (this.onFoul) {
+                        this.onFoul(this.foulReason + ` (${foulValue} points)`, isMiss);
+                    }
+
+                    this.endGame();
+                    return;
+                }
+
+                // Warning after 2 consecutive misses
+                if (this.consecutiveMisses === 2 && this.onMissWarning) {
+                    this.onMissWarning(this.currentPlayer);
+                }
+            } else if (!isMiss) {
+                // Reset on non-miss foul (e.g., potting wrong ball is still a foul but not a miss)
                 this.consecutiveMisses = 0;
             }
+            // Note: If player was snookered, miss count is not affected
 
             if (this.onFoul) {
                 this.onFoul(this.foulReason + ` (${foulValue} points)`, isMiss);

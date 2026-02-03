@@ -161,6 +161,7 @@ class PoolGame {
         this.game.onNominationChange = (colorName) => this.ui.updateNominatedColor(colorName);
         this.game.onFreeBallAwarded = () => this.handleFreeBallAwarded();
         this.game.onFreeBallNominated = (ball) => this.handleFreeBallNominated(ball);
+        this.game.onMissWarning = (player) => this.handleMissWarning(player);
 
         // UI snooker callbacks
         this.ui.onSnookerDecision = (decision) => this.applySnookerDecision(decision);
@@ -635,6 +636,11 @@ class PoolGame {
         if (ball && ball.colorName) {
             this.ui.updateNominatedColor(ball.colorName);
         }
+    }
+
+    // Handle miss warning (2 consecutive misses - 3rd will forfeit frame)
+    handleMissWarning(player) {
+        this.ui.showMessage(`Warning: Player ${player} has 2 consecutive misses. One more will forfeit the frame!`, 5000);
     }
 
     // Start the next frame in a match

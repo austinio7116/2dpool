@@ -656,7 +656,7 @@ class PoolGame {
         // Calculate delta time, capping to avoid large jumps on first frame or after pause
         let deltaTime = currentTime - this.lastTime;
         if (this.lastTime === 0 || deltaTime > 100) {
-            deltaTime = 5; // Default to 200fps
+            deltaTime = 16.67; // Default to 60fps
         }
         this.lastTime = currentTime;
 

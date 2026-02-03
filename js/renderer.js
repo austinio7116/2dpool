@@ -1088,11 +1088,10 @@ export class Renderer {
     }
 
     // Draw AI visualization overlay showing aiming calculations
-    // Draw AI visualization overlay showing aiming calculations
     drawAIVisualization(vis) {
         const ctx = this.ctx;
         const lineLength = 300; // Length to extend aim lines
-        const ballRadius = Constants.BALL_RADIUS || 12; // Ensure we have radius
+        const ballRadius = this.currentTableIndex == 8 ? 8 : 12; // Ensure we have radius
 
         // 1. Draw The "Ball Path" (Solid line with thickness of ball)
         // This helps visualize if the ball physically fits through the jaw gap

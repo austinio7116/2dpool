@@ -98,10 +98,6 @@ export class AI {
         this.table = table;
     }
 
-    // Scans physics bodies to find the exact vertices defining pocket jaws
-    // Identifies which physics vertices belong to the "knuckles" of each pocket
-    // In ai.js
-
     initializePocketGeometry(physicsEngine) {
         if (!physicsEngine || !physicsEngine.railBodies) {
             console.error("AI: Physics engine missing or empty");
@@ -110,119 +106,198 @@ export class AI {
 
         const railBodies = physicsEngine.railBodies;
         this.pocketJaws = [];
-        
-        // Ensure scale is defined (default to 100 if missing)
+
         const scale = this.physicsScale || 100;
-        
-        // Diagnostic Log 1: Check inputs
+        const bounds = this.table.bounds;
+
         console.log(`AI: Geometry Scan. Scale=${scale}. Bodies=${railBodies.length}`);
 
+        // -----------------------------
+        // Helpers
+        // -----------------------------
+        const distPointToSegment = (p, a, b) => {
+            const abx = b.x - a.x, aby = b.y - a.y;
+            const apx = p.x - a.x, apy = p.y - a.y;
+            const abLen2 = abx * abx + aby * aby;
+            if (abLen2 < 1e-8) return Math.hypot(apx, apy);
+
+            let t = (apx * abx + apy * aby) / abLen2;
+            t = Math.max(0, Math.min(1, t));
+            const cx = a.x + abx * t;
+            const cy = a.y + aby * t;
+            return Math.hypot(p.x - cx, p.y - cy);
+        };
+
+        const distPointToPolyline = (p, verts) => {
+            if (!verts || verts.length < 2) return Infinity;
+            let best = Infinity;
+            for (let i = 0; i < verts.length - 1; i++) {
+                const d = distPointToSegment(p, verts[i], verts[i + 1]);
+                if (d < best) best = d;
+            }
+            return best;
+        };
+
+        const centroid = (verts) => {
+            let sx = 0, sy = 0;
+            for (const v of verts) { sx += v.x; sy += v.y; }
+            const n = Math.max(1, verts.length);
+            return { x: sx / n, y: sy / n };
+        };
+
+        const computeDirection = (verts) => {
+            // Stable direction: from first to last non-degenerate span
+            for (let i = 0; i < verts.length - 1; i++) {
+                const dx = verts[i + 1].x - verts[i].x;
+                const dy = verts[i + 1].y - verts[i].y;
+                const len = Math.hypot(dx, dy);
+                if (len > 1e-3) return { x: dx / len, y: dy / len };
+            }
+            return { x: 1, y: 0 };
+        };
+
+        const classifyRailByBounds = (verts) => {
+            // Classify polyline as top/bottom/left/right by centroid proximity to bounds
+            const c = centroid(verts);
+            const dTop = Math.abs(c.y - bounds.top);
+            const dBottom = Math.abs(bounds.bottom - c.y);
+            const dLeft = Math.abs(c.x - bounds.left);
+            const dRight = Math.abs(bounds.right - c.x);
+
+            let name = 'top';
+            let best = dTop;
+
+            if (dBottom < best) { best = dBottom; name = 'bottom'; }
+            if (dLeft < best)   { best = dLeft;   name = 'left'; }
+            if (dRight < best)  { best = dRight;  name = 'right'; }
+
+            const axis = (name === 'top' || name === 'bottom') ? 'horizontal' : 'vertical';
+            return { name, axis, centroid: c };
+        };
+
+        // -----------------------------
+        // 1) Collect FULL rail polylines
+        // -----------------------------
+        const rawRails = []; // each is { verts: [...], body, fixture, userData }
+
+        for (const body of railBodies) {
+            let fixture = body.getFixtureList();
+            const uData = body.getUserData();
+
+            while (fixture) {
+                const shape = fixture.getShape();
+                const type = shape.getType();
+
+                if (type === 'chain' && uData?.railType === 'chain') {
+                    let vertices = shape.m_vertices;
+
+                    if (!vertices || vertices.length === 0) {
+                        vertices = [];
+                        const count = shape.getChildCount
+                            ? shape.getChildCount()
+                            : (shape.m_count || 0);
+                        for (let i = 0; i < count; i++) {
+                            if (shape.getVertex) vertices.push(shape.getVertex(i));
+                        }
+                    }
+
+                    if (vertices && vertices.length > 1) {
+                        const vertsPx = [];
+                        for (const v of vertices) {
+                            const vx = (v.x !== undefined) ? v.x : 0;
+                            const vy = (v.y !== undefined) ? v.y : 0;
+
+                            const gx = vx * scale;
+                            const gy = vy * scale;
+
+                            if (!isNaN(gx) && !isNaN(gy)) {
+                                vertsPx.push({ x: gx, y: gy });
+                            }
+                        }
+
+                        if (vertsPx.length > 1) {
+                            rawRails.push({
+                                verts: vertsPx,
+                                body,
+                                fixture,
+                                userData: uData
+                            });
+                        }
+                    }
+                }
+
+                fixture = fixture.getNext();
+            }
+        }
+
+        if (rawRails.length === 0) {
+            console.error("AI: No chain rail polylines found.");
+            return;
+        }
+
+        // -----------------------------
+        // 2) Classify each polyline rail
+        // -----------------------------
+        const rails = rawRails.map((r, idx) => {
+            const info = classifyRailByBounds(r.verts);
+            const dir = computeDirection(r.verts);
+
+            return {
+                id: idx,
+                verts: r.verts,     // FULL rail vertices (pixels)
+                dir,                // approximate tangent direction
+                name: info.name,    // 'top'|'bottom'|'left'|'right' (best guess)
+                axis: info.axis,    // 'horizontal'|'vertical'
+                centroid: info.centroid
+            };
+        });
+
+        // Optional: collapse rails by side if you have multiple polylines per side.
+        // If your physics creates 6 segments (pocket cuts), you can KEEP them all.
+        // We'll just pick the two closest ones per pocket below.
+
+        // -----------------------------
+        // 3) For each pocket, pick the TWO closest rail polylines
+        //    These are your "2 rail pieces that relate to the pocket by proximity".
+        // -----------------------------
         const pockets = this.table.pockets;
-        const KNUCKLE_SEARCH_RADIUS = 100; 
 
-        pockets.forEach((pocket, index) => {
+        pockets.forEach((pocket, pIndex) => {
             const pocketPos = pocket.position;
-            const jawGroups = new Map();
-            let debugClosestDist = Infinity;
-            let bodiesChecked = 0;
-            let verticesChecked = 0;
 
-            for (const body of railBodies) {
-                let fixture = body.getFixtureList();
-                const uData = body.getUserData();
-                
-                while (fixture) {
-                    const shape = fixture.getShape();
-                    const type = shape.getType();
-                    
-                    // Filter for 'chain' rails
-                    if (type === 'chain' && uData?.railType === 'chain') {
-                        bodiesChecked++;
-                        
-                        // TRY METHOD 1: m_vertices (Internal property)
-                        let vertices = shape.m_vertices;
-                        
-                        // TRY METHOD 2: getVertex() (Public API) if Method 1 failed
-                        if (!vertices || vertices.length === 0) {
-                            vertices = [];
-                            // Try to iterate using child count
-                            const count = shape.getChildCount ? shape.getChildCount() : (shape.m_count || 0);
-                            for (let i = 0; i < count; i++) {
-                                // Chain shape vertices are technically 1 more than child count usually, 
-                                // but let's try getVertex if available
-                                if (shape.getVertex) vertices.push(shape.getVertex(i));
-                            }
-                        }
+            const sorted = rails
+                .map(r => ({
+                    rail: r,
+                    d: distPointToPolyline(pocketPos, r.verts)
+                }))
+                .sort((a, b) => a.d - b.d);
 
-                        if (vertices && vertices.length > 0) {
-                            const validVertices = [];
-                            
-                            for (const v of vertices) {
-                                verticesChecked++;
-                                
-                                // Robust coordinate extraction
-                                const vx = (v.x !== undefined) ? v.x : 0;
-                                const vy = (v.y !== undefined) ? v.y : 0;
-
-                                // Convert to pixels
-                                const gx = vx * scale;
-                                const gy = vy * scale;
-                                
-                                // Check for NaN issues
-                                if (isNaN(gx) || isNaN(gy)) {
-                                    if (verticesChecked === 1) console.error("AI: NaN Vertex detected!", v, scale);
-                                    continue;
-                                }
-
-                                const dist = Math.hypot(gx - pocketPos.x, gy - pocketPos.y);
-
-                                if (dist < debugClosestDist) debugClosestDist = dist;
-
-                                if (dist < KNUCKLE_SEARCH_RADIUS) {
-                                    validVertices.push({ x: gx, y: gy });
-                                }
-                            }
-
-                            if (validVertices.length > 0) {
-                                // Create unique ID for this rail chunk
-                                const firstV = validVertices[0];
-                                const groupId = `rail_${Math.floor(firstV.x)}_${Math.floor(firstV.y)}`;
-                                jawGroups.set(groupId, validVertices);
-                            }
-                        }
-                    }
-                    fixture = fixture.getNext();
-                }
+            if (sorted.length < 2 || !isFinite(sorted[0].d) || !isFinite(sorted[1].d)) {
+                this.pocketJaws[pIndex] = { isValid: false, center: pocketPos };
+                return;
             }
 
-            // 
-            // We expect exactly 2 distinct clusters (Left Rail and Right Rail)
-            const jaws = Array.from(jawGroups.values());
-            
-            if (jaws.length === 2) {
-                this.pocketJaws[index] = {
-                    isValid: true,
-                    railA: jaws[0],
-                    railB: jaws[1],
-                    center: pocketPos
-                };
-            } else {
-                // Detailed failure logging
-                this.pocketJaws[index] = { isValid: false, center: pocketPos };
-                
-                // Only log if we completely failed to find anything close
-                if (index === 0) { 
-                    console.warn(`AI: Pocket 0 Scan Failed.`);
-                    console.warn(`   -> Bodies Checked: ${bodiesChecked}`);
-                    console.warn(`   -> Vertices Checked: ${verticesChecked}`);
-                    console.warn(`   -> Closest Vertex Dist: ${debugClosestDist} (Target < ${KNUCKLE_SEARCH_RADIUS})`);
-                    if (debugClosestDist === Infinity && verticesChecked > 0) {
-                        console.error("AI: Vertices were checked but distance is Infinity. This implies NaN math.");
-                    }
-                }
-            }
+            const railA = sorted[0].rail;
+            const railB = sorted[1].rail;
+
+            this.pocketJaws[pIndex] = {
+                isValid: true,
+                center: pocketPos,
+
+                // FULL geometry for each pocket-adjacent rail piece:
+                railA: railA.verts,
+                railB: railB.verts,
+
+                // Metadata so getPocketAimPoint can choose near/far by angle safely:
+                railAInfo: { id: railA.id, name: railA.name, axis: railA.axis, dir: railA.dir, centroid: railA.centroid },
+                railBInfo: { id: railB.id, name: railB.name, axis: railB.axis, dir: railB.dir, centroid: railB.centroid }
+            };
+
+            // Debug (optional)
+            // console.log(`Pocket ${pIndex}: closest rails = ${railA.name} (id ${railA.id}), ${railB.name} (id ${railB.id})`);
         });
     }
+
 
     // Called when it's the AI's turn (player 2)
     takeTurn() {
@@ -682,7 +757,7 @@ export class AI {
         const cueBallRadius = this.game.cueBall?.radius || 12;
 
         // Get adjusted aim point between pocket jaws (not center)
-        const pocketAimPoint = this.getPocketAimPoint(target.position, pocket);
+        const pocketAimPoint = this.getPocketAimPoint(target.position, pocket, ballRadius);
 
         // Calculate ghost ball position (where cue ball needs to hit)
         const ghostBall = this.calculateGhostBall(target.position, pocketAimPoint, ballRadius, cueBallRadius);
@@ -958,110 +1033,178 @@ export class AI {
     }
 
     /**
-     * Calculates the "Optical Center" of the pocket opening from the perspective 
-     * of the target ball.
-     * * It finds the angular window between the left and right rail knuckles and 
-     * shoots exactly down the middle of that window.
+     * getPocketAimPoint using pocket-local rail identity from initializePocketGeometry()
+     *
+     * Requires initializePocketGeometry() to have stored:
+     *   this.pocketJaws[pocketIndex] = {
+     *     railA: [...full polyline verts...],
+     *     railB: [...full polyline verts...],
+     *     railAInfo: { axis: 'horizontal'|'vertical', centroid: {x,y}, ... },
+     *     railBInfo: { axis: 'horizontal'|'vertical', centroid: {x,y}, ... }
+     *   }
+     *
+     * Logic (per your spec):
+     * 1) For this pocket, we have exactly two rail pieces by proximity: railA & railB.
+     * 2) "Near" rail = shallower angle between (rail line) and (target->pocket) line.
+     *    - horizontal rail line => angle = asin(|refDir.y|)
+     *    - vertical rail line   => angle = asin(|refDir.x|)
+     * 3) Start 30° from the FAR side (open side away from near rail), sweep toward near rail,
+     *    and find the first angle where a thick scan ray (ballRadius + margin corridor)
+     *    first touches the near rail geometry.
+     * 4) Aim point = point on that ray closest to pocket center (projection), clamped to [0, distToPocket].
+     *
+     * Coordinate system: x right, y down.
      */
-    // In ai.js
-
-    getPocketAimPoint(targetPos, pocket) {
+    getPocketAimPoint(targetPos, pocket, ballRadius) {
         if (!targetPos) return pocket.position;
 
         const pocketIndex = this.table.pockets.indexOf(pocket);
-        const jaws = this.pocketJaws[pocketIndex];
+        const jaws = this.pocketJaws?.[pocketIndex];
 
-        // Fallback
-        if (!jaws || !jaws.isValid) return pocket.position;
+        if (!jaws || !jaws.isValid || !jaws.railA || !jaws.railB || !jaws.railAInfo || !jaws.railBInfo) {
+            return pocket.position;
+        }
 
-        // Constants
-        const ballRadius = 12; // Constants.BALL_RADIUS
-        const margin = 2;      // The "Fraction" we want to miss by (Safety Margin)
-        const effectiveRadius = ballRadius + margin;
+        const pocketPos = pocket.position;
 
-        // 1. Establish Reference Frame
-        // Direction from ball to rough pocket center (Angle 0)
-        const refVec = Vec2.subtract(pocket.position, targetPos);
+        // Thickness of the scan corridor
+        const margin = 2;
+        const thickR = ballRadius + margin;
+
+        // Reference direction: target -> pocket center
+        const refVec = Vec2.subtract(pocketPos, targetPos);
+        const distToPocket = Vec2.length(refVec);
+        if (distToPocket < 1e-6) return pocketPos;
+
+        const refDir = Vec2.normalize(refVec);
         const refAngle = Math.atan2(refVec.y, refVec.x);
 
-        // Helper: Get angle of a vertex relative to our reference line
-        // Returns angle in [-PI, +PI]. Positive = Left, Negative = Right.
-        const getRelAngle = (v) => {
-            const a = Math.atan2(v.y - targetPos.y, v.x - targetPos.x);
-            let diff = a - refAngle;
-            while (diff > Math.PI) diff -= Math.PI * 2;
-            while (diff < -Math.PI) diff += Math.PI * 2;
-            return diff;
+        // Wrap angle to [-PI, PI]
+        const wrapPI = (a) => {
+            while (a > Math.PI) a -= 2 * Math.PI;
+            while (a < -Math.PI) a += 2 * Math.PI;
+            return a;
         };
 
-        // 2. Sort Rails into "Left" and "Right"
-        // We check the average angle of the points to decide which rail is which.
-        let sumA = 0;
-        jaws.railA.forEach(v => sumA += getRelAngle(v));
-        const isALeft = sumA >= 0;
+        // Relative angle of a point around target vs reference direction
+        const relAngleToPoint = (p) => {
+            const a = Math.atan2(p.y - targetPos.y, p.x - targetPos.x);
+            return wrapPI(a - refAngle);
+        };
 
-        const leftRailPoints = isALeft ? jaws.railA : jaws.railB;
-        const rightRailPoints = isALeft ? jaws.railB : jaws.railA;
+        // Angle between refDir and a rail *line direction* given the rail axis
+        // (this is your "simple angle check")
+        const angleToRailLine = (axis) => {
+            // horizontal rail line is (1,0) => angle = asin(|refDir.y|)
+            // vertical   rail line is (0,1) => angle = asin(|refDir.x|)
+            return axis === 'horizontal'
+                ? Math.asin(Math.min(1, Math.abs(refDir.y)))
+                : Math.asin(Math.min(1, Math.abs(refDir.x)));
+        };
 
-        // 3. Scan LEFT Rail for the Upper Limit
-        // We want the ball to pass to the RIGHT of these points.
-        // The Ball's Left Edge touches the rail at: AngleToPoint - BallWidth
-        // We want the MINIMUM of these angles (the one closest to the center).
-        let upperLimit = Infinity;
+        // 1) Pick near rail (shallower angle) among the two pocket-adjacent rails
+        const angA = angleToRailLine(jaws.railAInfo.axis);
+        const angB = angleToRailLine(jaws.railBInfo.axis);
 
-        for (const v of leftRailPoints) {
-            const dist = Math.hypot(v.x - targetPos.x, v.y - targetPos.y);
-            // Ignore points inside the ball (impossible geometry)
-            if (dist <= effectiveRadius) continue;
-
-            const ang = getRelAngle(v);
-            // How wide is the ball at this distance? (Angular radius)
-            const angularRadius = Math.asin(effectiveRadius / dist);
-            
-            // The angle of the clear path's left edge
-            const limit = ang - angularRadius;
-
-            // We want the tightest constraint (lowest angle on the left side)
-            if (limit < upperLimit) upperLimit = limit;
+        let nearVerts, nearCentroid;
+        if (angA < angB) {
+            nearVerts = jaws.railA;
+            nearCentroid = jaws.railAInfo.centroid;
+        } else if (angB < angA) {
+            nearVerts = jaws.railB;
+            nearCentroid = jaws.railBInfo.centroid;
+        } else {
+            // Tie: pick whichever rail piece is closer to the pocket center
+            const cA = jaws.railAInfo.centroid;
+            const cB = jaws.railBInfo.centroid;
+            const dA = Math.hypot(cA.x - pocketPos.x, cA.y - pocketPos.y);
+            const dB = Math.hypot(cB.x - pocketPos.x, cB.y - pocketPos.y);
+            if (dA <= dB) {
+                nearVerts = jaws.railA;
+                nearCentroid = cA;
+            } else {
+                nearVerts = jaws.railB;
+                nearCentroid = cB;
+            }
         }
 
-        // 4. Scan RIGHT Rail for the Lower Limit
-        // We want the ball to pass to the LEFT of these points.
-        // The Ball's Right Edge touches the rail at: AngleToPoint + BallWidth
-        // We want the MAXIMUM of these angles (the one closest to the center).
-        let lowerLimit = -Infinity;
+        if (!nearVerts || nearVerts.length < 2) return pocketPos;
 
-        for (const v of rightRailPoints) {
-            const dist = Math.hypot(v.x - targetPos.x, v.y - targetPos.y);
-            if (dist <= effectiveRadius) continue;
+        // 2) Determine which side (CW vs CCW) we must rotate to move toward the NEAR rail.
+        // Use the centroid direction: if we rotate the ray toward where the near rail sits, we should "hit" it.
+        // We decide the sweep direction by the sign of cross(refDir, toNear).
+        const toNear = Vec2.normalize(Vec2.subtract(nearCentroid, targetPos));
+        const cross = refDir.x * toNear.y - refDir.y * toNear.x;
 
-            const ang = getRelAngle(v);
-            const angularRadius = Math.asin(effectiveRadius / dist);
-            
-            const limit = ang + angularRadius;
+        // cross > 0 => toNear is CCW from refDir => sweep CCW (increasing relative angle)
+        // cross < 0 => toNear is CW  from refDir => sweep CW  (decreasing relative angle)
+        const sweepSign = (cross >= 0) ? +1 : -1;
 
-            // We want the tightest constraint (highest angle on the right side)
-            if (limit > lowerLimit) lowerLimit = limit;
+        // 3) Start 30° on the FAR (open) side: opposite the direction toward near rail
+        const startRel = -sweepSign * (30 * Math.PI / 180);
+
+        // 4) Find first touch angle using angular blocked-interval entry (vertex-based)
+        // Each vertex v blocks [ang-width, ang+width] where width=asin(thickR/dist).
+        let touchRel = null;
+
+        if (sweepSign > 0) {
+            // sweeping CCW (increasing angle)
+            let best = Infinity;
+
+            for (const v of nearVerts) {
+                const dx = v.x - targetPos.x;
+                const dy = v.y - targetPos.y;
+                const d = Math.hypot(dx, dy);
+                if (d <= thickR + 1e-6) continue;
+
+                const ang = relAngleToPoint(v);
+                const width = Math.asin(Math.min(1, thickR / d));
+
+                // As we increase angle, we enter at (ang - width)
+                const enter = ang - width;
+
+                if (enter >= startRel && enter < best) best = enter;
+            }
+
+            if (best !== Infinity) touchRel = best;
+        } else {
+            // sweeping CW (decreasing angle)
+            let best = -Infinity;
+
+            for (const v of nearVerts) {
+                const dx = v.x - targetPos.x;
+                const dy = v.y - targetPos.y;
+                const d = Math.hypot(dx, dy);
+                if (d <= thickR + 1e-6) continue;
+
+                const ang = relAngleToPoint(v);
+                const width = Math.asin(Math.min(1, thickR / d));
+
+                // As we decrease angle, we enter at (ang + width)
+                const enter = ang + width;
+
+                if (enter <= startRel && enter > best) best = enter;
+            }
+
+            if (best !== -Infinity) touchRel = best;
         }
 
-        // Handle blocked shots (if Lower > Upper, the gap is closed)
-        // Default to aiming at center if calculation fails
-        if (upperLimit === Infinity) upperLimit = 0.1;
-        if (lowerLimit === -Infinity) lowerLimit = -0.1;
+        if (touchRel === null) return pocketPos;
 
-        // 5. Bisect the Window
-        // Aim exactly between the Lower Limit (Near/Right Jaw) and Upper Limit (Far/Left Jaw)
-        const bestRelAngle = (upperLimit + lowerLimit) / 2;
-        const finalAngle = refAngle + bestRelAngle;
+        // 5) Convert touch angle to a scan ray
+        const finalAngle = refAngle + touchRel;
+        const scanDir = { x: Math.cos(finalAngle), y: Math.sin(finalAngle) };
 
-        // Project out to pocket distance to get specific coordinate
-        const distToPocket = Vec2.length(refVec);
-        
+        // 6) Return point on that ray closest to the pocket center (projection),
+        // clamped between target and pocket center distance.
+        const t = Math.max(0, Math.min(distToPocket, Vec2.dot(refVec, scanDir)));
+
         return {
-            x: targetPos.x + Math.cos(finalAngle) * distToPocket,
-            y: targetPos.y + Math.sin(finalAngle) * distToPocket
+            x: targetPos.x + scanDir.x * t,
+            y: targetPos.y + scanDir.y * t
         };
     }
+
 
 
     // Calculate a bank shot off the rail
@@ -1078,7 +1221,7 @@ export class AI {
             { name: 'right', x: bounds.right, axis: 'x', normal: { x: -1, y: 0 } }
         ];
 
-        const pocketAimPoint = this.getPocketAimPoint(target.position, pocket);
+        const pocketAimPoint = this.getPocketAimPoint(target.position, pocket, ballRadius);
         let bestBankShot = null;
         let bestScore = -Infinity;
 
@@ -1166,25 +1309,34 @@ export class AI {
 
     // Score a shot (0-100 scale)
     scoreShot(cutAngle, distanceToGhost, distanceToPocket, _pocketType) {
-        // Cut angle score: straight shots are easier
+        // 1. Cut Angle Score
+        // Keep linear, but reduce overall impact in the final sum.
         const cutAngleScore = Math.max(0, 100 - (cutAngle / 90) * 100);
 
-        // Distance score: closer is easier
+        // 2. Cue Ball Distance Score (Exponential Decay)
+        // Previous logic was too linear. This penalizes long shots significantly more.
         const maxDist = Math.max(this.table.width, this.table.height);
-        const distanceScore = Math.max(0, 100 - (distanceToGhost / maxDist) * 60);
+        
+        // Normalize distance: 0 = close, 1 = max table distance
+        const normalizedDist = distanceToGhost / maxDist;
+        
+        // Use a power curve (x^1.5) so short shots stay high-scoring, 
+        // but medium-long shots drop off faster than linear.
+        // Factor 90 ensures cross-table shots score very low (10/100).
+        const distanceScore = Math.max(0, 100 - (Math.pow(normalizedDist, 1.2) * 90));
 
-        // Pocket distance score
-        const pocketDistScore = Math.max(0, 100 - (distanceToPocket / maxDist) * 40);
+        // 3. Object Ball Distance Score (Target to Pocket)
+        // Similar to cue ball, longer travel = higher risk of missing/collision
+        const pocketDistScore = Math.max(0, 100 - (distanceToPocket / maxDist) * 80);
 
-        // No pocket type penalty - side pockets are just as viable as corners
-        // Corner pockets have wider acceptance angle but side pockets are often
-        // closer and good for shots along the rail
-
-        // Weighted average
-        return cutAngleScore * 0.35 +
-               distanceScore * 0.25 +
-               pocketDistScore * 0.20 +
-               15; // Base score for having a clear shot
+        // 4. Rebalanced Weights
+        // Old: Angle (0.35), CueDist (0.25), PocketDist (0.20)
+        // New: Angle (0.20), CueDist (0.45), PocketDist (0.25)
+        // This forces the AI to prefer being close to the ball above all else.
+        return cutAngleScore * 0.20 +
+               distanceScore * 0.15 +
+               pocketDistScore * 0.55 +
+               10; // Slightly lower base score to filter out truly bad shots
     }
 
     // Select a shot based on difficulty
@@ -1293,7 +1445,7 @@ export class AI {
 
 
         // Store visualization data for rendering overlay
-        const pocketAimPoint = this.getPocketAimPoint(shot.target.position, shot.pocket);
+        const pocketAimPoint = this.getPocketAimPoint(shot.target.position, shot.pocket, ballRadius);
         this.visualization = {
             cueBallPos: Vec2.clone(cueBallPos),
             ghostBall: shot.ghostBall,                    // Original ghost ball

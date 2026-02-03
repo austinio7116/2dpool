@@ -1093,7 +1093,7 @@ export class AI {
         // Power scales with distance - need more power for longer shots
         // Typical table is ~800px wide, so 400px is a medium shot
         // Base power of 15, scaling up with distance
-        let power = 15 + (totalDistance / 40);
+        let power = 5 + (totalDistance / 40);
 
         // Cut shots need more power because energy transfers less efficiently
         // At 45° cut, only ~70% of energy transfers to target ball
@@ -1101,8 +1101,8 @@ export class AI {
         const cutFactor = 1 + (cutAngle / 60) * 0.5;
         power *= cutFactor;
 
-        // Clamp to reasonable range - minimum 10, max 20
-        return Math.max(10, Math.min(50, power));
+        // Clamp to reasonable range - minimum 5, max 50
+        return Math.max(5, Math.min(50, power));
     }
 
     // Execute the chosen shot
@@ -1200,7 +1200,7 @@ export class AI {
         const friction = 0.2; 
         
         // Normalized power: map your power (10-50) to a relative speed factor
-        const speedFactor = Math.max(0.5, shot.power / 20);
+        const speedFactor = Math.max(0.5, shot.power / 50);
 
         // CIT formula: (R * mu * sin(2*theta)) / Speed
         // High speed = less throw; 30-degree cut = max throw
@@ -1398,12 +1398,12 @@ export class AI {
         // Power and spin affect how far it travels after contact
         // Backspin reduces travel distance, topspin increases it
         let travelDist = shot.power * 15;
-        if (spinY < 0) {
+        if (spinY > 0) {
             // Backspin reduces forward travel (can even go negative for draw)
-            travelDist *= Math.max(0.1, 1 + spinY * 1.5); // spinY=-0.5 -> travelDist*0.35
-        } else if (spinY > 0) {
+            travelDist *= Math.max(0.1, 1 + -spinY * 1.5); // spinY=-0.5 -> travelDist*0.35
+        } else if (spinY < 0) {
             // Topspin increases follow-through
-            travelDist *= (1 + spinY * 0.5); // spinY=0.5 -> travelDist*1.25
+            travelDist *= (1 + -spinY * 0.5); // spinY=0.5 -> travelDist*1.25
         }
 
         const endPos = Vec2.add(target.position, Vec2.multiply(path.direction, travelDist));
@@ -1477,7 +1477,7 @@ export class AI {
                 let power = escapeShot.power;
                 const powerError = (Math.random() - 0.5) * 2 * settings.powerError;
                 power = power * (1 + powerError);
-                power = Math.max(8, Math.min(30, power));
+                power = Math.max(5, Math.min(40, power));
 
                 aiLogGroupEnd();
                 if (this.onShot) {
@@ -1521,7 +1521,6 @@ export class AI {
                 const drawStrength = Math.min(1, Math.abs(spin.y)); // 0..1
                 power *= (1 + 0.20 * drawStrength); // +0%..+20%
             }
-            //power = Math.max(5, Math.min(25, power));
 
             aiLogGroupEnd();
             if (this.onShot) {
@@ -2001,7 +2000,7 @@ export class AI {
                     const distanceToGhost = Vec2.distance(cueBall.position, ghostBall);
                     // Based on calculatePower formula: power = 12 + distance/35
                     // Need enough power to travel the distance with some margin
-                    const minPowerToReach = 8 + (distanceToGhost / 40);
+                    const minPowerToReach = 5 + (distanceToGhost / 40);
 
                     // Try different power levels
                     for (const power of [8, 12, 18, 24, 30]) {

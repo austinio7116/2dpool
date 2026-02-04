@@ -110,14 +110,15 @@ export class Game {
     }
 
     // Initialize match with bestOf format
-    initMatch(bestOf = 1) {
+    initMatch(bestOf = 1, firstFrameBreaker = 1) {
         this.match = {
             bestOf: bestOf,
             player1Frames: 0,
             player2Frames: 0,
             currentFrame: 1,
             matchWinner: null,
-            matchComplete: false
+            matchComplete: false,
+            firstFrameBreaker: firstFrameBreaker  // Track who broke frame 1 for alternation
         };
     }
 
@@ -153,12 +154,13 @@ export class Game {
 
         // Initialize match if bestOf provided in options
         if (options.bestOf !== undefined) {
-            this.initMatch(options.bestOf);
+            // Track who breaks the first frame for alternation in subsequent frames
+            this.initMatch(options.bestOf, options.startingPlayer || 1);
         } else if (options.resumeMatch) {
             // Match state will be restored from saved data
         } else {
             // Single frame game
-            this.initMatch(1);
+            this.initMatch(1, options.startingPlayer || 1);
         }
 
         // Create balls based on game mode
@@ -832,9 +834,14 @@ export class Game {
 
         this.match.currentFrame++;
 
+        // Alternate who breaks: odd frames = firstFrameBreaker, even frames = other player
+        const frameNum = this.match.currentFrame;
+        const firstBreaker = this.match.firstFrameBreaker || 1;
+        const alternatingBreaker = (frameNum % 2 === 1) ? firstBreaker : (firstBreaker === 1 ? 2 : 1);
+
         // Reset frame state but keep match scores
         this.state = GameState.BALL_IN_HAND;
-        this.currentPlayer = options.startingPlayer || 1;
+        this.currentPlayer = alternatingBreaker;
         this.player1Group = null;
         this.player2Group = null;
         this.isBreakShot = true;
@@ -1831,6 +1838,7 @@ export class Game {
             player1Frames: this.match.player1Frames,
             player2Frames: this.match.player2Frames,
             currentFrame: this.match.currentFrame,
+            firstFrameBreaker: this.match.firstFrameBreaker,
 
             // Current frame state
             currentPlayer: this.currentPlayer,
@@ -1872,7 +1880,8 @@ export class Game {
             player2Frames: data.player2Frames,
             currentFrame: data.currentFrame,
             matchWinner: null,
-            matchComplete: false
+            matchComplete: false,
+            firstFrameBreaker: data.firstFrameBreaker || 1
         };
 
         // Restore frame state

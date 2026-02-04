@@ -681,14 +681,8 @@ class PoolGame {
         const selectedBallSet = this.ui.getSelectedBallSet();
         const mode = this.game.mode;
 
-        // Randomize who breaks for new frame when AI is enabled - BEFORE starting frame
-        const options = {};
-        if (this.ai.enabled) {
-            options.startingPlayer = AI.randomizeBreak();
-        }
-
-        // Create new balls in game
-        this.game.startNextFrame(options);
+        // Create new balls in game - break alternation is handled by game.startNextFrame()
+        this.game.startNextFrame();
 
         // Re-apply custom ball set if needed
         if (selectedBallSet && !selectedBallSet.isPredefined && mode !== GameMode.SNOOKER) {
@@ -872,14 +866,6 @@ class PoolGame {
                 }
             }
 
-            // Record AI shot collision data (after physics resolves velocities)
-            if (cueBallHitTarget && this.ai.pendingShot) {
-                const velocity = this.physics.getBallVelocity(cueBallHitTarget);
-                if (velocity) {
-                    this.ai.recordShotCollision(cueBallHitTarget, velocity);
-                }
-            }
-
             if (!this.physics.areBallsMoving(this.game.balls)) {
                 this.game.onBallsStopped();
                 this.input.resetSpin();
@@ -958,45 +944,4 @@ class PoolGame {
 
 document.addEventListener('DOMContentLoaded', () => {
     window.poolGame = new PoolGame();
-
-    // Expose AI shot tracking helpers on window for easy console access
-    window.aiShotTracker = {
-        getShotHistory: () => window.poolGame.ai.getShotHistory(),
-        clearHistory: () => window.poolGame.ai.clearShotHistory(),
-        downloadJSON: () => window.poolGame.ai.downloadShotData('json'),
-        downloadCSV: () => window.poolGame.ai.downloadShotData('csv'),
-        exportJSON: () => window.poolGame.ai.exportShotDataJSON(),
-        exportCSV: () => window.poolGame.ai.exportShotDataCSV(),
-        help: () => console.log(`
-AI Shot Tracker Commands:
-  aiShotTracker.getShotHistory()  - Get array of all recorded shots
-  aiShotTracker.clearHistory()    - Clear all recorded data
-  aiShotTracker.downloadJSON()    - Download data as JSON file
-  aiShotTracker.downloadCSV()     - Download data as CSV file
-  aiShotTracker.exportJSON()      - Get JSON string (for copy/paste)
-  aiShotTracker.exportCSV()       - Get CSV string (for copy/paste)
-
-Each shot record contains:
-  - intendedAngle: angle from target ball to pocket aim point (degrees)
-  - actualAngle: actual angle the ball traveled (degrees)
-  - angleError: difference between intended and actual (degrees)
-  - power: shot power used
-  - spinY: vertical spin applied (positive = topspin, negative = backspin)
-  - cutAngle: the cut angle of the shot (degrees)
-  - cueBallToTargetDist: distance from cue ball to target ball (pixels)
-  - difficulty: AI difficulty setting
-  - targetBallVelocity: {x, y} velocity vector after collision
-        `)
-    };
-
-    console.log('[AI Shot Tracker] Ready! Type aiShotTracker.help() for commands.');
-
-    // Keyboard shortcut to toggle 3D ball rendering (press '3')
-    document.addEventListener('keydown', (e) => {
-        if (e.key === '3') {
-            const renderer = window.poolGame.renderer;
-            renderer.use3DBalls = !renderer.use3DBalls;
-            console.log(`3D ball rendering: ${renderer.use3DBalls ? 'ON' : 'OFF'}`);
-        }
-    });
 });

@@ -1,6 +1,261 @@
 // Custom Ball Set Manager - handles localStorage CRUD for custom ball sets
 
 const STORAGE_KEY = 'poolGame_customBallSets';
+const DELETED_DEFAULTS_KEY = 'poolGame_deletedDefaultBallSets';
+
+// Default custom ball sets - loaded as editable defaults
+const DEFAULT_CUSTOM_BALL_SETS = [
+    {
+        id: 'default-hot-pink',
+        name: 'Hot Pink',
+        style: 'solid',
+        colors: {
+            cue: '#FFFEF0',
+            group1: '#131010',
+            group2: '#ff00dd',
+            eightBall: '#9e9e9e'
+        },
+        options: {
+            hasStripes: false,
+            showNumbers: false,
+            striped8Ball: false,
+            stripeBackgroundColor: '#FFFFFF',
+            numberCircleColor: '#FFFFFF',
+            numberTextColor: '#000000',
+            numberBorder: true,
+            numberBorderColor: '#000000',
+            numberCircleRadialLines: 0,
+            stripeThickness: 0.55,
+            numberCircleRadius: 0.82
+        },
+        isPredefined: false,
+        isDefault: true,
+        advancedMode: false
+    },
+    {
+        id: 'default-pro-league',
+        name: 'Pro League',
+        style: 'stripe',
+        colors: {
+            cue: '#FFFEF0',
+            group1: '#e6a800',
+            group2: '#63031b',
+            eightBall: '#000000'
+        },
+        options: {
+            hasStripes: true,
+            showNumbers: true,
+            striped8Ball: false,
+            stripeBackgroundColor: '#ffffff',
+            numberCircleColor: '#ffffff',
+            numberTextColor: '#000000',
+            numberBorder: true,
+            numberBorderColor: '#000000',
+            numberCircleRadialLines: 3,
+            radialLinesColor: '#000000',
+            stripeThickness: 0.61,
+            numberCircleRadius: 0.72,
+            borderWidth: 1,
+            numberScale: 1,
+            stripeOrientation: 'horizontal'
+        },
+        isPredefined: false,
+        isDefault: true,
+        advancedMode: false
+    },
+    {
+        id: 'default-pro-tournament',
+        name: 'Pro Tournament',
+        style: 'stripe',
+        colors: {
+            cue: '#FFFEF0',
+            group1: '#FFD700',
+            group2: '#0000CD',
+            eightBall: '#000000'
+        },
+        options: {
+            hasStripes: true,
+            showNumbers: true,
+            striped8Ball: false,
+            stripeBackgroundColor: '#000000',
+            numberCircleColor: '#FFFFFF',
+            numberTextColor: '#000000',
+            numberBorder: true,
+            numberBorderColor: '#000000',
+            numberCircleRadialLines: 2,
+            radialLinesColor: '#000000',
+            stripeThickness: 0.63,
+            numberCircleRadius: 0.65,
+            borderWidth: 1,
+            numberScale: 1,
+            stripeOrientation: 'horizontal'
+        },
+        isPredefined: false,
+        isDefault: true,
+        advancedMode: true,
+        ballColors: {
+            1: '#f5b400',
+            2: '#0037ed',
+            3: '#ff1e00',
+            4: '#ff477b',
+            5: '#9a2eff',
+            6: '#00e39b',
+            7: '#80320b',
+            8: '#000000',
+            9: '#f5b400',
+            10: '#0037ed',
+            11: '#ff1e00',
+            12: '#ff477b',
+            13: '#9a2eff',
+            14: '#00e39b',
+            15: '#80320b'
+        }
+    },
+    {
+        id: 'default-space',
+        name: 'Space',
+        style: 'stripe',
+        colors: {
+            cue: '#FFFEF0',
+            group1: '#ffd700',
+            group2: '#0000cd',
+            eightBall: '#000000'
+        },
+        options: {
+            hasStripes: true,
+            showNumbers: true,
+            striped8Ball: false,
+            stripeBackgroundColor: '#948f8f',
+            numberCircleColor: '#ffffff',
+            numberTextColor: '#000000',
+            numberBorder: true,
+            numberBorderColor: '#000000',
+            numberCircleRadialLines: 13,
+            radialLinesColor: '#000000',
+            stripeThickness: 0.39,
+            numberCircleRadius: 0.77,
+            borderWidth: 1,
+            numberScale: 1,
+            stripeOrientation: 'horizontal'
+        },
+        isPredefined: false,
+        isDefault: true,
+        advancedMode: true,
+        ballColors: {
+            1: '#ffd700',
+            2: '#0000cd',
+            3: '#ff0000',
+            4: '#4b0082',
+            5: '#ff8c00',
+            6: '#006400',
+            7: '#800000',
+            8: '#000000',
+            9: '#ffd700',
+            10: '#0000cd',
+            11: '#ff0000',
+            12: '#4b0082',
+            13: '#ff8c00',
+            14: '#006400',
+            15: '#800000'
+        }
+    },
+    {
+        id: 'default-vintage',
+        name: 'Vintage',
+        style: 'stripe',
+        colors: {
+            cue: '#FFFEF0',
+            group1: '#FFD700',
+            group2: '#0000CD',
+            eightBall: '#000000'
+        },
+        options: {
+            hasStripes: true,
+            showNumbers: true,
+            striped8Ball: false,
+            stripeBackgroundColor: '#ffe999',
+            numberCircleColor: '#fff7db',
+            numberTextColor: '#000000',
+            numberBorder: false,
+            numberBorderColor: '#000000',
+            numberCircleRadialLines: 0,
+            radialLinesColor: '#000000',
+            stripeThickness: 0.56,
+            numberCircleRadius: 0.65,
+            borderWidth: 1,
+            numberScale: 1.05,
+            stripeOrientation: 'vertical'
+        },
+        isPredefined: false,
+        isDefault: true,
+        advancedMode: true,
+        ballColors: {
+            1: '#c2a500',
+            2: '#000052',
+            3: '#9e0000',
+            4: '#370042',
+            5: '#c24e00',
+            6: '#004713',
+            7: '#660000',
+            8: '#000000',
+            9: '#c2a500',
+            10: '#000052',
+            11: '#9e0000',
+            12: '#370042',
+            13: '#c24e00',
+            14: '#004713',
+            15: '#660000'
+        }
+    },
+    {
+        id: 'default-vintage2',
+        name: 'Vintage 2',
+        style: 'stripe',
+        colors: {
+            cue: '#FFFEF0',
+            group1: '#FFD700',
+            group2: '#0000CD',
+            eightBall: '#000000'
+        },
+        options: {
+            hasStripes: true,
+            showNumbers: true,
+            striped8Ball: false,
+            stripeBackgroundColor: '#ffe999',
+            numberCircleColor: '#ffe999',
+            numberTextColor: '#000000',
+            numberBorder: true,
+            numberBorderColor: '#383838',
+            numberCircleRadialLines: 2,
+            radialLinesColor: '#ffe999',
+            stripeThickness: 0.53,
+            numberCircleRadius: 0.65,
+            borderWidth: 1.4,
+            numberScale: 0.9,
+            stripeOrientation: 'vertical'
+        },
+        isPredefined: false,
+        isDefault: true,
+        advancedMode: true,
+        ballColors: {
+            1: '#b88700',
+            2: '#0000CD',
+            3: '#FF0000',
+            4: '#4B0082',
+            5: '#ff7300',
+            6: '#006400',
+            7: '#800000',
+            8: '#000000',
+            9: '#b88700',
+            10: '#0000CD',
+            11: '#FF0000',
+            12: '#4B0082',
+            13: '#ff7300',
+            14: '#006400',
+            15: '#800000'
+        }
+    }
+];
 
 // Predefined ball sets
 export const PREDEFINED_BALL_SETS = [
@@ -77,17 +332,53 @@ export const PREDEFINED_BALL_SETS = [
 
 export class CustomBallSetManager {
     constructor() {
+        this.deletedDefaults = this.loadDeletedDefaults();
         this.customSets = this.load();
     }
 
-    // Load custom sets from localStorage
+    // Load the list of deleted default set IDs
+    loadDeletedDefaults() {
+        try {
+            const data = localStorage.getItem(DELETED_DEFAULTS_KEY);
+            return data ? JSON.parse(data) : [];
+        } catch (e) {
+            return [];
+        }
+    }
+
+    // Save the list of deleted default set IDs
+    saveDeletedDefaults() {
+        try {
+            localStorage.setItem(DELETED_DEFAULTS_KEY, JSON.stringify(this.deletedDefaults));
+        } catch (e) {
+            console.warn('Failed to save deleted defaults list:', e);
+        }
+    }
+
+    // Load custom sets from localStorage, merging with defaults
     load() {
         try {
             const data = localStorage.getItem(STORAGE_KEY);
-            return data ? JSON.parse(data) : [];
+            const storedSets = data ? JSON.parse(data) : [];
+
+            // Create a map of stored set IDs for quick lookup
+            const storedIds = new Set(storedSets.map(s => s.id));
+
+            // Add any default sets that aren't already in storage and haven't been deleted
+            const mergedSets = [...storedSets];
+            for (const defaultSet of DEFAULT_CUSTOM_BALL_SETS) {
+                if (!storedIds.has(defaultSet.id) && !this.deletedDefaults.includes(defaultSet.id)) {
+                    mergedSets.push({ ...defaultSet });
+                }
+            }
+
+            return mergedSets;
         } catch (e) {
             console.warn('Failed to load custom ball sets:', e);
-            return [];
+            // Return defaults on error (excluding deleted ones)
+            return DEFAULT_CUSTOM_BALL_SETS
+                .filter(s => !this.deletedDefaults.includes(s.id))
+                .map(s => ({ ...s }));
         }
     }
 
@@ -218,6 +509,13 @@ export class CustomBallSetManager {
         const index = this.customSets.findIndex(set => set.id === id);
         if (index === -1) return false;
 
+        // Track if this is a default set being deleted
+        const isDefaultSet = id.startsWith('default-');
+        if (isDefaultSet && !this.deletedDefaults.includes(id)) {
+            this.deletedDefaults.push(id);
+            this.saveDeletedDefaults();
+        }
+
         this.customSets.splice(index, 1);
         this.save();
         return true;
@@ -228,6 +526,19 @@ export class CustomBallSetManager {
         // Strip existing IDs and metadata to avoid conflicts
         const { id, isPredefined, createdAt, updatedAt, ...cleanData } = setData;
         return this.create(cleanData);
+    }
+
+    // Restore all deleted default sets
+    restoreDefaults() {
+        this.deletedDefaults = [];
+        this.saveDeletedDefaults();
+        this.customSets = this.load();
+        return this.customSets;
+    }
+
+    // Check if a set is a default set
+    isDefaultSet(id) {
+        return id.startsWith('default-');
     }
 
     // Convert a ball set to game-compatible color configuration

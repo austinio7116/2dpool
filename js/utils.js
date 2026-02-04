@@ -369,15 +369,15 @@ export const Constants = {
             useCurvedPockets: true,
             isSnooker: true,
             redCount: 15,
-            tableWidth: 1000,   // Wider aspect ratio to match snooker table image
+            tableWidth: 918,   // Wider aspect ratio to match snooker table image
             boundsOffset: { top: 18, bottom: 15, left: 13, right: 12},  // Move cushions/pockets outward
             spotlocations: {
-                yellow: { x: -314, y: 73 },   // Left of D
-                green: { x: -314, y: -73 },     // Right of D
-                brown: { x: -314, y: 0 },      // Center of baulk line
+                yellow: { x: -290, y: 73 },   // Left of D
+                green: { x: -290, y: -73 },     // Right of D
+                brown: { x: -290, y: 0 },      // Center of baulk line
                 blue: { x: 0, y: 0 },          // Center spot
-                pink: { x: 250, y: 0 },        // Between center and reds
-                black: { x: 418, y: 0 }        // Behind reds
+                pink: { x: 236, y: 0 },        // Between center and reds
+                black: { x: 388, y: 0 }        // Behind reds
             }
         }
     }

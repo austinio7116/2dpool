@@ -43,6 +43,7 @@ export class Input {
         this.handleMouseMove = this.handleMouseMove.bind(this);
         this.handleMouseDown = this.handleMouseDown.bind(this);
         this.handleMouseUp = this.handleMouseUp.bind(this);
+        this.handleRightClick = this.handleRightClick.bind(this);
 
         // Bind event handlers - touch
         this.handleTouchStart = this.handleTouchStart.bind(this);
@@ -56,7 +57,7 @@ export class Input {
         // Mouse events - mousedown on canvas, move on canvas for ball placement
         this.canvas.addEventListener('mousedown', this.handleMouseDown);
         this.canvas.addEventListener('mousemove', this.handleMouseMove);
-        this.canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+        this.canvas.addEventListener('contextmenu', this.handleRightClick);
 
         // Touch events
         this.canvas.addEventListener('touchstart', this.handleTouchStart, { passive: false });
@@ -69,6 +70,7 @@ export class Input {
         // Mouse events
         this.canvas.removeEventListener('mousedown', this.handleMouseDown);
         this.canvas.removeEventListener('mousemove', this.handleMouseMove);
+        this.canvas.removeEventListener('contextmenu', this.handleRightClick);
         document.removeEventListener('mousemove', this.handleMouseMove);
         document.removeEventListener('mouseup', this.handleMouseUp);
 
@@ -202,6 +204,21 @@ export class Input {
         this.isDragging = false;
     }
 
+    handleRightClick(event) {
+        event.preventDefault();
+
+        // Cancel shot if currently aiming
+        if (this.isDragging) {
+            // Remove document-level listeners
+            document.removeEventListener('mousemove', this.handleMouseMove);
+            document.removeEventListener('mouseup', this.handleMouseUp);
+
+            this.resetAim();
+            this.isMouseDown = false;
+            this.isDragging = false;
+        }
+    }
+
     // Touch event handlers
     getTouchPosition(touch) {
         const rect = this.canvas.getBoundingClientRect();
@@ -224,7 +241,15 @@ export class Input {
             setTimeout(() => touchHint.style.display = 'none', 500);
         }
 
-        if (event.touches.length !== 1) return;
+        // Second touch cancels current shot
+        if (event.touches.length > 1) {
+            if (this.isDragging) {
+                this.resetAim();
+                this.isMouseDown = false;
+                this.isDragging = false;
+            }
+            return;
+        }
         const touch = event.touches[0];
 
         this.isMouseDown = true;

@@ -148,22 +148,29 @@ export class Input {
             return;
         }
 
-        if (this.ballInHandMode && this.placementBall && this.placementValid) {
-            // Remove document listeners we just added
-            document.removeEventListener('mousemove', this.handleMouseMove);
-            document.removeEventListener('mouseup', this.handleMouseUp);
+        // Ball placement mode - validate the ACTUAL click position, not stale placementValid
+        if (this.ballInHandMode && this.placementBall) {
+            // Validate using the click position (mousePos was just updated above)
+            const isValidPosition = !this.placementValidation || this.placementValidation(this.mousePos);
 
-            this.ballInHandMode = false;
-            this.placementBall = null;
-            this.isMouseDown = false;
+            if (isValidPosition) {
+                // Remove document listeners we just added
+                document.removeEventListener('mousemove', this.handleMouseMove);
+                document.removeEventListener('mouseup', this.handleMouseUp);
 
-            if (this.onBallPlaced) {
-                this.onBallPlaced(this.mousePos);
+                this.ballInHandMode = false;
+                this.placementBall = null;
+                this.isMouseDown = false;
+
+                if (this.onBallPlaced) {
+                    this.onBallPlaced(this.mousePos);
+                }
             }
+            // Always return when in ball-in-hand mode to prevent aiming
             return;
         }
 
-        // Start aiming
+        // Start aiming (only when NOT in ball-in-hand mode)
         if (this.cueBall && !this.cueBall.pocketed && this.canShoot) {
             this.isDragging = true;
             this.dragStart = Vec2.clone(this.mousePos);
@@ -295,13 +302,18 @@ export class Input {
             return;
         }
 
-        // Ball placement mode - place ball on touch end
-        if (this.ballInHandMode && this.placementBall && this.placementValid) {
-            this.ballInHandMode = false;
-            this.placementBall = null;
+        // Ball placement mode - validate the ACTUAL position before placing
+        if (this.ballInHandMode && this.placementBall) {
+            // Validate using current position
+            const isValidPosition = !this.placementValidation || this.placementValidation(this.mousePos);
 
-            if (this.onBallPlaced) {
-                this.onBallPlaced(this.mousePos);
+            if (isValidPosition) {
+                this.ballInHandMode = false;
+                this.placementBall = null;
+
+                if (this.onBallPlaced) {
+                    this.onBallPlaced(this.mousePos);
+                }
             }
             this.isMouseDown = false;
             return;

@@ -234,7 +234,7 @@ class PoolGame {
         }
 
         this.input.setCueBall(this.game.cueBall);
-        this.input.setCanShoot(true);
+        // Note: canShoot is set by handleStateChange based on game state
         this.input.resetSpin();
 
         this.ui.showGameHUD(mode, this.game.getMatchInfo());
@@ -488,9 +488,11 @@ class PoolGame {
             this.game.cueBall.velocity.x = 0;
             this.game.cueBall.velocity.y = 0;
 
+            // Disable shooting during ball placement (for both AI and human)
+            this.input.setCanShoot(false);
+
             if (isAITurn) {
                 // AI handles ball placement
-                this.input.setCanShoot(false);
                 setTimeout(() => this.ai.takeTurn(), 300);
             } else {
                 // Human player places ball

@@ -1131,39 +1131,17 @@ export class AI {
         // Calculate ghost ball position (where cue ball needs to hit)
         const ghostBall = this.calculateGhostBall(target.position, pocketAimPoint, ballRadius, cueBallRadius);
 
-        // CRITICAL: Check if we can legally reach and pot this ball without fouling
-        // This is more thorough than just checking center-to-center paths
-
-        // 1. Check if path from cue ball to ghost ball is clear
-        if (!this.isPathClear(cueBallPos, ghostBall, [target])) {
-            return null;
-        }
-
-        // 2. Check if path from target to pocket is clear
+        // 1. First check if path from target to pocket is clear (no throw adjustment needed)
         if (!this.isPathClear(target.position, pocketAimPoint, [target])) {
             return null;
         }
 
-        // 3. NEW: Check that no ball is blocking the potting angle
-        // Even if we can reach the ghost ball, another ball near the target
-        // could obstruct the required contact angle
-        if (!this.isPottingAngleClear(cueBallPos, target, pocket)) {
-            return null;
-        }
-
-        // 4. NEW: Check for balls that the cue ball would clip near the contact point
-        // This catches cases where a ball is just off the direct path but would still be hit
-        if (this.wouldClipBallNearTarget(cueBallPos, ghostBall, target)) {
-            return null;
-        }
-
-        // Calculate shot parameters
+        // Calculate shot parameters early so we can compute throw adjustment
         const aimDirection = Vec2.normalize(Vec2.subtract(ghostBall, cueBallPos));
         const distanceToGhost = Vec2.distance(cueBallPos, ghostBall);
         const distanceToPocket = Vec2.distance(target.position, pocketAimPoint);
 
         // Calculate cut angle (angle between cue ball aim line and pocket direction)
-        // Must use ghostBall (where cue ball aims) not target center
         const targetToPocket = Vec2.normalize(Vec2.subtract(pocketAimPoint, target.position));
         const cueBallToGhost = Vec2.normalize(Vec2.subtract(ghostBall, cueBallPos));
         const cutAngle = Math.acos(Math.max(-1, Math.min(1, Vec2.dot(cueBallToGhost, targetToPocket))));
@@ -1183,17 +1161,47 @@ export class AI {
             return null;
         }
 
+        // Calculate power needed for throw calculation
+        const power = this.calculatePower(distanceToGhost, distanceToPocket, cutAngleDeg);
+
+        // Calculate throw adjustment using spinY=0 (stun) as baseline for evaluation
+        // The actual spin will be calculated during execution, but stun is a reasonable
+        // baseline for determining if the shot path is geometrically possible
+        const throwAdjustment = this.calculateThrowAdjustment(
+            cueBallPos, ghostBall, target.position, pocket.position, cutAngleDeg, power, 0
+        );
+
+        // 2. Check if path from cue ball to throw-adjusted ghost ball is clear
+        if (!this.isPathClear(cueBallPos, throwAdjustment.adjustedGhostBall, [target])) {
+            if (AI_DEBUG) {
+                const targetName = target.colorName || target.number || 'ball';
+                aiLog(`  Shot rejected: throw-adjusted path to ${targetName} is blocked`);
+            }
+            return null;
+        }
+
+        // 3. Check that no ball is blocking the potting angle
+        if (!this.isPottingAngleClear(cueBallPos, target, pocket)) {
+            return null;
+        }
+
+        // 4. Check for balls that the cue ball would clip near the contact point
+        // Use throw-adjusted ghost ball for more accurate collision prediction
+        if (this.wouldClipBallNearTarget(cueBallPos, throwAdjustment.adjustedGhostBall, target)) {
+            return null;
+        }
+
         // Score the shot
         const score = this.scoreShot(cutAngleDeg, distanceToGhost, distanceToPocket, pocket.type, target);
-
-        // Calculate power needed
-        const power = this.calculatePower(distanceToGhost, distanceToPocket, cutAngleDeg);
 
         return {
             target,
             pocket,
-            ghostBall,
-            direction: aimDirection,
+            ghostBall,                                          // original ghost ball
+            adjustedGhostBall: throwAdjustment.adjustedGhostBall, // throw-compensated ghost ball
+            direction: aimDirection,                             // original direction (to ghost ball)
+            adjustedDirection: throwAdjustment.adjustedDirection, // throw-compensated direction
+            throwAngle: throwAdjustment.throwAngle,              // amount of throw compensation applied
             power,
             cutAngle: cutAngleDeg,
             score
@@ -1836,48 +1844,24 @@ export class AI {
 
         // Store initial aim direction before any adjustments
         const initialDirection = Vec2.clone(shot.direction);
-        let adjustedGhostBall = Vec2.clone(shot.ghostBall);
-        let directionAfterThrow = initialDirection;
 
         // Calculate spin early so we can use it for model prediction
         const spin = this.calculateSpin(shot);
 
-        // Throw/angle compensation for cut shots
+        // Recalculate throw with actual spin for maximum accuracy
+        // During evaluation, spinY=0 was used; now we have the real spin value
+        const throwAdjustment = this.calculateThrowAdjustment(
+            cueBallPos, shot.ghostBall, shot.target.position, shot.pocket.position,
+            shot.cutAngle, shot.power, spin.y
+        );
+
+        const adjustedGhostBall = throwAdjustment.adjustedGhostBall;
+        const directionAfterThrow = throwAdjustment.adjustedDirection;
+
         if (shot.cutAngle > 1) {
-            // Determine cut direction for compensation sign
-            const cueToBall = Vec2.subtract(shot.target.position, cueBallPos);
-            const ballToPocket = Vec2.subtract(shot.pocket.position, shot.target.position);
-            const cross = cueToBall.x * ballToPocket.y - cueToBall.y * ballToPocket.x;
-            const cutSign = cross > 0 ? -1 : 1;
-
-            if (angleModelLoaded && angleModel) {
-                // Use trained model to predict angle error
-                const predictedError = angleModel.predictAngleError(shot.cutAngle, spin.y, shot.power);
-                const adjustmentRad = (predictedError * Math.PI / 180) * cutSign;
-
-                aiLog('Model-based compensation:', predictedError.toFixed(2), '° (cut sign:', cutSign, ')');
-
-                // Rotate the aim direction to compensate
-                directionAfterThrow = Vec2.rotate(initialDirection, -adjustmentRad);
-                directionAfterThrow = Vec2.normalize(directionAfterThrow);
-
-                // Update ghost ball position to match rotated direction (for visualization)
-                const distToGhost = Vec2.distance(cueBallPos, shot.ghostBall);
-                adjustedGhostBall = Vec2.add(cueBallPos, Vec2.multiply(directionAfterThrow, distToGhost));
-            } else {
-                // Fallback: use physics-based throw shift calculation
-                const throwShift = this.calculateThrowShift(shot, ballRadius);
-                aiLog('Throw compensation (fallback): shift ghost ball by', throwShift.toFixed(2), 'px');
-
-                // Shift ghost ball perpendicular to the shot line
-                const perpendicular = { x: -initialDirection.y, y: initialDirection.x };
-
-                adjustedGhostBall = Vec2.add(shot.ghostBall, Vec2.multiply(perpendicular, throwShift * cutSign));
-                directionAfterThrow = Vec2.normalize(Vec2.subtract(adjustedGhostBall, cueBallPos));
-            }
+            aiLog('Throw compensation:', throwAdjustment.throwAngle.toFixed(2), '° (with spin.y:', spin.y.toFixed(2), ')');
         } else {
             aiLog('No throw compensation (cut ≤ 1°)');
-            directionAfterThrow = Vec2.clone(initialDirection);
         }
 
         let direction = directionAfterThrow;
@@ -1939,6 +1923,89 @@ export class AI {
         if (this.onShot) {
             this.onShot(direction, power, spin);
         }
+    }
+
+    // Calculate throw adjustment for a shot - used by both evaluation and execution
+    // Returns { adjustedGhostBall, adjustedDirection, throwAngle }
+    calculateThrowAdjustment(cueBallPos, ghostBall, targetPos, pocketPos, cutAngleDeg, power, spinY = 0) {
+        const ballRadius = 12; // Standard ball radius
+        const direction = Vec2.normalize(Vec2.subtract(ghostBall, cueBallPos));
+
+        // No adjustment needed for very straight shots
+        if (cutAngleDeg <= 1) {
+            return {
+                adjustedGhostBall: Vec2.clone(ghostBall),
+                adjustedDirection: Vec2.clone(direction),
+                throwAngle: 0
+            };
+        }
+
+        // Determine cut direction for compensation sign
+        const cueToBall = Vec2.subtract(targetPos, cueBallPos);
+        const ballToPocket = Vec2.subtract(pocketPos, targetPos);
+        const cross = cueToBall.x * ballToPocket.y - cueToBall.y * ballToPocket.x;
+        const cutSign = cross > 0 ? -1 : 1;
+
+        let adjustedDirection;
+        let adjustedGhostBall;
+        let throwAngle = 0;
+
+        if (angleModelLoaded && angleModel) {
+            // Use trained model to predict angle error
+            const predictedError = angleModel.predictAngleError(cutAngleDeg, spinY, power);
+            throwAngle = predictedError;
+            const adjustmentRad = (predictedError * Math.PI / 180) * cutSign;
+
+            // Rotate the aim direction to compensate
+            adjustedDirection = Vec2.rotate(direction, -adjustmentRad);
+            adjustedDirection = Vec2.normalize(adjustedDirection);
+
+            // Update ghost ball position to match rotated direction
+            const distToGhost = Vec2.distance(cueBallPos, ghostBall);
+            adjustedGhostBall = Vec2.add(cueBallPos, Vec2.multiply(adjustedDirection, distToGhost));
+        } else {
+            // Fallback: use physics-based throw shift calculation
+            // Create a minimal shot object for calculateThrowShift
+            const throwShift = this.calculateThrowShiftDirect(cutAngleDeg, power, ballRadius);
+            throwAngle = Math.atan(throwShift / (ballRadius * 2)) * 180 / Math.PI;
+
+            // Shift ghost ball perpendicular to the shot line
+            const perpendicular = { x: -direction.y, y: direction.x };
+            adjustedGhostBall = Vec2.add(ghostBall, Vec2.multiply(perpendicular, throwShift * cutSign));
+            adjustedDirection = Vec2.normalize(Vec2.subtract(adjustedGhostBall, cueBallPos));
+        }
+
+        return {
+            adjustedGhostBall,
+            adjustedDirection,
+            throwAngle
+        };
+    }
+
+    // Direct throw shift calculation without requiring a shot object
+    calculateThrowShiftDirect(cutAngleDeg, power, ballRadius) {
+        // Throw is negligible on very full or extremely thin shots
+        if (cutAngleDeg < 1 || cutAngleDeg > 75) return 0;
+
+        const thetaRad = cutAngleDeg * Math.PI / 180;
+
+        // Typical coefficient of friction for pool balls is ~0.06
+        const friction = 0.05;
+
+        // CIT is inversely proportional to speed.
+        // We map your power (5-50) to a speed factor.
+        const speedFactor = Math.max(0.5, power / 15);
+
+        // Angle of throw (radians) ≈ (friction * sin(2 * theta)) / speed
+        // This peaks the throw effect around a 30-45 degree cut.
+        const throwAngleRad = (friction * Math.sin(2 * thetaRad)) / speedFactor;
+
+        // Convert the angular deviation into a lateral shift distance for the ghost ball.
+        // We use the distance from contact to target center (2 * ballRadius)
+        const shiftDistance = (ballRadius * 2) * Math.tan(throwAngleRad);
+
+        // Physical limit: throw rarely exceeds 15-20% of the ball's radius
+        return Math.min(shiftDistance, ballRadius * 0.25);
     }
 
     calculateThrowShift(shot, ballRadius) {

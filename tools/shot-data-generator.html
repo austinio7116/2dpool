@@ -1,0 +1,797 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Shot Training Data Generator</title>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #1a1a2e;
+            color: #eee;
+            margin: 0;
+            padding: 20px;
+        }
+        .container { max-width: 1200px; margin: 0 auto; }
+        h1 { color: #4CAF50; text-align: center; }
+        .config-panel {
+            background: #16213e;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        .config-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            margin-bottom: 15px;
+        }
+        .config-group { flex: 1; min-width: 200px; }
+        label { display: block; margin-bottom: 5px; color: #aaa; }
+        input[type="number"], select {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #333;
+            border-radius: 5px;
+            background: #0f0f23;
+            color: #eee;
+        }
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+        .btn-primary { background: #4CAF50; color: white; }
+        .btn-primary:hover { background: #45a049; }
+        .btn-secondary { background: #2196F3; color: white; }
+        .btn-secondary:hover { background: #1976D2; }
+        .btn-danger { background: #f44336; color: white; }
+        .btn:disabled { background: #555; cursor: not-allowed; }
+        .progress-container {
+            background: #0f0f23;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .progress-bar {
+            width: 100%;
+            height: 30px;
+            background: #333;
+            border-radius: 15px;
+            overflow: hidden;
+            margin-bottom: 10px;
+        }
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #4CAF50, #8BC34A);
+            transition: width 0.3s;
+        }
+        .stats { display: flex; flex-wrap: wrap; gap: 20px; }
+        .stat-box {
+            background: #16213e;
+            padding: 15px 20px;
+            border-radius: 8px;
+            flex: 1;
+            min-width: 150px;
+        }
+        .stat-box h3 {
+            margin: 0 0 5px 0;
+            color: #888;
+            font-size: 12px;
+            text-transform: uppercase;
+        }
+        .stat-box .value { font-size: 24px; font-weight: bold; color: #4CAF50; }
+        .visualization { display: flex; gap: 20px; margin-bottom: 20px; }
+        #canvas-container {
+            flex: 1;
+            background: #0f0f23;
+            border-radius: 10px;
+            padding: 10px;
+        }
+        canvas { display: block; margin: 0 auto; }
+        .log-panel { flex: 1; max-width: 400px; }
+        #log {
+            background: #0f0f23;
+            border-radius: 10px;
+            padding: 15px;
+            height: 430px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .log-entry { margin-bottom: 5px; padding: 3px 0; border-bottom: 1px solid #222; }
+        .log-success { color: #4CAF50; }
+        .log-info { color: #2196F3; }
+        .log-warn { color: #FF9800; }
+        .log-error { color: #f44336; }
+        .data-preview {
+            background: #0f0f23;
+            border-radius: 10px;
+            padding: 15px;
+            margin-top: 20px;
+        }
+        .data-preview h3 { margin-top: 0; color: #4CAF50; }
+        #data-sample {
+            background: #16213e;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+            font-family: monospace;
+            font-size: 11px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎱 AI Shot Training Data Generator</h1>
+
+        <div class="config-panel">
+            <h2>Configuration</h2>
+            <div class="config-row">
+                <div class="config-group">
+                    <label>Cut Angle Min (degrees)</label>
+                    <input type="number" id="cutAngleMin" value="1" min="0" max="89">
+                </div>
+                <div class="config-group">
+                    <label>Cut Angle Max (degrees)</label>
+                    <input type="number" id="cutAngleMax" value="75" min="1" max="89">
+                </div>
+                <div class="config-group">
+                    <label>Cut Angle Step</label>
+                    <input type="number" id="cutAngleStep" value="1" min="0.5" max="10" step="0.5">
+                </div>
+            </div>
+            <div class="config-row">
+                <div class="config-group">
+                    <label>Power Min</label>
+                    <input type="number" id="powerMin" value="5" min="1" max="50">
+                </div>
+                <div class="config-group">
+                    <label>Power Max</label>
+                    <input type="number" id="powerMax" value="25" min="5" max="50">
+                </div>
+                <div class="config-group">
+                    <label>Power Steps</label>
+                    <input type="number" id="powerSteps" value="5" min="1" max="20">
+                </div>
+            </div>
+            <div class="config-row">
+                <div class="config-group">
+                    <label>SpinY Min (backspin/topspin)</label>
+                    <input type="number" id="spinYMin" value="-1" min="-1" max="1" step="0.1">
+                </div>
+                <div class="config-group">
+                    <label>SpinY Max</label>
+                    <input type="number" id="spinYMax" value="1" min="-1" max="1" step="0.1">
+                </div>
+                <div class="config-group">
+                    <label>SpinY Steps</label>
+                    <input type="number" id="spinYSteps" value="5" min="1" max="20">
+                </div>
+            </div>
+            <div class="config-row">
+                <div class="config-group">
+                    <label>Distance Min (pixels)</label>
+                    <input type="number" id="distanceMin" value="50" min="30" max="600">
+                </div>
+                <div class="config-group">
+                    <label>Distance Max (pixels)</label>
+                    <input type="number" id="distanceMax" value="400" min="50" max="800">
+                </div>
+                <div class="config-group">
+                    <label>Distance Steps</label>
+                    <input type="number" id="distanceSteps" value="5" min="1" max="20">
+                </div>
+            </div>
+            <div class="config-row">
+                <div class="config-group">
+                    <label>Simulation Speed</label>
+                    <select id="simSpeed">
+                        <option value="0">Maximum (no visualization)</option>
+                        <option value="1">Fast (1ms/shot)</option>
+                        <option value="10" selected>Normal (visualized)</option>
+                        <option value="50">Slow (detailed)</option>
+                    </select>
+                </div>
+                <div class="config-group">
+                    <label>Total Shots Estimate</label>
+                    <input type="text" id="totalEstimate" readonly>
+                </div>
+            </div>
+        </div>
+
+        <div style="text-align: center; margin-bottom: 20px;">
+            <button class="btn btn-primary" id="startBtn">▶ Start Generation</button>
+            <button class="btn btn-secondary" id="pauseBtn" disabled>⏸ Pause</button>
+            <button class="btn btn-danger" id="stopBtn" disabled>⏹ Stop</button>
+            <button class="btn btn-secondary" id="downloadJSONBtn">💾 Download JSON</button>
+            <button class="btn btn-secondary" id="downloadCSVBtn">📊 Download CSV</button>
+        </div>
+
+        <div class="progress-container">
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill" style="width: 0%"></div>
+            </div>
+            <div class="stats">
+                <div class="stat-box">
+                    <h3>Progress</h3>
+                    <div class="value" id="progressPercent">0%</div>
+                </div>
+                <div class="stat-box">
+                    <h3>Shots Generated</h3>
+                    <div class="value" id="shotsGenerated">0</div>
+                </div>
+                <div class="stat-box">
+                    <h3>Valid Samples</h3>
+                    <div class="value" id="validSamples">0</div>
+                </div>
+                <div class="stat-box">
+                    <h3>Rate</h3>
+                    <div class="value" id="shotsPerSec">0/s</div>
+                </div>
+                <div class="stat-box">
+                    <h3>Avg Angle Error</h3>
+                    <div class="value" id="avgError">-</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="visualization">
+            <div id="canvas-container">
+                <canvas id="canvas" width="920" height="520"></canvas>
+            </div>
+            <div class="log-panel">
+                <h3>Log</h3>
+                <div id="log"></div>
+            </div>
+        </div>
+
+        <div class="data-preview">
+            <h3>Data Sample (last 5 records)</h3>
+            <div id="data-sample">No data yet...</div>
+        </div>
+    </div>
+
+    <!-- Use the same importmap as the main game -->
+    <script type="importmap">
+    {
+        "imports": {
+            "planck": "https://esm.sh/planck-js@1.0.6"
+        }
+    }
+    </script>
+    <script type="module">
+        // Import actual game classes
+        import { Table } from '../js/table.js';
+        import { Ball } from '../js/ball.js';
+        import { PlanckPhysics } from '../js/planck-physics.js';
+        import { Vec2, Constants } from '../js/utils.js';
+
+        // Constants
+        const TABLE_WIDTH = Constants.TABLE_WIDTH;
+        const TABLE_HEIGHT = Constants.TABLE_HEIGHT;
+        const TABLE_PADDING = Constants.TABLE_PADDING;
+        const BALL_RADIUS = Constants.BALL_RADIUS;
+
+        // State
+        let table = null;
+        let physics = null;
+        let cueBall = null;
+        let targetBall = null;
+        let shotData = [];
+        let isRunning = false;
+        let isPaused = false;
+        let currentShotIndex = 0;
+        let totalShots = 0;
+        let startTime = null;
+        let validSamples = 0;
+        let totalAngleError = 0;
+        let shotQueue = [];
+
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+
+        // Initialize
+        function init() {
+            table = new Table();
+            physics = new PlanckPhysics(table);
+            updateEstimate();
+
+            document.querySelectorAll('input').forEach(input => {
+                input.addEventListener('change', updateEstimate);
+            });
+
+            // Button event listeners
+            document.getElementById('startBtn').addEventListener('click', startGeneration);
+            document.getElementById('pauseBtn').addEventListener('click', pauseGeneration);
+            document.getElementById('stopBtn').addEventListener('click', stopGeneration);
+            document.getElementById('downloadJSONBtn').addEventListener('click', downloadJSON);
+            document.getElementById('downloadCSVBtn').addEventListener('click', downloadCSV);
+
+            log('Initialized with actual game physics engine', 'success');
+            draw();
+        }
+
+        function updateEstimate() {
+            const cutAngleMin = parseFloat(document.getElementById('cutAngleMin').value);
+            const cutAngleMax = parseFloat(document.getElementById('cutAngleMax').value);
+            const cutAngleStep = parseFloat(document.getElementById('cutAngleStep').value);
+            const powerSteps = parseInt(document.getElementById('powerSteps').value);
+            const spinSteps = parseInt(document.getElementById('spinYSteps').value);
+            const distanceSteps = parseInt(document.getElementById('distanceSteps').value);
+
+            const cutAngles = Math.ceil((cutAngleMax - cutAngleMin) / cutAngleStep) + 1;
+            const total = cutAngles * powerSteps * spinSteps * distanceSteps;
+
+            document.getElementById('totalEstimate').value = total.toLocaleString() + ' shots';
+        }
+
+        function log(message, type = 'info') {
+            const logDiv = document.getElementById('log');
+            const entry = document.createElement('div');
+            entry.className = `log-entry log-${type}`;
+            entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            logDiv.appendChild(entry);
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        function generateShotQueue() {
+            shotQueue = [];
+
+            const cutAngleMin = parseFloat(document.getElementById('cutAngleMin').value);
+            const cutAngleMax = parseFloat(document.getElementById('cutAngleMax').value);
+            const cutAngleStep = parseFloat(document.getElementById('cutAngleStep').value);
+            const powerMin = parseFloat(document.getElementById('powerMin').value);
+            const powerMax = parseFloat(document.getElementById('powerMax').value);
+            const powerSteps = parseInt(document.getElementById('powerSteps').value);
+            const spinYMin = parseFloat(document.getElementById('spinYMin').value);
+            const spinYMax = parseFloat(document.getElementById('spinYMax').value);
+            const spinYSteps = parseInt(document.getElementById('spinYSteps').value);
+            const distanceMin = parseFloat(document.getElementById('distanceMin').value);
+            const distanceMax = parseFloat(document.getElementById('distanceMax').value);
+            const distanceSteps = parseInt(document.getElementById('distanceSteps').value);
+
+            for (let cutAngle = cutAngleMin; cutAngle <= cutAngleMax; cutAngle += cutAngleStep) {
+                for (let pi = 0; pi < powerSteps; pi++) {
+                    const power = powerSteps === 1 ? powerMin : powerMin + (powerMax - powerMin) * pi / (powerSteps - 1);
+                    for (let si = 0; si < spinYSteps; si++) {
+                        const spinY = spinYSteps === 1 ? spinYMin : spinYMin + (spinYMax - spinYMin) * si / (spinYSteps - 1);
+                        for (let di = 0; di < distanceSteps; di++) {
+                            const distance = distanceSteps === 1 ? distanceMin : distanceMin + (distanceMax - distanceMin) * di / (distanceSteps - 1);
+                            shotQueue.push({ cutAngle, power, spinY, distance });
+                        }
+                    }
+                }
+            }
+
+            totalShots = shotQueue.length;
+            log(`Generated ${totalShots} shot configurations`, 'success');
+        }
+
+        function setupShot(params) {
+            const { cutAngle, power, spinY, distance } = params;
+            const cutAngleRad = cutAngle * Math.PI / 180;
+
+            // Reset physics
+            physics = new PlanckPhysics(table);
+
+            // Fixed object ball at table center
+            const targetX = TABLE_PADDING + TABLE_WIDTH / 2;
+            const targetY = TABLE_PADDING + TABLE_HEIGHT / 2;
+
+            // Fixed pocket position (top-right corner)
+            const pocket = table.pockets[2]; // Top-right pocket
+            const pocketX = pocket.position.x;
+            const pocketY = pocket.position.y;
+
+            // Target direction: from object ball to pocket
+            const targetToPocketX = pocketX - targetX;
+            const targetToPocketY = pocketY - targetY;
+            const targetToPocketLen = Math.sqrt(targetToPocketX * targetToPocketX + targetToPocketY * targetToPocketY);
+            const targetDirX = targetToPocketX / targetToPocketLen;
+            const targetDirY = targetToPocketY / targetToPocketLen;
+
+            // The angle of the target direction (object ball to pocket)
+            const targetAngle = Math.atan2(targetDirY, targetDirX);
+            const intendedAngle = targetAngle * 180 / Math.PI;
+
+            // Ghost ball position
+            const contactOffset = 2 * BALL_RADIUS;
+            const ghostBallX = targetX - targetDirX * contactOffset;
+            const ghostBallY = targetY - targetDirY * contactOffset;
+
+            // Cue ball approach angle (180° behind target + cutAngle offset)
+            const approachAngle = targetAngle + Math.PI - cutAngleRad;
+
+            // Cue ball position
+            const cueBallX = ghostBallX - Math.cos(approachAngle) * distance;
+            const cueBallY = ghostBallY - Math.sin(approachAngle) * distance;
+
+            // Clamp to table bounds
+            const clampedCueX = Math.max(TABLE_PADDING + BALL_RADIUS + 5,
+                                         Math.min(TABLE_PADDING + TABLE_WIDTH - BALL_RADIUS - 5, cueBallX));
+            const clampedCueY = Math.max(TABLE_PADDING + BALL_RADIUS + 5,
+                                         Math.min(TABLE_PADDING + TABLE_HEIGHT - BALL_RADIUS - 5, cueBallY));
+
+            // Create balls using actual Ball class
+            cueBall = new Ball(clampedCueX, clampedCueY, 0); // 0 = cue ball
+            targetBall = new Ball(targetX, targetY, 1); // 1 = solid ball
+
+            // Calculate shot direction (from cue ball to ghost ball)
+            const dirX = ghostBallX - clampedCueX;
+            const dirY = ghostBallY - clampedCueY;
+            const dirLen = Math.sqrt(dirX * dirX + dirY * dirY);
+            const direction = { x: dirX / dirLen, y: dirY / dirLen };
+
+            // Apply shot using the same logic as main.js executeShot
+            const velocity = Vec2.multiply(direction, power);
+            cueBall.velocity.x = velocity.x;
+            cueBall.velocity.y = velocity.y;
+
+            // Calculate spin (same as main.js)
+            const speed = Math.sqrt(velocity.x * velocity.x + velocity.y * velocity.y);
+            const R = cueBall.radius;
+            const naturalOmega = speed / R;
+
+            // Spin.x = English (left/right), spin.y = Draw/Follow
+            // For this test, we're only varying spinY (draw/follow)
+            const spin = { x: 0, y: spinY };
+
+            // Z-Axis (English)
+            cueBall.spinZ = -spin.x * naturalOmega * 2.0 * 60;
+
+            // X/Y Axis (Follow/Draw)
+            const perpX = -direction.y;
+            const perpY = direction.x;
+            const rollingSpinX = perpX * naturalOmega * 60;
+            const rollingSpinY = perpY * naturalOmega * 60;
+            const spinFactor = spin.y * 5;
+            cueBall.spin.x = rollingSpinX * spinFactor;
+            cueBall.spin.y = rollingSpinY * spinFactor;
+
+            cueBall.forceSync = true;
+            cueBall.isSliding = true;
+
+            return {
+                intendedAngle,
+                cueBallPos: { x: clampedCueX, y: clampedCueY },
+                targetPos: { x: targetX, y: targetY },
+                ghostBallPos: { x: ghostBallX, y: ghostBallY },
+                direction,
+                actualDistance: Math.sqrt((clampedCueX - targetX) ** 2 + (clampedCueY - targetY) ** 2)
+            };
+        }
+
+        function runSimulation(debug = false) {
+            let collision = false;
+            let targetVelocity = null;
+            let maxSteps = 300;
+            let step = 0;
+
+            const balls = [cueBall, targetBall];
+            const initialCueVel = { x: cueBall.velocity.x, y: cueBall.velocity.y };
+
+            if (debug) {
+                console.log('Initial cue ball:', {
+                    pos: {...cueBall.position},
+                    vel: {...cueBall.velocity},
+                    forceSync: cueBall.forceSync
+                });
+                console.log('Initial target ball:', {
+                    pos: {...targetBall.position},
+                    vel: {...targetBall.velocity}
+                });
+            }
+
+            // Run physics until collision detected or timeout
+            // Note: update() expects deltaTime in MILLISECONDS (default 16.67ms = 60fps)
+            while (step < maxSteps) {
+                physics.update(balls, 16.67);
+                step++;
+
+                if (debug && step <= 5) {
+                    console.log(`Step ${step}: cue vel =`, cueBall.velocity.x.toFixed(2), cueBall.velocity.y.toFixed(2),
+                                'target vel =', targetBall.velocity.x.toFixed(2), targetBall.velocity.y.toFixed(2));
+                }
+
+                // Check if target ball moved (collision occurred)
+                const targetMoved = Math.abs(targetBall.velocity.x) > 0.1 || Math.abs(targetBall.velocity.y) > 0.1;
+
+                if (targetMoved && !collision) {
+                    collision = true;
+                    // Run a few more steps to let velocity stabilize
+                    for (let i = 0; i < 3; i++) {
+                        physics.update(balls, 1/60);
+                    }
+                    targetVelocity = {
+                        x: targetBall.velocity.x,
+                        y: targetBall.velocity.y
+                    };
+                    if (debug) {
+                        console.log('Collision detected at step', step, 'target velocity:', targetVelocity);
+                    }
+                    break;
+                }
+            }
+
+            if (debug && !collision) {
+                console.log('No collision after', maxSteps, 'steps. Final cue pos:', cueBall.position);
+            }
+
+            return { collision, targetVelocity };
+        }
+
+        function draw(params = null, setupData = null) {
+            // Green felt
+            ctx.fillStyle = '#0d6b32';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Table border
+            ctx.strokeStyle = '#8B4513';
+            ctx.lineWidth = 4;
+            ctx.strokeRect(TABLE_PADDING, TABLE_PADDING, TABLE_WIDTH, TABLE_HEIGHT);
+
+            // Draw pockets
+            if (table && table.pockets) {
+                ctx.fillStyle = '#000';
+                for (const pocket of table.pockets) {
+                    ctx.beginPath();
+                    ctx.arc(pocket.position.x, pocket.position.y, Constants.POCKET_RADIUS, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+
+            // Draw target ball
+            if (targetBall) {
+                ctx.fillStyle = '#FFDD00';
+                ctx.beginPath();
+                ctx.arc(targetBall.position.x, targetBall.position.y, BALL_RADIUS, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.strokeStyle = '#CC9900';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+            }
+
+            // Draw cue ball
+            if (cueBall) {
+                ctx.fillStyle = '#FFFFFF';
+                ctx.beginPath();
+                ctx.arc(cueBall.position.x, cueBall.position.y, BALL_RADIUS, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.strokeStyle = '#CCCCCC';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+            }
+
+            // Draw ghost ball position
+            if (setupData) {
+                ctx.strokeStyle = 'rgba(255, 255, 0, 0.4)';
+                ctx.lineWidth = 1;
+                ctx.setLineDash([3, 3]);
+                ctx.beginPath();
+                ctx.arc(setupData.ghostBallPos.x, setupData.ghostBallPos.y, BALL_RADIUS, 0, Math.PI * 2);
+                ctx.stroke();
+
+                // Draw aim line
+                ctx.beginPath();
+                ctx.moveTo(setupData.cueBallPos.x, setupData.cueBallPos.y);
+                ctx.lineTo(setupData.ghostBallPos.x, setupData.ghostBallPos.y);
+                ctx.stroke();
+                ctx.setLineDash([]);
+            }
+
+            // Draw info
+            ctx.fillStyle = '#FFF';
+            ctx.font = '14px monospace';
+            if (params) {
+                ctx.fillText(`Cut Angle: ${params.cutAngle.toFixed(1)}°`, 10, 20);
+                ctx.fillText(`Power: ${params.power.toFixed(1)}`, 10, 40);
+                ctx.fillText(`SpinY: ${params.spinY.toFixed(2)}`, 10, 60);
+                ctx.fillText(`Distance: ${params.distance.toFixed(0)}px`, 10, 80);
+            }
+        }
+
+        async function startGeneration() {
+            if (isRunning) return;
+
+            isRunning = true;
+            isPaused = false;
+            shotData = [];
+            currentShotIndex = 0;
+            validSamples = 0;
+            totalAngleError = 0;
+            startTime = Date.now();
+
+            document.getElementById('startBtn').disabled = true;
+            document.getElementById('pauseBtn').disabled = false;
+            document.getElementById('stopBtn').disabled = false;
+
+            generateShotQueue();
+            log('Starting shot generation with real physics...', 'success');
+
+            await runGenerationLoop();
+        }
+
+        async function runGenerationLoop() {
+            const simSpeed = parseInt(document.getElementById('simSpeed').value);
+
+            while (isRunning && currentShotIndex < shotQueue.length) {
+                if (isPaused) {
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                    continue;
+                }
+
+                const params = shotQueue[currentShotIndex];
+
+                // Setup shot
+                const setupData = setupShot(params);
+
+                // Visualize if speed > 0
+                if (simSpeed > 0) {
+                    draw(params, setupData);
+                }
+
+                // Run simulation (debug first 3 shots)
+                const debug = currentShotIndex < 3;
+                const result = runSimulation(debug);
+
+                if (result.collision && result.targetVelocity) {
+                    const velMag = Math.sqrt(result.targetVelocity.x ** 2 + result.targetVelocity.y ** 2);
+
+                    if (velMag > 0.1) {
+                        const actualAngle = Math.atan2(result.targetVelocity.y, result.targetVelocity.x) * 180 / Math.PI;
+                        let angleError = actualAngle - setupData.intendedAngle;
+                        while (angleError > 180) angleError -= 360;
+                        while (angleError < -180) angleError += 360;
+
+                        const shotRecord = {
+                            timestamp: Date.now(),
+                            intendedAngle: setupData.intendedAngle,
+                            actualAngle: actualAngle,
+                            angleError: angleError,
+                            power: params.power,
+                            spinY: params.spinY,
+                            cutAngle: params.cutAngle,
+                            cueBallToTargetDist: setupData.actualDistance,
+                            difficulty: 'simulated',
+                            targetBallVelocity: result.targetVelocity
+                        };
+
+                        shotData.push(shotRecord);
+                        validSamples++;
+                        totalAngleError += Math.abs(angleError);
+                    }
+                }
+
+                currentShotIndex++;
+                updateProgress();
+
+                if (simSpeed > 0) {
+                    await new Promise(resolve => setTimeout(resolve, simSpeed));
+                } else if (currentShotIndex % 100 === 0) {
+                    await new Promise(resolve => setTimeout(resolve, 0));
+                }
+            }
+
+            if (currentShotIndex >= shotQueue.length) {
+                finishGeneration();
+            }
+        }
+
+        function updateProgress() {
+            const progress = (currentShotIndex / totalShots) * 100;
+            document.getElementById('progressFill').style.width = progress + '%';
+            document.getElementById('progressPercent').textContent = progress.toFixed(1) + '%';
+            document.getElementById('shotsGenerated').textContent = currentShotIndex.toLocaleString();
+            document.getElementById('validSamples').textContent = validSamples.toLocaleString();
+
+            const elapsed = (Date.now() - startTime) / 1000;
+            const rate = currentShotIndex / elapsed;
+            document.getElementById('shotsPerSec').textContent = rate.toFixed(0) + '/s';
+
+            if (validSamples > 0) {
+                const avgError = totalAngleError / validSamples;
+                document.getElementById('avgError').textContent = avgError.toFixed(2) + '°';
+            }
+
+            if (shotData.length > 0 && currentShotIndex % 10 === 0) {
+                const lastRecords = shotData.slice(-5);
+                document.getElementById('data-sample').innerHTML =
+                    '<pre>' + JSON.stringify(lastRecords, null, 2) + '</pre>';
+            }
+        }
+
+        function finishGeneration() {
+            isRunning = false;
+            document.getElementById('startBtn').disabled = false;
+            document.getElementById('pauseBtn').disabled = true;
+            document.getElementById('stopBtn').disabled = true;
+
+            const elapsed = (Date.now() - startTime) / 1000;
+            log(`Generation complete! ${validSamples} valid samples in ${elapsed.toFixed(1)}s`, 'success');
+            if (validSamples > 0) {
+                log(`Average angle error: ${(totalAngleError / validSamples).toFixed(2)}°`, 'info');
+            }
+        }
+
+        function pauseGeneration() {
+            isPaused = !isPaused;
+            document.getElementById('pauseBtn').textContent = isPaused ? '▶ Resume' : '⏸ Pause';
+            log(isPaused ? 'Paused' : 'Resumed', 'info');
+        }
+
+        function stopGeneration() {
+            isRunning = false;
+            isPaused = false;
+            document.getElementById('startBtn').disabled = false;
+            document.getElementById('pauseBtn').disabled = true;
+            document.getElementById('stopBtn').disabled = true;
+            log('Stopped by user', 'warn');
+        }
+
+        function downloadJSON() {
+            if (shotData.length === 0) {
+                log('No data to download', 'error');
+                return;
+            }
+
+            const blob = new Blob([JSON.stringify(shotData, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `ai_shot_data_${Date.now()}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            log(`Downloaded ${shotData.length} records as JSON`, 'success');
+        }
+
+        function downloadCSV() {
+            if (shotData.length === 0) {
+                log('No data to download', 'error');
+                return;
+            }
+
+            const headers = ['timestamp', 'intendedAngle', 'actualAngle', 'angleError', 'power', 'spinY', 'cutAngle', 'cueBallToTargetDist', 'difficulty', 'targetBallVelocityX', 'targetBallVelocityY'];
+            const rows = shotData.map(shot => [
+                shot.timestamp,
+                shot.intendedAngle,
+                shot.actualAngle,
+                shot.angleError,
+                shot.power,
+                shot.spinY,
+                shot.cutAngle,
+                shot.cueBallToTargetDist,
+                shot.difficulty,
+                shot.targetBallVelocity.x,
+                shot.targetBallVelocity.y
+            ].join(','));
+
+            const csv = [headers.join(','), ...rows].join('\n');
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `ai_shot_data_${Date.now()}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            log(`Downloaded ${shotData.length} records as CSV`, 'success');
+        }
+
+        // Initialize on load
+        init();
+    </script>
+</body>
+</html>

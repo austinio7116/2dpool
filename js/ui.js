@@ -2705,9 +2705,9 @@ export class UI {
         const p2GroupType = gameInfo.player2Group;
 
         if (gameInfo.mode === GameMode.EIGHT_BALL) {
-            // US 8-ball: solid (1) or stripe (9)
-            const p1BallNum = p1GroupType === 'solid' ? 1 : 9;
-            const p2BallNum = p2GroupType === 'solid' ? 1 : 9;
+            // US 8-ball: solid (2 - blue) or stripe (11 - red stripe) for better contrast
+            const p1BallNum = p1GroupType === 'solid' ? 2 : 11;
+            const p2BallNum = p2GroupType === 'solid' ? 2 : 11;
 
             // Ensure we have a ball set to render with
             const ballSet = this.selectedBallSet || PREDEFINED_BALL_SETS[0];
@@ -2718,9 +2718,9 @@ export class UI {
             if (p1Canvas) this.p1BallGroup.appendChild(p1Canvas);
             if (p2Canvas) this.p2BallGroup.appendChild(p2Canvas);
         } else if (gameInfo.mode === GameMode.UK_EIGHT_BALL) {
-            // UK 8-ball: group1 (1) or group2 (9)
-            const p1BallNum = p1GroupType === 'group1' ? 1 : 9;
-            const p2BallNum = p2GroupType === 'group1' ? 1 : 9;
+            // UK 8-ball: group1 (2) or group2 (10) - use non-yellow balls for contrast
+            const p1BallNum = p1GroupType === 'group1' ? 2 : 10;
+            const p2BallNum = p2GroupType === 'group1' ? 2 : 10;
 
             // Ensure we have a ball set to render with
             const ballSet = this.selectedBallSet || PREDEFINED_BALL_SETS[0];

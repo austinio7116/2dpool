@@ -74,10 +74,10 @@ export class Renderer {
             this.tableImages.push(img);
         }
 
-        // Load colorize overlays for tables 1, 2, 3, 4, 8, 9
+        // Load colorize overlays for tables 1, 2, 3, 4, 7, 8, 9
         this.colorizeOverlays = {};
         this.colorizeOverlaysLoaded = {};
-        const overlayTables = [1, 2, 3, 4, 8, 9];
+        const overlayTables = [1, 2, 3, 4, 7, 8, 9];
         for (const tableNum of overlayTables) {
             const img = new Image();
             img.onload = () => {

@@ -266,8 +266,12 @@ class PoolGame {
             ball.numberBorder = config.numberBorder || false;
             ball.numberBorderColor = config.numberBorderColor || null;
             ball.numberCircleRadialLines = config.numberCircleRadialLines || 0;
+            ball.radialLinesColor = config.radialLinesColor || null;
             ball.stripeThickness = config.stripeThickness ?? 0.55;
             ball.numberCircleRadius = config.numberCircleRadius ?? 0.66;
+            ball.borderWidth = config.borderWidth ?? 1.0;
+            ball.numberScale = config.numberScale ?? 1.0;
+            ball.stripeOrientation = config.stripeOrientation || 'horizontal';
         }
 
         // Progress callback for loading bar

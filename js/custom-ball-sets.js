@@ -137,8 +137,12 @@ export class CustomBallSetManager {
                 numberBorder: setData.options?.numberBorder || false,
                 numberBorderColor: setData.options?.numberBorderColor || '#000000',
                 numberCircleRadialLines: setData.options?.numberCircleRadialLines || 0,
+                radialLinesColor: setData.options?.radialLinesColor || '#000000',
                 stripeThickness: setData.options?.stripeThickness ?? 0.55,
-                numberCircleRadius: setData.options?.numberCircleRadius ?? 0.5
+                numberCircleRadius: setData.options?.numberCircleRadius ?? 0.5,
+                borderWidth: setData.options?.borderWidth ?? 1.0,
+                numberScale: setData.options?.numberScale ?? 1.0,
+                stripeOrientation: setData.options?.stripeOrientation || 'horizontal'
             },
             isPredefined: false,
             createdAt: Date.now()
@@ -183,8 +187,12 @@ export class CustomBallSetManager {
                 numberBorder: setData.options?.numberBorder || false,
                 numberBorderColor: setData.options?.numberBorderColor || '#000000',
                 numberCircleRadialLines: setData.options?.numberCircleRadialLines || 0,
+                radialLinesColor: setData.options?.radialLinesColor || '#000000',
                 stripeThickness: setData.options?.stripeThickness ?? 0.55,
-                numberCircleRadius: setData.options?.numberCircleRadius ?? 0.5
+                numberCircleRadius: setData.options?.numberCircleRadius ?? 0.5,
+                borderWidth: setData.options?.borderWidth ?? 1.0,
+                numberScale: setData.options?.numberScale ?? 1.0,
+                stripeOrientation: setData.options?.stripeOrientation || 'horizontal'
             },
             isPredefined: false,
             createdAt: existingSet.createdAt,
@@ -380,8 +388,12 @@ export class CustomBallSetManager {
             numberBorder: ballSet.options?.numberBorder || false,
             numberBorderColor: ballSet.options?.numberBorderColor || '#000000',
             numberCircleRadialLines: ballSet.options?.numberCircleRadialLines || 0,
+            radialLinesColor: ballSet.options?.radialLinesColor || '#000000',
             stripeThickness: ballSet.options?.stripeThickness ?? 0.55,
-            numberCircleRadius: ballSet.options?.numberCircleRadius ?? 0.66
+            numberCircleRadius: ballSet.options?.numberCircleRadius ?? 0.66,
+            borderWidth: ballSet.options?.borderWidth ?? 1.0,
+            numberScale: ballSet.options?.numberScale ?? 1.0,
+            stripeOrientation: ballSet.options?.stripeOrientation || 'horizontal'
         };
     }
 

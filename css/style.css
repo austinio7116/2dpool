@@ -961,6 +961,63 @@ body {
     display: none;
 }
 
+.stripe-orientation-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 4px;
+}
+
+.stripe-orientation-row > label {
+    font-size: 0.8rem;
+    color: #ccc;
+    white-space: nowrap;
+}
+
+.orientation-toggle {
+    display: flex;
+    gap: 4px;
+}
+
+.orientation-btn {
+    padding: 4px 10px;
+    border: 2px solid #4a4a6a;
+    background: rgba(40, 40, 60, 0.8);
+    color: #aaa;
+    font-size: 0.7rem;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.orientation-btn:hover {
+    border-color: #6a6a8a;
+}
+
+.orientation-btn.active {
+    border-color: #ffd700;
+    background: rgba(60, 60, 80, 0.9);
+    color: #fff;
+}
+
+.radial-lines-row {
+    display: flex;
+    align-items: flex-end;
+    gap: 10px;
+}
+
+.radial-lines-row .ball-slider-group {
+    flex: 1;
+}
+
+.radial-lines-color-field {
+    min-width: 70px;
+}
+
+.radial-lines-color-field.hidden {
+    display: none;
+}
+
 .border-checkbox {
     margin-left: 8px;
 }

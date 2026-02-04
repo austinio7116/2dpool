@@ -137,10 +137,18 @@ export class UI {
         this.solidBorderColorField = document.getElementById('solid-border-color-field');
         this.solidRadialLinesSlider = document.getElementById('solid-radial-lines');
         this.solidRadialLinesValue = document.getElementById('solid-radial-lines-value');
+        this.solidRadialLinesColorField = document.getElementById('solid-radial-lines-color-field');
         this.solidStripeThicknessSlider = document.getElementById('solid-stripe-thickness');
         this.solidStripeThicknessValue = document.getElementById('solid-stripe-thickness-value');
         this.solidCircleRadiusSlider = document.getElementById('solid-circle-radius');
         this.solidCircleRadiusValue = document.getElementById('solid-circle-radius-value');
+        this.solidBorderWidthSlider = document.getElementById('solid-border-width');
+        this.solidBorderWidthValue = document.getElementById('solid-border-width-value');
+        this.solidNumberScaleSlider = document.getElementById('solid-number-scale');
+        this.solidNumberScaleValue = document.getElementById('solid-number-scale-value');
+        this.solidOrientationHorizontal = document.getElementById('solid-orientation-horizontal');
+        this.solidOrientationVertical = document.getElementById('solid-orientation-vertical');
+        this.solidStripeOrientation = 'horizontal';
 
         // Stripe mode elements
         this.stripeModeOptions = document.getElementById('stripe-mode-options');
@@ -160,10 +168,18 @@ export class UI {
         this.colorNumberBorder = document.getElementById('color-number-border');
         this.radialLinesSlider = document.getElementById('radial-lines');
         this.radialLinesValue = document.getElementById('radial-lines-value');
+        this.radialLinesColorField = document.getElementById('radial-lines-color-field');
         this.stripeThicknessSlider = document.getElementById('stripe-thickness');
         this.stripeThicknessValue = document.getElementById('stripe-thickness-value');
         this.circleRadiusSlider = document.getElementById('circle-radius');
         this.circleRadiusValue = document.getElementById('circle-radius-value');
+        this.borderWidthSlider = document.getElementById('border-width');
+        this.borderWidthValue = document.getElementById('border-width-value');
+        this.numberScaleSlider = document.getElementById('number-scale');
+        this.numberScaleValue = document.getElementById('number-scale-value');
+        this.orientationHorizontal = document.getElementById('orientation-horizontal');
+        this.orientationVertical = document.getElementById('orientation-vertical');
+        this.stripeOrientation = 'horizontal';
 
         // Table creator elements
         this.customTableNameInput = document.getElementById('custom-table-name');
@@ -505,6 +521,9 @@ export class UI {
         });
         this.solidRadialLinesSlider?.addEventListener('input', (e) => {
             if (this.solidRadialLinesValue) this.solidRadialLinesValue.textContent = e.target.value;
+            // Show/hide radial lines color picker based on value
+            const hasRadialLines = parseInt(e.target.value) > 0;
+            this.solidRadialLinesColorField?.classList.toggle('hidden', !hasRadialLines);
             this.updateCreatorPreview();
         });
         this.solidStripeThicknessSlider?.addEventListener('input', (e) => {
@@ -513,6 +532,27 @@ export class UI {
         });
         this.solidCircleRadiusSlider?.addEventListener('input', (e) => {
             if (this.solidCircleRadiusValue) this.solidCircleRadiusValue.textContent = parseFloat(e.target.value).toFixed(2);
+            this.updateCreatorPreview();
+        });
+        this.solidBorderWidthSlider?.addEventListener('input', (e) => {
+            if (this.solidBorderWidthValue) this.solidBorderWidthValue.textContent = parseFloat(e.target.value).toFixed(1);
+            this.updateCreatorPreview();
+        });
+        this.solidNumberScaleSlider?.addEventListener('input', (e) => {
+            if (this.solidNumberScaleValue) this.solidNumberScaleValue.textContent = parseFloat(e.target.value).toFixed(2);
+            this.updateCreatorPreview();
+        });
+        // Solid mode orientation toggles
+        this.solidOrientationHorizontal?.addEventListener('click', () => {
+            this.solidStripeOrientation = 'horizontal';
+            this.solidOrientationHorizontal.classList.add('active');
+            this.solidOrientationVertical?.classList.remove('active');
+            this.updateCreatorPreview();
+        });
+        this.solidOrientationVertical?.addEventListener('click', () => {
+            this.solidStripeOrientation = 'vertical';
+            this.solidOrientationVertical.classList.add('active');
+            this.solidOrientationHorizontal?.classList.remove('active');
             this.updateCreatorPreview();
         });
 
@@ -546,6 +586,9 @@ export class UI {
         // Ball customization sliders
         this.radialLinesSlider?.addEventListener('input', (e) => {
             if (this.radialLinesValue) this.radialLinesValue.textContent = e.target.value;
+            // Show/hide radial lines color picker based on value
+            const hasRadialLines = parseInt(e.target.value) > 0;
+            this.radialLinesColorField?.classList.toggle('hidden', !hasRadialLines);
             this.updateCreatorPreview();
         });
         this.stripeThicknessSlider?.addEventListener('input', (e) => {
@@ -554,6 +597,27 @@ export class UI {
         });
         this.circleRadiusSlider?.addEventListener('input', (e) => {
             if (this.circleRadiusValue) this.circleRadiusValue.textContent = parseFloat(e.target.value).toFixed(2);
+            this.updateCreatorPreview();
+        });
+        this.borderWidthSlider?.addEventListener('input', (e) => {
+            if (this.borderWidthValue) this.borderWidthValue.textContent = parseFloat(e.target.value).toFixed(1);
+            this.updateCreatorPreview();
+        });
+        this.numberScaleSlider?.addEventListener('input', (e) => {
+            if (this.numberScaleValue) this.numberScaleValue.textContent = parseFloat(e.target.value).toFixed(2);
+            this.updateCreatorPreview();
+        });
+        // Stripe mode orientation toggles
+        this.orientationHorizontal?.addEventListener('click', () => {
+            this.stripeOrientation = 'horizontal';
+            this.orientationHorizontal.classList.add('active');
+            this.orientationVertical?.classList.remove('active');
+            this.updateCreatorPreview();
+        });
+        this.orientationVertical?.addEventListener('click', () => {
+            this.stripeOrientation = 'vertical';
+            this.orientationVertical.classList.add('active');
+            this.orientationHorizontal?.classList.remove('active');
             this.updateCreatorPreview();
         });
 
@@ -849,8 +913,12 @@ export class UI {
             numberBorder: config.numberBorder,
             numberBorderColor: config.numberBorderColor,
             numberCircleRadialLines: config.numberCircleRadialLines,
+            radialLinesColor: config.radialLinesColor,
             stripeThickness: config.stripeThickness,
-            numberCircleRadius: config.numberCircleRadius
+            numberCircleRadius: config.numberCircleRadius,
+            borderWidth: config.borderWidth,
+            numberScale: config.numberScale,
+            stripeOrientation: config.stripeOrientation
         };
 
         try {
@@ -1131,6 +1199,10 @@ export class UI {
                 if (this.solidRadialLinesValue) this.solidRadialLinesValue.textContent = set.options?.numberCircleRadialLines || 0;
                 this.solidRadialLinesSlider.disabled = !set.options?.numberBorder;
             }
+            // Load radial lines color
+            this.setSwatchColor('solid-radial-lines-color', set.options?.radialLinesColor || '#000000');
+            this.solidRadialLinesColorField?.classList.toggle('hidden', !(set.options?.numberCircleRadialLines > 0));
+
             if (this.solidStripeThicknessSlider) {
                 this.solidStripeThicknessSlider.value = set.options?.stripeThickness ?? 0.55;
                 if (this.solidStripeThicknessValue) this.solidStripeThicknessValue.textContent = (set.options?.stripeThickness ?? 0.55).toFixed(2);
@@ -1138,6 +1210,23 @@ export class UI {
             if (this.solidCircleRadiusSlider) {
                 this.solidCircleRadiusSlider.value = set.options?.numberCircleRadius ?? 0.66;
                 if (this.solidCircleRadiusValue) this.solidCircleRadiusValue.textContent = (set.options?.numberCircleRadius ?? 0.66).toFixed(2);
+            }
+            if (this.solidBorderWidthSlider) {
+                this.solidBorderWidthSlider.value = set.options?.borderWidth ?? 1.0;
+                if (this.solidBorderWidthValue) this.solidBorderWidthValue.textContent = (set.options?.borderWidth ?? 1.0).toFixed(1);
+            }
+            if (this.solidNumberScaleSlider) {
+                this.solidNumberScaleSlider.value = set.options?.numberScale ?? 1.0;
+                if (this.solidNumberScaleValue) this.solidNumberScaleValue.textContent = (set.options?.numberScale ?? 1.0).toFixed(2);
+            }
+            // Load stripe orientation
+            this.solidStripeOrientation = set.options?.stripeOrientation || 'horizontal';
+            if (this.solidStripeOrientation === 'vertical') {
+                this.solidOrientationVertical?.classList.add('active');
+                this.solidOrientationHorizontal?.classList.remove('active');
+            } else {
+                this.solidOrientationHorizontal?.classList.add('active');
+                this.solidOrientationVertical?.classList.remove('active');
             }
         } else {
             // Load stripe mode values
@@ -1161,6 +1250,10 @@ export class UI {
                 // Disable radial lines if border is not enabled
                 this.radialLinesSlider.disabled = !set.options?.numberBorder;
             }
+            // Load radial lines color
+            this.setSwatchColor('radial-lines-color', set.options?.radialLinesColor || '#000000');
+            this.radialLinesColorField?.classList.toggle('hidden', !(set.options?.numberCircleRadialLines > 0));
+
             if (this.stripeThicknessSlider) {
                 this.stripeThicknessSlider.value = set.options?.stripeThickness ?? 0.55;
                 if (this.stripeThicknessValue) this.stripeThicknessValue.textContent = (set.options?.stripeThickness ?? 0.55).toFixed(2);
@@ -1168,6 +1261,23 @@ export class UI {
             if (this.circleRadiusSlider) {
                 this.circleRadiusSlider.value = set.options?.numberCircleRadius ?? 0.5;
                 if (this.circleRadiusValue) this.circleRadiusValue.textContent = (set.options?.numberCircleRadius ?? 0.5).toFixed(2);
+            }
+            if (this.borderWidthSlider) {
+                this.borderWidthSlider.value = set.options?.borderWidth ?? 1.0;
+                if (this.borderWidthValue) this.borderWidthValue.textContent = (set.options?.borderWidth ?? 1.0).toFixed(1);
+            }
+            if (this.numberScaleSlider) {
+                this.numberScaleSlider.value = set.options?.numberScale ?? 1.0;
+                if (this.numberScaleValue) this.numberScaleValue.textContent = (set.options?.numberScale ?? 1.0).toFixed(2);
+            }
+            // Load stripe orientation
+            this.stripeOrientation = set.options?.stripeOrientation || 'horizontal';
+            if (this.stripeOrientation === 'vertical') {
+                this.orientationVertical?.classList.add('active');
+                this.orientationHorizontal?.classList.remove('active');
+            } else {
+                this.orientationHorizontal?.classList.add('active');
+                this.orientationVertical?.classList.remove('active');
             }
 
             // Load advanced mode
@@ -1227,7 +1337,9 @@ export class UI {
         this.setSwatchColor('solid-number-text', '#000000');
         if (this.solidNumberBorderCheckbox) this.solidNumberBorderCheckbox.checked = false;
         this.setSwatchColor('solid-number-border', '#000000');
+        this.setSwatchColor('solid-radial-lines-color', '#000000');
         this.solidBorderColorField?.classList.add('hidden');
+        this.solidRadialLinesColorField?.classList.add('hidden');
         if (this.solidRadialLinesSlider) {
             this.solidRadialLinesSlider.value = 0;
             if (this.solidRadialLinesValue) this.solidRadialLinesValue.textContent = '0';
@@ -1241,6 +1353,18 @@ export class UI {
             this.solidCircleRadiusSlider.value = 0.66;
             if (this.solidCircleRadiusValue) this.solidCircleRadiusValue.textContent = '0.66';
         }
+        if (this.solidBorderWidthSlider) {
+            this.solidBorderWidthSlider.value = 1.0;
+            if (this.solidBorderWidthValue) this.solidBorderWidthValue.textContent = '1.0';
+        }
+        if (this.solidNumberScaleSlider) {
+            this.solidNumberScaleSlider.value = 1.0;
+            if (this.solidNumberScaleValue) this.solidNumberScaleValue.textContent = '1.00';
+        }
+        // Reset solid stripe orientation
+        this.solidStripeOrientation = 'horizontal';
+        this.solidOrientationHorizontal?.classList.add('active');
+        this.solidOrientationVertical?.classList.remove('active');
 
         // Reset stripe mode fields
         this.setSwatchColor('solids', '#FFD700');
@@ -1272,7 +1396,9 @@ export class UI {
         this.setSwatchColor('number-text', '#000000');
         if (this.numberBorderCheckbox) this.numberBorderCheckbox.checked = false;
         this.setSwatchColor('number-border', '#000000');
+        this.setSwatchColor('radial-lines-color', '#000000');
         this.borderColorField?.classList.add('hidden');
+        this.radialLinesColorField?.classList.add('hidden');
 
         // Reset sliders
         if (this.radialLinesSlider) {
@@ -1288,6 +1414,18 @@ export class UI {
             this.circleRadiusSlider.value = 0.5;
             if (this.circleRadiusValue) this.circleRadiusValue.textContent = '0.50';
         }
+        if (this.borderWidthSlider) {
+            this.borderWidthSlider.value = 1.0;
+            if (this.borderWidthValue) this.borderWidthValue.textContent = '1.0';
+        }
+        if (this.numberScaleSlider) {
+            this.numberScaleSlider.value = 1.0;
+            if (this.numberScaleValue) this.numberScaleValue.textContent = '1.00';
+        }
+        // Reset stripe orientation
+        this.stripeOrientation = 'horizontal';
+        this.orientationHorizontal?.classList.add('active');
+        this.orientationVertical?.classList.remove('active');
 
         // Reset modal title and button text for create mode
         const modalTitle = this.creatorModal.querySelector('.modal-header h2');
@@ -1468,8 +1606,12 @@ export class UI {
                     numberBorder: this.solidNumberBorderCheckbox?.checked || false,
                     numberBorderColor: this.getSwatchColor('solid-number-border'),
                     numberCircleRadialLines: parseInt(this.solidRadialLinesSlider?.value || '0'),
+                    radialLinesColor: this.getSwatchColor('solid-radial-lines-color'),
                     stripeThickness: parseFloat(this.solidStripeThicknessSlider?.value || '0.55'),
-                    numberCircleRadius: parseFloat(this.solidCircleRadiusSlider?.value || '0.80')
+                    numberCircleRadius: parseFloat(this.solidCircleRadiusSlider?.value || '0.80'),
+                    borderWidth: parseFloat(this.solidBorderWidthSlider?.value || '1.0'),
+                    numberScale: parseFloat(this.solidNumberScaleSlider?.value || '1.0'),
+                    stripeOrientation: this.solidStripeOrientation || 'horizontal'
                 }
             };
         } else {
@@ -1493,8 +1635,12 @@ export class UI {
                     numberBorder: this.numberBorderCheckbox?.checked || false,
                     numberBorderColor: this.getSwatchColor('number-border'),
                     numberCircleRadialLines: parseInt(this.radialLinesSlider?.value || '0'),
+                    radialLinesColor: this.getSwatchColor('radial-lines-color'),
                     stripeThickness: parseFloat(this.stripeThicknessSlider?.value || '0.55'),
-                    numberCircleRadius: parseFloat(this.circleRadiusSlider?.value || '0.5')
+                    numberCircleRadius: parseFloat(this.circleRadiusSlider?.value || '0.5'),
+                    borderWidth: parseFloat(this.borderWidthSlider?.value || '1.0'),
+                    numberScale: parseFloat(this.numberScaleSlider?.value || '1.0'),
+                    stripeOrientation: this.stripeOrientation || 'horizontal'
                 }
             };
 
@@ -1557,8 +1703,12 @@ export class UI {
                     numberBorder: this.solidNumberBorderCheckbox?.checked || false,
                     numberBorderColor: this.getSwatchColor('solid-number-border'),
                     numberCircleRadialLines: parseInt(this.solidRadialLinesSlider?.value || '0'),
+                    radialLinesColor: this.getSwatchColor('solid-radial-lines-color'),
                     stripeThickness: parseFloat(this.solidStripeThicknessSlider?.value || '0.55'),
-                    numberCircleRadius: parseFloat(this.solidCircleRadiusSlider?.value || '0.80')
+                    numberCircleRadius: parseFloat(this.solidCircleRadiusSlider?.value || '0.80'),
+                    borderWidth: parseFloat(this.solidBorderWidthSlider?.value || '1.0'),
+                    numberScale: parseFloat(this.solidNumberScaleSlider?.value || '1.0'),
+                    stripeOrientation: this.solidStripeOrientation || 'horizontal'
                 }
             };
         } else {
@@ -1580,8 +1730,12 @@ export class UI {
                     numberBorder: this.numberBorderCheckbox?.checked || false,
                     numberBorderColor: this.getSwatchColor('number-border'),
                     numberCircleRadialLines: parseInt(this.radialLinesSlider?.value || '0'),
+                    radialLinesColor: this.getSwatchColor('radial-lines-color'),
                     stripeThickness: parseFloat(this.stripeThicknessSlider?.value || '0.55'),
-                    numberCircleRadius: parseFloat(this.circleRadiusSlider?.value || '0.5')
+                    numberCircleRadius: parseFloat(this.circleRadiusSlider?.value || '0.5'),
+                    borderWidth: parseFloat(this.borderWidthSlider?.value || '1.0'),
+                    numberScale: parseFloat(this.numberScaleSlider?.value || '1.0'),
+                    stripeOrientation: this.stripeOrientation || 'horizontal'
                 }
             };
 

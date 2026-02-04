@@ -88,8 +88,12 @@ export class BallRenderer3D {
             key += `-${options.numberBorder || false}`;
             key += `-${options.numberBorderColor || ''}`;
             key += `-${options.numberCircleRadialLines || 0}`;
+            key += `-${options.radialLinesColor || ''}`;
             key += `-${options.stripeThickness ?? 0.55}`;
             key += `-${options.numberCircleRadius ?? 0.5}`;
+            key += `-${options.borderWidth ?? 1.0}`;
+            key += `-${options.numberScale ?? 1.0}`;
+            key += `-${options.stripeOrientation || 'horizontal'}`;
         }
         return key;
     }
@@ -140,7 +144,9 @@ export class BallRenderer3D {
             const hasCustomOptions = ball.numberCircleColor || ball.numberTextColor ||
                                      ball.numberBorder || ball.stripeBackgroundColor ||
                                      ball.showNumber === false || ball.numberCircleRadialLines > 0 ||
-                                     ball.stripeThickness !== 0.55 || ball.numberCircleRadius !== 0.66;
+                                     ball.stripeThickness !== 0.55 || ball.numberCircleRadius !== 0.66 ||
+                                     ball.borderWidth !== 1.0 || ball.numberScale !== 1.0 ||
+                                     ball.stripeOrientation === 'vertical' || ball.radialLinesColor;
 
             if (hasCustomOptions) {
                 const options = {
@@ -151,8 +157,12 @@ export class BallRenderer3D {
                     numberBorder: ball.numberBorder,
                     numberBorderColor: ball.numberBorderColor,
                     numberCircleRadialLines: ball.numberCircleRadialLines || 0,
+                    radialLinesColor: ball.radialLinesColor,
                     stripeThickness: ball.stripeThickness ?? 0.55,
-                    numberCircleRadius: ball.numberCircleRadius ?? 0.66
+                    numberCircleRadius: ball.numberCircleRadius ?? 0.66,
+                    borderWidth: ball.borderWidth ?? 1.0,
+                    numberScale: ball.numberScale ?? 1.0,
+                    stripeOrientation: ball.stripeOrientation || 'horizontal'
                 };
 
                 ballsToCache.push({
@@ -343,9 +353,13 @@ export class BallRenderer3D {
                     const numberVisible = localZ > 0; // Only if facing camera
 
                     // Stripe: band around equator in LOCAL ball coordinates
-                    // The "equator" is where localY = 0
-                    // Latitude is |localY| (0 at equator, 1 at poles)
-                    const latitude = Math.abs(localY);
+                    // The "equator" depends on stripe orientation:
+                    // - horizontal: equator is where localY = 0, stripe goes across the ball horizontally
+                    // - vertical: stripe goes around the edge of the ball as seen from the number circle
+                    //             (number sits in the middle of the background, stripe is around the circumference)
+                    const stripeVertical = numberOptions.stripeOrientation === 'vertical';
+                    // For vertical: use |localZ| so stripe is around the edge (low Z) and background at center (high Z)
+                    const latitude = stripeVertical ? Math.abs(localZ) : Math.abs(localY);
                     const inStripe = latitude < stripeLatitude;
 
                     // Check if we should sample from text texture
@@ -425,12 +439,16 @@ export class BallRenderer3D {
         const centerY = textureSize / 2;
         const circleRadius = textureSize * 0.38; // Slightly larger circle
 
+        // Get scale options (default to 1.0)
+        const borderWidthScale = options.borderWidth ?? 1.0;
+        const numberScale = options.numberScale ?? 1.0;
+
         // Fill with transparent
         ctx.clearRect(0, 0, textureSize, textureSize);
 
         // Draw border FIRST if enabled (so it's underneath)
         if (options.numberBorder) {
-            const borderWidth = 32; // Even thicker border
+            const borderWidth = 32 * borderWidthScale; // Scale border width
             ctx.strokeStyle = options.numberBorderColor || '#000000';
             ctx.lineWidth = borderWidth;
             ctx.beginPath();
@@ -444,21 +462,24 @@ export class BallRenderer3D {
         ctx.arc(centerX, centerY, circleRadius, 0, Math.PI * 2);
         ctx.fill();
 
-        // Draw radial lines if enabled (on top of circle)
+        // Draw radial lines if enabled (on top of border, starting from outer edge)
         if (options.numberBorder && options.numberCircleRadialLines > 0) {
             const lineCount = options.numberCircleRadialLines;
-            const lineLength = circleRadius / 5;
+            const borderWidth = 32 * borderWidthScale;
+            const outerRadius = circleRadius + borderWidth; // Outer edge of border
+            const lineLength = borderWidth + circleRadius * 0.15; // Extend slightly into circle
 
-            ctx.strokeStyle = options.numberBorderColor || '#000000';
-            ctx.lineWidth = 20; // Even thicker radial lines
+            // Use radialLinesColor if provided, otherwise fall back to numberBorderColor
+            ctx.strokeStyle = options.radialLinesColor || options.numberBorderColor || '#000000';
+            ctx.lineWidth = 20 * borderWidthScale; // Scale radial line width too
             ctx.lineCap = 'round';
 
             for (let i = 0; i < lineCount; i++) {
                 const angle = (i / lineCount) * Math.PI * 2;
-                const outerX = centerX + Math.cos(angle) * circleRadius;
-                const outerY = centerY + Math.sin(angle) * circleRadius;
-                const innerX = centerX + Math.cos(angle) * (circleRadius - lineLength);
-                const innerY = centerY + Math.sin(angle) * (circleRadius - lineLength);
+                const outerX = centerX + Math.cos(angle) * outerRadius;
+                const outerY = centerY + Math.sin(angle) * outerRadius;
+                const innerX = centerX + Math.cos(angle) * (outerRadius - lineLength);
+                const innerY = centerY + Math.sin(angle) * (outerRadius - lineLength);
 
                 ctx.beginPath();
                 ctx.moveTo(outerX, outerY);
@@ -469,7 +490,7 @@ export class BallRenderer3D {
 
         // Draw number text (on top of everything)
         ctx.fillStyle = options.numberTextColor || '#000000';
-        ctx.font = `bold ${textureSize * 0.50}px Arial`;
+        ctx.font = `bold ${textureSize * 0.50 * numberScale}px Arial`; // Scale number size
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(number.toString(), centerX, centerY + textureSize * 0.02);
@@ -608,7 +629,9 @@ export class BallRenderer3D {
         const hasCustomOptions = ball.numberCircleColor || ball.numberTextColor ||
                                  ball.numberBorder || ball.stripeBackgroundColor ||
                                  ball.showNumber === false || ball.numberCircleRadialLines > 0 ||
-                                 ball.stripeThickness !== 0.55 || ball.numberCircleRadius !== 0.66;
+                                 ball.stripeThickness !== 0.55 || ball.numberCircleRadius !== 0.66 ||
+                                 ball.borderWidth !== 1.0 || ball.numberScale !== 1.0 ||
+                                 ball.stripeOrientation === 'vertical' || ball.radialLinesColor;
 
         // Build options object for custom balls
         const options = hasCustomOptions ? {
@@ -619,8 +642,12 @@ export class BallRenderer3D {
             numberBorder: ball.numberBorder,
             numberBorderColor: ball.numberBorderColor,
             numberCircleRadialLines: ball.numberCircleRadialLines || 0,
+            radialLinesColor: ball.radialLinesColor,
             stripeThickness: ball.stripeThickness ?? 0.55,
-            numberCircleRadius: ball.numberCircleRadius ?? 0.66
+            numberCircleRadius: ball.numberCircleRadius ?? 0.66,
+            borderWidth: ball.borderWidth ?? 1.0,
+            numberScale: ball.numberScale ?? 1.0,
+            stripeOrientation: ball.stripeOrientation || 'horizontal'
         } : null;
 
         // Use cached frames (works for both standard and custom balls now)

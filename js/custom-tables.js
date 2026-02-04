@@ -129,6 +129,6 @@ export class CustomTableManager {
 
     // Check if a colorize overlay exists for a base table
     hasColorizeOverlay(baseTable) {
-        return [1, 2, 3, 4, 8, 9].includes(baseTable);
+        return [1, 2, 3, 4, 7, 8, 9].includes(baseTable);
     }
 }

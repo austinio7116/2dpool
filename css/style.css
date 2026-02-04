@@ -2700,31 +2700,22 @@ body {
 .hud-nomination {
     display: flex;
     align-items: center;
-    gap: 4px;
-    padding: 2px 8px;
+    gap: 2px;
+    padding: 1px 6px;
     background: rgba(255, 255, 255, 0.1);
-    border-radius: 4px;
+    border-radius: 3px;
     font-size: 0.65rem;
-    color: #ccc;
 }
 
 .hud-nomination.hidden {
     display: none;
 }
 
-.hud-nomination .nom-color-dot {
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    border: 1px solid rgba(255, 255, 255, 0.4);
+.hud-nomination .target-dot {
+    width: 8px;
+    height: 8px;
+    margin-right: 1px;
 }
-
-.hud-nomination .nom-color-dot.yellow { background: #FFD700; }
-.hud-nomination .nom-color-dot.green { background: #228B22; }
-.hud-nomination .nom-color-dot.brown { background: #8B4513; }
-.hud-nomination .nom-color-dot.blue { background: #0066cc; }
-.hud-nomination .nom-color-dot.pink { background: #FF69B4; }
-.hud-nomination .nom-color-dot.black { background: #1a1a1a; border-color: #666; }
 
 /* ============================================
    MOBILE RESPONSIVE - SNOOKER DECISION/NOMINATION
@@ -2771,12 +2762,14 @@ body {
     }
 
     .hud-nomination {
-        padding: 1px 6px;
+        padding: 1px 4px;
         font-size: 0.55rem;
+        gap: 1px;
     }
 
-    .hud-nomination .nom-color-dot {
-        width: 8px;
-        height: 8px;
+    .hud-nomination .target-dot {
+        width: 6px;
+        height: 6px;
+        margin-right: 0;
     }
 }

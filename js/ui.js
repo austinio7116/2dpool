@@ -3137,24 +3137,9 @@ export class UI {
             return;
         }
 
-        // Color mapping for visual indicator
-        const colorMap = {
-            'yellow': '#ffff00',
-            'green': '#00aa00',
-            'brown': '#8b4513',
-            'blue': '#0000ff',
-            'pink': '#ff69b4',
-            'black': '#000000'
-        };
-
-        const colorHex = colorMap[colorName] || '#ffffff';
-
-        // Update the indicator
+        // Update the indicator using the same target-dot style as the ball-on display
+        const displayName = colorName.charAt(0).toUpperCase() + colorName.slice(1);
         this.hudSnookerNomination.classList.remove('hidden');
-        this.hudSnookerNomination.innerHTML = `
-            <span class="nomination-label">Nominated:</span>
-            <span class="nomination-ball" style="background-color: ${colorHex}; border: 2px solid ${colorName === 'yellow' ? '#ccc' : '#fff'}"></span>
-            <span class="nomination-name">${colorName.charAt(0).toUpperCase() + colorName.slice(1)}</span>
-        `;
+        this.hudSnookerNomination.innerHTML = `<span class="target-dot target-${colorName}"></span> ${displayName}`;
     }
 }

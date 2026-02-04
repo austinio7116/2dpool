@@ -95,11 +95,36 @@ export class AI {
         // Shot tracking for data collection
         this.pendingShot = null;  // Current shot being tracked
         this.shotHistory = [];    // All tracked shots
+
+        // Track last shot that resulted in a foul (to avoid repeated fouls)
+        this.lastFoulShot = null;  // { targetId, pocketIndex, cutAngle, direction }
+        this.lastExecutedShot = null;  // Most recent shot executed (for foul tracking)
     }
 
     // Clear visualization when shot completes
     clearVisualization() {
         this.visualization = null;
+    }
+
+    // Record that the AI's last shot resulted in a foul (called from main.js)
+    recordFoul(shot) {
+        // Use provided shot or fall back to lastExecutedShot
+        const foulShot = shot || this.lastExecutedShot;
+        if (foulShot && foulShot.target) {
+            this.lastFoulShot = {
+                targetId: foulShot.target.id || foulShot.target.number,
+                pocketIndex: foulShot.pocket ? this.table.pockets.indexOf(foulShot.pocket) : -1,
+                cutAngle: foulShot.cutAngle || 0,
+                direction: foulShot.direction ? Vec2.clone(foulShot.direction) : null,
+                isSafetyShot: foulShot.isSafetyShot || false
+            };
+            aiLog('Recorded foul shot:', this.lastFoulShot);
+        }
+    }
+
+    // Clear foul tracking (called when AI successfully completes a shot without fouling)
+    clearFoulTracking() {
+        this.lastFoulShot = null;
     }
 
     // Get current visualization for rendering
@@ -1795,21 +1820,46 @@ export class AI {
 
         if (shots.length === 0) return null;
 
+        // Filter out or deprioritize shots that match the last foul shot
+        let availableShots = shots;
+        if (this.lastFoulShot && shots.length > 1) {
+            const nonFoulShots = shots.filter(shot => !this.isSameShotAsFoul(shot));
+            if (nonFoulShots.length > 0) {
+                aiLog('Avoiding previous foul shot - filtered from', shots.length, 'to', nonFoulShots.length, 'options');
+                availableShots = nonFoulShots;
+            } else {
+                // All shots match the foul - will add angle variation in executeShot
+                aiLog('All shots similar to foul shot - will add angle variation');
+            }
+        }
+
         switch (settings.shotSelection) {
             case 'random':
                 // Pick randomly from top 50%
-                const topHalf = shots.slice(0, Math.ceil(shots.length / 2));
+                const topHalf = availableShots.slice(0, Math.ceil(availableShots.length / 2));
                 return topHalf[Math.floor(Math.random() * topHalf.length)];
 
             case 'top3':
                 // Pick best from top 3
-                const top3 = shots.slice(0, Math.min(3, shots.length));
+                const top3 = availableShots.slice(0, Math.min(3, availableShots.length));
                 return top3[Math.floor(Math.random() * top3.length)];
 
             case 'optimal':
             default:
-                return shots[0];
+                return availableShots[0];
         }
+    }
+
+    // Check if a shot is the same as the last foul shot
+    isSameShotAsFoul(shot) {
+        if (!this.lastFoulShot) return false;
+
+        const targetId = shot.target.id || shot.target.number;
+        const pocketIndex = this.table.pockets.indexOf(shot.pocket);
+
+        // Same target ball and same pocket = same shot
+        return targetId === this.lastFoulShot.targetId &&
+               pocketIndex === this.lastFoulShot.pocketIndex;
     }
 
     // Calculate power needed for the shot
@@ -1867,7 +1917,15 @@ export class AI {
         let direction = directionAfterThrow;
 
         // Apply aim error based on difficulty (still as angle, but this is intentional variance)
-        const aimError = (Math.random() - 0.5) * 2 * settings.aimError * (Math.PI / 180);
+        let aimError = (Math.random() - 0.5) * 2 * settings.aimError * (Math.PI / 180);
+
+        // If this shot is the same as the last foul shot, add extra angle variation to try something different
+        if (this.isSameShotAsFoul(shot)) {
+            const foulAvoidanceAngle = (Math.random() > 0.5 ? 1 : -1) * (2 + Math.random() * 3) * (Math.PI / 180);
+            aimError += foulAvoidanceAngle;
+            aiLog('Foul avoidance: adding', (foulAvoidanceAngle * 180 / Math.PI).toFixed(2) + '° to avoid repeating foul');
+        }
+
         direction = Vec2.rotate(direction, aimError);
         direction = Vec2.normalize(direction);
         aiLog('Aim error applied:', (aimError * 180 / Math.PI).toFixed(2) + '°');
@@ -1918,6 +1976,9 @@ export class AI {
             cueBallToTargetDist: cueBallToTargetDist,
             difficulty: this.difficulty
         };
+
+        // Store last executed shot for foul tracking
+        this.lastExecutedShot = shot;
 
         aiLogGroupEnd();
         if (this.onShot) {
@@ -2113,6 +2174,14 @@ export class AI {
             }
         }
 
+        // SAFETY CHECK: Never apply topspin on straight shots (≤1 degree cut angle)
+        // Topspin on a straight shot will follow the object ball into the pocket (scratch)
+        if (shot.cutAngle <= 1 && spinY < 0) {
+            aiLog('OVERRIDE: Preventing topspin on straight shot (cut ≤ 1°) - using stun instead');
+            spinY = 0;
+            reason = 'straight shot - topspin blocked to prevent scratch';
+        }
+
         aiLog('DECISION: spin.y =', spinY.toFixed(2), '| Reason:', reason);
         aiLogGroupEnd();
         return { x: 0, y: spinY };
@@ -2295,13 +2364,31 @@ export class AI {
                       '| Power:', escapeShot.power.toFixed(1));
 
                 const settings = DIFFICULTY_SETTINGS[this.difficulty];
-                const aimError = (Math.random() - 0.5) * 2 * settings.aimError * (Math.PI / 180);
+                let aimError = (Math.random() - 0.5) * 2 * settings.aimError * (Math.PI / 180);
+
+                // Check if we fouled on the same escape attempt before
+                const targetId = escapeShot.target.id || escapeShot.target.number;
+                if (this.lastFoulShot && this.lastFoulShot.targetId === targetId && this.lastFoulShot.isSafetyShot) {
+                    const foulAvoidanceAngle = (Math.random() > 0.5 ? 1 : -1) * (5 + Math.random() * 10) * (Math.PI / 180);
+                    aimError += foulAvoidanceAngle;
+                    aiLog('Foul avoidance: adding', (foulAvoidanceAngle * 180 / Math.PI).toFixed(1) + '° to escape shot');
+                }
+
                 const adjustedDir = Vec2.rotate(escapeShot.direction, aimError);
 
                 let power = escapeShot.power;
                 const powerError = (Math.random() - 0.5) * 2 * settings.powerError;
                 power = power * (1 + powerError);
                 power = Math.max(5, Math.min(40, power));
+
+                // Track escape shot for foul avoidance
+                this.lastExecutedShot = {
+                    target: escapeShot.target,
+                    pocket: { position: escapeShot.target.position },
+                    cutAngle: 0,
+                    direction: Vec2.clone(escapeShot.direction),
+                    isSafetyShot: true
+                };
 
                 aiLogGroupEnd();
                 if (this.onShot) {
@@ -2333,7 +2420,16 @@ export class AI {
             const settings = DIFFICULTY_SETTINGS[this.difficulty];
 
             // Apply aim error based on difficulty
-            const aimError = (Math.random() - 0.5) * 2 * settings.aimError * (Math.PI / 180);
+            let aimError = (Math.random() - 0.5) * 2 * settings.aimError * (Math.PI / 180);
+
+            // Check if we fouled on a similar safety before
+            const targetId = safetyShot.target.id || safetyShot.target.number;
+            if (this.lastFoulShot && this.lastFoulShot.targetId === targetId && this.lastFoulShot.isSafetyShot) {
+                const foulAvoidanceAngle = (Math.random() > 0.5 ? 1 : -1) * (5 + Math.random() * 10) * (Math.PI / 180);
+                aimError += foulAvoidanceAngle;
+                aiLog('Foul avoidance: adding', (foulAvoidanceAngle * 180 / Math.PI).toFixed(1) + '° to safety shot');
+            }
+
             const adjustedDir = Vec2.rotate(safetyShot.direction, aimError);
 
             // Apply power error
@@ -2345,6 +2441,15 @@ export class AI {
                 const drawStrength = Math.min(1, Math.abs(spin.y)); // 0..1
                 power *= (1 + 0.20 * drawStrength); // +0%..+20%
             }
+
+            // Track safety shot for foul avoidance
+            this.lastExecutedShot = {
+                target: safetyShot.target,
+                pocket: { position: safetyShot.target.position },
+                cutAngle: safetyShot.contactAngle || 0,
+                direction: Vec2.clone(safetyShot.direction),
+                isSafetyShot: true
+            };
 
             aiLogGroupEnd();
             if (this.onShot) {
@@ -2374,8 +2479,26 @@ export class AI {
             if (desperateEscape) {
                 aiLog('Desperate escape attempt');
                 const settings = DIFFICULTY_SETTINGS[this.difficulty];
-                const aimError = (Math.random() - 0.5) * 2 * settings.aimError * (Math.PI / 180);
+                let aimError = (Math.random() - 0.5) * 2 * settings.aimError * (Math.PI / 180);
+
+                // Check if we fouled on the same escape attempt before
+                const targetId = desperateEscape.target.id || desperateEscape.target.number;
+                if (this.lastFoulShot && this.lastFoulShot.targetId === targetId && this.lastFoulShot.isSafetyShot) {
+                    const foulAvoidanceAngle = (Math.random() > 0.5 ? 1 : -1) * (10 + Math.random() * 20) * (Math.PI / 180);
+                    aimError += foulAvoidanceAngle;
+                    aiLog('Foul avoidance: adding', (foulAvoidanceAngle * 180 / Math.PI).toFixed(1) + '° to desperate escape');
+                }
+
                 const adjustedDir = Vec2.rotate(desperateEscape.direction, aimError);
+
+                // Track escape shot for foul avoidance
+                this.lastExecutedShot = {
+                    target: desperateEscape.target,
+                    pocket: { position: desperateEscape.target.position },
+                    cutAngle: 0,
+                    direction: Vec2.clone(desperateEscape.direction),
+                    isSafetyShot: true
+                };
 
                 aiLogGroupEnd();
                 if (this.onShot) {
@@ -2410,8 +2533,28 @@ export class AI {
         const power = Math.max(8, Math.min(14, 6 + bestDist / 80));
 
         const settings = DIFFICULTY_SETTINGS[this.difficulty];
-        const aimError = (Math.random() - 0.5) * 2 * settings.aimError * (Math.PI / 180);
+        let aimError = (Math.random() - 0.5) * 2 * settings.aimError * (Math.PI / 180);
+
+        // Check if this is the same target we fouled on last time
+        const targetId = bestTarget.id || bestTarget.number;
+        if (this.lastFoulShot && this.lastFoulShot.targetId === targetId) {
+            // Add significant angle variation to try a different approach
+            // Try to come at the ball from a different angle (±15-30 degrees)
+            const foulAvoidanceAngle = (Math.random() > 0.5 ? 1 : -1) * (15 + Math.random() * 15) * (Math.PI / 180);
+            aimError += foulAvoidanceAngle;
+            aiLog('Foul avoidance: adding', (foulAvoidanceAngle * 180 / Math.PI).toFixed(1) + '° to try different approach');
+        }
+
         const adjustedDir = Vec2.rotate(direction, aimError);
+
+        // Store this as a safety shot for foul tracking (use pocket index -1 to indicate safety)
+        this.lastExecutedShot = {
+            target: bestTarget,
+            pocket: { position: bestTarget.position }, // Dummy pocket for safety shots
+            cutAngle: 0,
+            direction: Vec2.clone(direction),
+            isSafetyShot: true
+        };
 
         aiLogGroupEnd();
         if (this.onShot) {
@@ -3194,136 +3337,6 @@ export class AI {
         const perpDist = Vec2.distance(ball.position, closestPoint);
 
         return perpDist < blockRadius;
-    }
-
-    // ==========================================
-    // Shot Tracking Methods (for data collection)
-    // ==========================================
-
-    /**
-     * Called when the cue ball collides with a target ball during an AI shot.
-     * Records the actual ball trajectory for comparison with intended trajectory.
-     * @param {Object} targetBall - The ball that was hit
-     * @param {Object} targetVelocity - The velocity vector of the target ball after collision {x, y}
-     */
-    recordShotCollision(targetBall, targetVelocity) {
-        if (!this.pendingShot) return;
-
-        // Only record if this is the target ball we were aiming at
-        if (targetBall !== this.pendingShot.targetBall) return;
-
-        // Calculate actual travel angle from velocity vector
-        const actualAngle = Math.atan2(targetVelocity.y, targetVelocity.x) * 180 / Math.PI;
-
-        // Calculate angle error (difference between intended and actual)
-        let angleError = actualAngle - this.pendingShot.intendedAngle;
-        // Normalize to -180 to 180
-        while (angleError > 180) angleError -= 360;
-        while (angleError < -180) angleError += 360;
-
-        // Complete the shot record
-        const shotRecord = {
-            timestamp: this.pendingShot.timestamp,
-            intendedAngle: this.pendingShot.intendedAngle,
-            actualAngle: actualAngle,
-            angleError: angleError,
-            power: this.pendingShot.power,
-            spinY: this.pendingShot.spinY,
-            cutAngle: this.pendingShot.cutAngle,
-            cueBallToTargetDist: this.pendingShot.cueBallToTargetDist,
-            difficulty: this.pendingShot.difficulty,
-            targetBallVelocity: { x: targetVelocity.x, y: targetVelocity.y }
-        };
-
-        this.shotHistory.push(shotRecord);
-        console.log('[AI Shot Tracker] Recorded shot:', shotRecord);
-
-        // Clear pending shot
-        this.pendingShot = null;
-    }
-
-    /**
-     * Get all recorded shot data
-     * @returns {Array} Array of shot records
-     */
-    getShotHistory() {
-        return this.shotHistory;
-    }
-
-    /**
-     * Clear all recorded shot data
-     */
-    clearShotHistory() {
-        this.shotHistory = [];
-        console.log('[AI Shot Tracker] History cleared');
-    }
-
-    /**
-     * Export shot data as JSON string
-     * @returns {string} JSON string of shot data
-     */
-    exportShotDataJSON() {
-        return JSON.stringify(this.shotHistory, null, 2);
-    }
-
-    /**
-     * Export shot data as CSV string
-     * @returns {string} CSV string of shot data
-     */
-    exportShotDataCSV() {
-        if (this.shotHistory.length === 0) return '';
-
-        const headers = [
-            'timestamp',
-            'intendedAngle',
-            'actualAngle',
-            'angleError',
-            'power',
-            'spinY',
-            'cutAngle',
-            'cueBallToTargetDist',
-            'difficulty',
-            'targetVelocityX',
-            'targetVelocityY'
-        ];
-
-        const rows = this.shotHistory.map(shot => [
-            shot.timestamp,
-            shot.intendedAngle.toFixed(4),
-            shot.actualAngle.toFixed(4),
-            shot.angleError.toFixed(4),
-            shot.power.toFixed(4),
-            shot.spinY.toFixed(4),
-            shot.cutAngle.toFixed(4),
-            shot.cueBallToTargetDist.toFixed(4),
-            shot.difficulty,
-            shot.targetBallVelocity.x.toFixed(4),
-            shot.targetBallVelocity.y.toFixed(4)
-        ].join(','));
-
-        return [headers.join(','), ...rows].join('\n');
-    }
-
-    /**
-     * Download shot data as a file
-     * @param {string} format - 'json' or 'csv'
-     */
-    downloadShotData(format = 'json') {
-        const data = format === 'csv' ? this.exportShotDataCSV() : this.exportShotDataJSON();
-        const mimeType = format === 'csv' ? 'text/csv' : 'application/json';
-        const filename = `ai_shot_data_${Date.now()}.${format}`;
-
-        const blob = new Blob([data], { type: mimeType });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-
-        console.log(`[AI Shot Tracker] Downloaded ${this.shotHistory.length} shots as ${filename}`);
     }
 
     // Randomize who breaks (called at game start when AI is enabled)

@@ -540,7 +540,11 @@ class PoolGame {
                 this.input.setCanShoot(false);
                 setTimeout(() => this.ai.takeTurn(), 300);
             } else {
-                // Human player's turn
+                // Human player's turn - AI must have completed their shot without fouling
+                // Clear AI's foul tracking since they didn't foul
+                if (this.ai.enabled && !this.game.foul) {
+                    this.ai.clearFoulTracking();
+                }
                 this.input.setCanShoot(true);
             }
         } else if (state === GameState.AWAITING_DECISION) {
@@ -555,6 +559,11 @@ class PoolGame {
     handleFoul(reason, isMiss = false) {
         this.ui.showFoul(reason, isMiss);
         this.audio.playScratch();
+
+        // If the AI (player 2) committed this foul, record it for foul avoidance
+        if (this.ai.enabled && this.game.currentPlayer === 2) {
+            this.ai.recordFoul();
+        }
     }
 
     handleGameOver(winner, reason, match) {

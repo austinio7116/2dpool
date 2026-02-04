@@ -1810,6 +1810,9 @@ export class UI {
         this.ballGroups.style.cssText = '';
         this.ballGroups.innerHTML = ''; // Clear previous content
         this.last9BallState = null;
+        if (this.hudSnookerNomination && mode !== GameMode.SNOOKER) {
+            this.hudSnookerNomination.classList.add('hidden');
+        }
 
         // Initialize new unified HUD
         if (this.hudInfoPanel) {

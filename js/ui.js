@@ -2719,8 +2719,8 @@ export class UI {
             if (p2Canvas) this.p2BallGroup.appendChild(p2Canvas);
         } else if (gameInfo.mode === GameMode.UK_EIGHT_BALL) {
             // UK 8-ball: group1 (2) or group2 (10) - use non-yellow balls for contrast
-            const p1BallNum = p1GroupType === 'group1' ? 2 : 10;
-            const p2BallNum = p2GroupType === 'group1' ? 2 : 10;
+            const p1BallNum = p1GroupType === 'group1' ? 2 : 11;
+            const p2BallNum = p2GroupType === 'group1' ? 2 : 11;
 
             // Ensure we have a ball set to render with
             const ballSet = this.selectedBallSet || PREDEFINED_BALL_SETS[0];

@@ -492,11 +492,24 @@ export class AI {
         setTimeout(() => {
             let position = this.findBestCueBallPosition();
 
+            // Determine placement mode (must match main.js placeCueBall logic)
+            let placementMode = 'anywhere';
+            if (this.game.mode === GameMode.SNOOKER) {
+                placementMode = 'dzone';
+            } else if (this.game.isBreakShot || this.game.mode === GameMode.UK_EIGHT_BALL) {
+                placementMode = 'kitchen';
+            }
+
             // Validate position can actually be placed
-            const kitchenOnly = this.game.isBreakShot || this.game.mode === GameMode.UK_EIGHT_BALL;
-            if (position && !this.game.canPlaceCueBall(position, kitchenOnly)) {
-                // Fallback to a valid kitchen position if our chosen position fails
-                position = this.table.findValidKitchenPosition(this.game.balls, this.table.center.y);
+            if (position && !this.game.canPlaceCueBall(position, placementMode)) {
+                // Fallback to a valid position based on placement mode
+                if (placementMode === 'dzone') {
+                    position = this.table.findValidDPosition(this.game.balls, this.table.center.y);
+                } else if (placementMode === 'kitchen') {
+                    position = this.table.findValidKitchenPosition(this.game.balls, this.table.center.y);
+                } else {
+                    position = this.table.findValidCueBallPosition(this.game.balls, this.table.center.y);
+                }
             }
 
             if (this.onBallPlacement && position) {
@@ -592,38 +605,40 @@ export class AI {
         return bestPosition || this.table.findValidCueBallPosition(this.game.balls, this.table.center.y);
     }
 
-    // Get snooker break position - between green and yellow spots
+    // Get snooker break position - on the line between yellow and brown spots
     getSnookerBreakPosition() {
         const tableCenter = this.table.center;
         const spots = this.table.spots;
 
-        if (spots && spots.yellow && spots.green) {
-            // Spots are relative to table center
-            const yellowAbsolute = {
-                x: tableCenter.x + spots.yellow.x,
-                y: tableCenter.y + spots.yellow.y
-            };
-            const greenAbsolute = {
-                x: tableCenter.x + spots.green.x,
-                y: tableCenter.y + spots.green.y
-            };
-
-            // Position between green and yellow, but offset toward yellow to avoid brown ball
-            // (Brown is at the exact center between green and yellow)
-            // Use 70/30 split to ensure we're far enough from brown (need > 2 ball radii)
-            const position = {
-                x: (yellowAbsolute.x + greenAbsolute.x) / 2 + (Math.random() - 0.5) * -3,
-                y: yellowAbsolute.y * 0.7 + greenAbsolute.y * 0.3 + (Math.random() - 0.5) * 3 // 70% toward yellow
-            };
-
-            // Verify position is valid before returning
-            if (this.game.canPlaceCueBall(position, true)) {
-                return position;
-            }
+        if (!spots || !spots.yellow || !spots.brown) {
+            return this.table.findValidDPosition(this.game.balls, this.table.center.y);
         }
 
-        // Fallback to default kitchen position
-        return this.table.findValidKitchenPosition(this.game.balls, this.table.center.y);
+        const ballRadius = this.game.cueBall?.radius || 10;
+        const minGap = ballRadius * 2 + 5; // At least 5px gap from touching either ball
+
+        // Get absolute positions
+        const yellowY = tableCenter.y + spots.yellow.y;
+        const brownY = tableCenter.y + spots.brown.y;
+        const x = tableCenter.x + spots.yellow.x; // Yellow and brown share same x (baulk line)
+
+        // Determine which is lower/higher y value
+        const lowerY = Math.min(yellowY, brownY);
+        const upperY = Math.max(yellowY, brownY);
+
+        // Available range between the two balls (with gap from each)
+        const rangeStart = lowerY + minGap;
+        const rangeEnd = upperY - minGap;
+
+        if (rangeStart >= rangeEnd) {
+            // Not enough space, use midpoint
+            return { x, y: (yellowY + brownY) / 2 };
+        }
+
+        // Random position between yellow and brown
+        const y = rangeStart + Math.random() * (rangeEnd - rangeStart);
+
+        return { x, y };
     }
 
     // Find best position within the D-zone for snooker ball-in-hand

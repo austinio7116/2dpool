@@ -449,6 +449,29 @@ class PoolGame {
             this.input.exitBallInHandMode();
             this.input.setCanShoot(true);
             this.input.resetSpin();
+        } else {
+
+            // If AI attempted placement and failed, fall back to a valid position
+            // This handles cases where AI calculates an invalid position (e.g., outside D-zone)
+            if (this.ai.enabled && this.game.currentPlayer === 2 &&
+                this.game.state === GameState.BALL_IN_HAND) {
+
+                let validPos;
+                if (placementMode === 'dzone') {
+                    validPos = this.table.findValidDPosition(this.game.balls, this.table.center.y);
+                } else if (placementMode === 'kitchen') {
+                    validPos = this.table.findValidKitchenPosition(this.game.balls, this.table.center.y);
+                } else {
+                    validPos = this.table.findValidCueBallPosition(this.game.balls, this.table.center.y);
+                }
+
+                if (validPos && this.game.canPlaceCueBall(validPos, placementMode)) {
+                    this.game.placeCueBall(validPos, placementMode);
+                    this.input.exitBallInHandMode();
+                    this.input.setCanShoot(false); // AI will shoot next
+                    this.input.resetSpin();
+                }
+            }
         }
     }
 

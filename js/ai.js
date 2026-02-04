@@ -1157,7 +1157,7 @@ export class AI {
         // Reject shots with extreme cut angles (over 60 degrees is very difficult)
         // Exception: allow up to 75 degrees if ball is very close to pocket
         const isNearPocket = distanceToPocket < ballRadius * 4; // Within ~4 ball widths
-        const maxCutAngle = isNearPocket ? 80 : 75;
+        const maxCutAngle = isNearPocket ? 75 : 70;
 
         if (cutAngleDeg > maxCutAngle) {
             return null;

@@ -1099,6 +1099,11 @@ export class Game {
         }
 
         // 4. Calculate Score (Only if NO foul)
+        // Track if the free ball was potted (need to check before clearing state)
+        const freeBallWasPotted = this.isFreeBall && this.freeBallNomination &&
+            pocketed.includes(this.freeBallNomination);
+        const pottedFreeBall = freeBallWasPotted ? this.freeBallNomination : null;
+
         if (!isFoul) {
             for (const b of pocketed) {
                 if (b.isCueBall) continue;
@@ -1190,11 +1195,20 @@ export class Game {
             this.highestBreak = Math.max(this.highestBreak, this.currentBreak);
 
             // Respotting on Valid Pot:
+            // Free ball colour must ALWAYS be respotted, even in colors phase
+            if (pottedFreeBall && pottedFreeBall.isColor) {
+                this.respotSingleBall(pottedFreeBall);
+            }
+            // Normal respotting: colors respot during reds phase, not during clearance
             const isClearance = this.colorsPhase;
-            this.respotSnookerBalls(pocketed, !isClearance);
+            const ballsToRespot = pottedFreeBall
+                ? pocketed.filter(b => b !== pottedFreeBall)  // Exclude already-respotted free ball
+                : pocketed;
+            this.respotSnookerBalls(ballsToRespot, !isClearance);
 
             // Determine Next Target
-            this.advanceSnookerTargetState(pocketed);
+            // Pass free ball info so it's treated as if the ball-on was potted
+            this.advanceSnookerTargetState(pocketed, pottedFreeBall);
 
             // Clear nomination after potting a color
             if (this.snookerTarget === 'red') {
@@ -1633,11 +1647,16 @@ export class Game {
     }
 
     // --- Helper: State Machine for Targets ---
-    advanceSnookerTargetState(pocketedBalls) {
+    advanceSnookerTargetState(pocketedBalls, pottedFreeBall = null) {
         const redsRemaining = this.getActualRedsRemaining();
-        
+
         // If we are in Clearance Phase (no reds left, potting colors in order)
         if (this.colorsPhase) {
+            // Free ball in colors phase: acts as the target color, so advance sequence
+            if (pottedFreeBall) {
+                this.advanceSequence();
+                return;
+            }
             // If we potted the target, move to next
             const pottedTarget = pocketedBalls.find(b => b.colorName === this.snookerTarget);
             if (pottedTarget) {
@@ -1647,10 +1666,11 @@ export class Game {
         }
 
         // Standard Phase (Red -> Color -> Red)
-        const pottedRed = pocketedBalls.some(b => b.isRed);
-        
+        // Free ball during reds phase: treat as if a red was potted
+        const pottedRed = pocketedBalls.some(b => b.isRed) || pottedFreeBall;
+
         if (pottedRed) {
-            // Potted a Red? Next target is Any Color
+            // Potted a Red (or free ball acting as red)? Next target is Any Color
             this.snookerTarget = 'color';
         } else {
             // Potted a Color?

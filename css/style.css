@@ -515,8 +515,8 @@ body {
 }
 
 .ball-set-option .set-preview canvas {
-    width: 22px;
-    height: 22px;
+    width: 36px;
+    height: 36px;
 }
 
 .ball-set-option .set-name {
@@ -894,8 +894,8 @@ body {
 }
 
 .preview-balls canvas {
-    width: 22px;
-    height: 22px;
+    width: 36px;
+    height: 36px;
 }
 
 /* Creator V2 Layout */
@@ -2517,6 +2517,11 @@ body {
     .ball-groups-9ball {
         bottom: 6px !important;
         left: 75% !important;
+    }
+
+    .ball-groups-9ball canvas{
+        width: 32px !important;
+        height: 32px !important;
     }
 }
 /* Loading spinner */

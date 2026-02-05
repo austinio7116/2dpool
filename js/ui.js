@@ -886,7 +886,7 @@ export class UI {
         const previewBalls = this.ballSetManager.getPreviewBalls(this.selectedBallSet);
 
         for (const ballNum of previewBalls) {
-            const canvas = this.renderBallPreviewCanvas(ballNum, this.selectedBallSet, 24);
+            const canvas = this.renderBallPreviewCanvas(ballNum, this.selectedBallSet, 32);
             if (canvas) {
                 this.ballSetPreview.appendChild(canvas);
             }
@@ -894,7 +894,7 @@ export class UI {
     }
 
     // Render a single ball preview to a canvas
-    renderBallPreviewCanvas(ballNumber, ballSet, size = 24) {
+    renderBallPreviewCanvas(ballNumber, ballSet, size = 32) {
         const config = this.ballSetManager.getBallConfig(ballSet, ballNumber);
         if (!config) return null;
 
@@ -1031,7 +1031,7 @@ export class UI {
 
             const previewBalls = this.ballSetManager.getPreviewBalls(set);
             for (const ballNum of previewBalls) {
-                const canvas = this.renderBallPreviewCanvas(ballNum, set, 22);
+                const canvas = this.renderBallPreviewCanvas(ballNum, set, 48);
                 if (canvas) {
                     previewDiv.appendChild(canvas);
                 }
@@ -1671,7 +1671,7 @@ export class UI {
         const previewBalls = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
 
         for (const ballNum of previewBalls) {
-            const canvas = this.renderBallPreviewCanvas(ballNum, tempSet, 22);
+            const canvas = this.renderBallPreviewCanvas(ballNum, tempSet, 32);
             if (canvas) {
                 this.creatorPreviewBalls.appendChild(canvas);
             }
@@ -2125,7 +2125,7 @@ export class UI {
             container.className = `ball-group ${isActive ? 'active-turn' : ''}`;
             
             const repBallNum = groupType === 'solid' ? 1 : 9;
-            const canvas = this.renderBallPreviewCanvas(repBallNum, this.selectedBallSet, 22);
+            const canvas = this.renderBallPreviewCanvas(repBallNum, this.selectedBallSet, 24);
             
             if (canvas) {
                 container.appendChild(canvas);
@@ -2232,7 +2232,7 @@ export class UI {
 
             for (const ballNum of railSequence) {
                 // Rail Ball Size 16px
-                const smallCanvas = this.renderBallPreviewCanvas(ballNum, this.selectedBallSet, 16);
+                const smallCanvas = this.renderBallPreviewCanvas(ballNum, this.selectedBallSet, 24);
                 if (smallCanvas) {
                     smallCanvas.style.opacity = '0.7';
                     railWrapper.appendChild(smallCanvas);
@@ -2262,7 +2262,7 @@ export class UI {
             container.className = `ball-group ${isActive ? 'active-turn' : ''}`;
 
             const repBallNum = group === 'group1' ? 1 : 9;
-            const canvas = this.renderBallPreviewCanvas(repBallNum, this.selectedBallSet, 22);
+            const canvas = this.renderBallPreviewCanvas(repBallNum, this.selectedBallSet, 24);
             
             if (canvas) {
                 container.appendChild(canvas);
@@ -2712,8 +2712,8 @@ export class UI {
             // Ensure we have a ball set to render with
             const ballSet = this.selectedBallSet || PREDEFINED_BALL_SETS[0];
 
-            const p1Canvas = this.renderBallPreviewCanvas(p1BallNum, ballSet, 28);
-            const p2Canvas = this.renderBallPreviewCanvas(p2BallNum, ballSet, 28);
+            const p1Canvas = this.renderBallPreviewCanvas(p1BallNum, ballSet, 64);
+            const p2Canvas = this.renderBallPreviewCanvas(p2BallNum, ballSet, 64);
 
             if (p1Canvas) this.p1BallGroup.appendChild(p1Canvas);
             if (p2Canvas) this.p2BallGroup.appendChild(p2Canvas);
@@ -2725,8 +2725,8 @@ export class UI {
             // Ensure we have a ball set to render with
             const ballSet = this.selectedBallSet || PREDEFINED_BALL_SETS[0];
 
-            const p1Canvas = this.renderBallPreviewCanvas(p1BallNum, ballSet, 28);
-            const p2Canvas = this.renderBallPreviewCanvas(p2BallNum, ballSet, 28);
+            const p1Canvas = this.renderBallPreviewCanvas(p1BallNum, ballSet, 64);
+            const p2Canvas = this.renderBallPreviewCanvas(p2BallNum, ballSet, 64);
 
             if (p1Canvas) this.p1BallGroup.appendChild(p1Canvas);
             if (p2Canvas) this.p2BallGroup.appendChild(p2Canvas);

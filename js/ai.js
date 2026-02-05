@@ -1379,7 +1379,7 @@ export class AI {
 
             // Check if ball blocks the path (use slightly smaller margin for better shot finding)
             const ballRadius = ball.radius || 12;
-            const clearance = ballRadius + cueBallRadius - 2; // Allow slight overlap for edge cases
+            const clearance = ballRadius + cueBallRadius ; // Allow slight overlap for edge cases
             if (perpDist < clearance) {
                 return false;
             }

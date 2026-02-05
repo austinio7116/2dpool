@@ -207,11 +207,11 @@ body {
 
 .ball-preview {
     display: flex;
-    gap: 4px;
+    gap: 2px;
     justify-content: center;
     align-items: center;
     flex-wrap: wrap;
-    padding: 10px 8px;
+    padding: 4px 16px;
     aspect-ratio: 2 / 1;
 }
 

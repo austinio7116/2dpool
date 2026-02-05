@@ -996,13 +996,10 @@ export class AI {
         const pockets = this.table.pockets;
         let candidateShots = [];
 
-        
-
         // 1. Identify all geometrically possible pots first
         for (const target of validTargets) {
             for (const pocket of pockets) {
                 // Do a basic geometry check (can we even see the ball?)
-                // We pass 'checkOnly' to avoid expensive calculations yet
                 const baseShot = this.evaluatePotentialShot(cueBall.position, target, pocket, { basicCheck: true });
                 
                 if (baseShot) {
@@ -1013,10 +1010,9 @@ export class AI {
             }
         }
 
-        // If no direct shots, look for banks (keeping existing bank logic simplified for now)
+        // If no direct shots, look for banks
         if (candidateShots.length === 0) {
             aiLog('No direct shots, looking for banks...');
-            // ... (keep your existing bank shot logic here or call a helper)
              for (const target of validTargets) {
                 if (!this.isPathClear(cueBall.position, target.position, [target])) {
                     for (const pocket of pockets) {
@@ -1035,37 +1031,75 @@ export class AI {
         // 3. Sort by Composite Score (Potting Chance + Position Quality)
         candidateShots.sort((a, b) => b.compositeScore - a.compositeScore);
 
-        // 1. Pick the best potting option
-        // (We already sorted them by compositeScore)
-        const bestOption = this.selectShot(candidateShots); // Or candidateShots[0] for optimal
+        // 4. Pick the best potting option
+        const bestOption = this.selectShot(candidateShots); 
 
-        // 2. DEFINE CONFIDENCE THRESHOLD
-        // How risky does a shot need to be before we refuse to take it?
-        // Easy AI: reckless, takes almost anything (Threshold 10)
-        // Medium AI: reasonable (Threshold 30)
-        // Hard AI: disciplined, refuses risky shots (Threshold 55-60)
-        
-        const thresholds = {
-            easy: 60,
-            medium: 70,
-            hard: 80 
+        // 5. DEFINE CONFIDENCE THRESHOLD
+        // Default Thresholds (Snooker)
+        let thresholds = {
+            easy: 40,
+            medium: 50,
+            hard: 60 
         };
+
+        // ADJUSTMENT: For Pool modes (8-ball, 9-ball), lower thresholds by 20
+        // Pool pockets are generally more forgiving, and the table is smaller
+        if (this.game.mode !== GameMode.SNOOKER) {
+            thresholds = {
+                easy: 30,
+                medium: 40,
+                hard: 40 
+            };
+            aiLog('Pool Mode detected: Lowering confidence thresholds by 20 points');
+        }
+
         const minPotConfidence = thresholds[this.difficulty] || 65;
 
-        // 3. THE SAFETY CHECK
-        // Check 'potScore' specifically (pure difficulty), not composite score (which includes position)
+        // 6. THE SAFETY CHECK
         if (bestOption.potScore < minPotConfidence) {
-            aiLog(`⚠️ Shot Rejected: Risk too high.`);
-            aiLog(`   Best pot score: ${bestOption.potScore.toFixed(1)} (Threshold: ${minPotConfidence})`);
-            aiLog(`   Reason: ${bestOption.powerLevel} attempt on ${bestOption.target.colorName || 'ball'}`);
+            aiLog(`⚠️ Shot Confidence Low: ${bestOption.potScore.toFixed(1)} < ${minPotConfidence}`);
+
+            // --- NEW: RESCUE LOGIC START ---
+            // The "Smart" shot (good position) is too risky. 
+            // Check if there is a "Dumb" shot (high pot chance, bad position) that we ignored.
             
-            // OPTIONAL: "Shot to Nothing" Logic
-            // If we are playing Hard mode, we might take a riskier shot (e.g. 40 score) 
-            // IF it has a very high safety rating (it leaves the cue ball safe if we miss).
-            // But for now, returning null is the robust way to force a Safety play.
+            // Look for any shot in our candidates with a very high pot score
+            // (e.g. 15 points higher than threshold)
+            const rescueThreshold = minPotConfidence + 5;
             
+            const safePot = candidateShots.find(s => s.potScore > rescueThreshold);
+            
+            if (safePot) {
+                aiLog(`✅ RECOVERY: Found a guaranteed pot (${safePot.target.colorName || 'ball'} -> ${safePot.potScore.toFixed(0)}) to save the turn.`);
+                aiLog(`   Sacrificing position to ensure the pot.`);
+                aiLogGroupEnd();
+                return safePot;
+            }
+            // --- NEW: RESCUE LOGIC END ---
+
+            aiLog('   Comparing against best available safety...');
+            const opponentTargets = this.getOpponentTargets();
+            const bestSafety = this.findBestSafetyShot(validTargets, opponentTargets);
+
+            // Safety Score logic: 100 = Perfect Snooker, 0 = Left a "hanger" for opponent
+            // Pot Score logic: 100 = Hanger for us, 0 = Impossible cut
+            
+            // If Safety Score is LOWER than our Pot Score, it means the safety is 
+            // riskier/worse than just going for the pot.
+            const safetyQuality = bestSafety ? bestSafety.score : 0;
+
+            const aggressionBias = 25; 
+            
+            if (safetyQuality < (bestOption.potScore + aggressionBias)) {
+                aiLog(`🛑 FORCED ATTACK: Safety (${safetyQuality.toFixed(1)}) is roughly equal to or worse than Pot (${bestOption.potScore.toFixed(1)}).`);
+                aiLog(`   Biasing +${aggressionBias} towards offense to retain table control.`);
+                aiLogGroupEnd();
+                return bestOption;
+            }
+
+            aiLog(`⚠️ Shot Rejected: Safety (${safetyQuality.toFixed(1)}) is the smarter play.`);
             aiLogGroupEnd();
-            return null; // <--- This triggers playSafety() in your main loop
+            return null; // Triggers playSafety()
         }
 
         aiLog(`✅ Shot Accepted: Score ${bestOption.potScore.toFixed(1)} >= ${minPotConfidence}`);
@@ -1078,7 +1112,7 @@ export class AI {
         const variants = [];
         
         // 1. Calculate the "Pure" Geometric Difficulty once
-        const baseDifficulty = this.calculatePottingDifficulty(cueBallPos, target, pocket);
+        const baseDifficulty = this.calculatePottingDifficulty(cueBallPos, target, pocket, true);
 
         // Calculate distances for power scaling
         const distCueToTarget = Vec2.distance(cueBallPos, target.position);
@@ -1134,7 +1168,7 @@ export class AI {
             }
 
             // Variants Weighting
-            const compositeScore = (potScore * 0.4) + (positionScore * 0.6);
+            const compositeScore = (potScore * 0.5) + (positionScore * 0.5);
 
             variants.push({
                 ...baseGeometry,
@@ -1151,64 +1185,106 @@ export class AI {
     }
 
     // Unified physics/geometry evaluator: Returns 0 (Impossible) to 100 (Guaranteed)
-    calculatePottingDifficulty(cueBallPos, targetBall, pocket) {
-        // 1. Basic Geometry
-        const distCueToTarget = Vec2.distance(cueBallPos, targetBall.position);
-        const distTargetToPocket = Vec2.distance(targetBall.position, pocket.position);
+    // Unified physics/geometry evaluator
+    calculatePottingDifficulty(cueBallPos, targetBall, pocket, debug = false) {
+        const ballRadius = targetBall.radius || 12; // Needed for ghost ball calc
+        const cueBallRadius = this.game.cueBall?.radius || 12;
+
+        // 1. Calculate Ghost Ball Position (Crucial Fix)
+        // We aim at the ghost ball, not the center of the target ball
+        const pocketDir = Vec2.normalize(Vec2.subtract(pocket.position, targetBall.position));
+        const ghostBall = Vec2.subtract(targetBall.position, Vec2.multiply(pocketDir, ballRadius + cueBallRadius));
+
+        // 2. Calculate Angle using Ghost Ball
+        // Vector from Cue Ball -> Ghost Ball
+        const aimLine = Vec2.normalize(Vec2.subtract(ghostBall, cueBallPos));
+        // Vector from Target -> Pocket
+        const pocketLine = pocketDir; // Already calculated
         
-        const aimLine = Vec2.normalize(Vec2.subtract(targetBall.position, cueBallPos));
-        const pocketLine = Vec2.normalize(Vec2.subtract(pocket.position, targetBall.position));
         const dot = Vec2.dot(aimLine, pocketLine);
         const cutAngle = Math.acos(Math.max(-1, Math.min(1, dot))) * 180 / Math.PI;
 
-        // 2. Base Score from Angle (0 to 100)
-        // Steep drop-off after 60 degrees
+        const distCueToTarget = Vec2.distance(cueBallPos, targetBall.position);
+        const distTargetToPocket = Vec2.distance(targetBall.position, pocket.position);
+        
+        // Start with perfect score
         let score = 100;
-        if (cutAngle > 80) return 0; // Impossible cut
+        const penalties = {}; 
+
+        // 3. Base Score from Angle (0 to 100)
+        // Cutoff > 80 degrees
+        if (cutAngle > 80) {
+            if (debug) aiLog(`      [${targetBall.number || 'Color'}] IMPOSSIBLE CUT (>80°): ${cutAngle.toFixed(1)}°`);
+            return 0; 
+        }
         
         // Non-linear angle penalty
-        // 0° = 0 penalty, 30° = ~10 penalty, 60° = ~40 penalty
+        // 0° = 0 penalty, 30° = ~12.5 penalty, 60° = ~50 penalty
         const anglePenalty = Math.pow(cutAngle / 60, 2) * 50;
         score -= anglePenalty;
+        penalties.angle = anglePenalty;
 
-        // 3. Distance Factors
-        // A: Cue to Target (Aiming Difficulty)
-        // Long shots are harder to aim precisely
-        const aimingPenalty = Math.max(0, (distCueToTarget - 400) / 10); // -1 pt per 10px over 400
+        // 4. Distance Factors
+        // A: Cue to Ghost Ball (Aiming Difficulty)
+        // Using ghost ball distance is slightly more accurate for thin cuts
+        const distToGhost = Vec2.distance(cueBallPos, ghostBall);
+        const aimingPenalty = Math.max(0, (distToGhost - 150) / 10); 
         score -= aimingPenalty;
+        penalties.aimDist = aimingPenalty / 3; // Less weight than angle
 
-        // B: Target to Pocket (Precision Difficulty) - THE USER REQUEST
-        // If distance is short, margin for error is huge (Very Easy)
-        // If distance is long, margin for error is tiny (Very Hard)
+        // B: Target to Pocket
+        let lengthPenalty = 0;
         if (distTargetToPocket < 150) {
-            score += 15; // Bonus for being close to pocket ("Hanger")
+             lengthPenalty = (distTargetToPocket) / 10;
+             score += lengthPenalty; 
+             penalties.pocketDist = -lengthPenalty; 
         } else if (distTargetToPocket > 600) {
-            score -= 15; // Long pot penalty
+             lengthPenalty = 15; 
+             score -= lengthPenalty;
+             penalties.pocketDist = lengthPenalty;
         } else {
-             // Linear penalty for medium-long range
-             score -= (distTargetToPocket - 150) / 20;
+             lengthPenalty = (distTargetToPocket - 150) / 20;
+             score -= lengthPenalty;
+             penalties.pocketDist = lengthPenalty;
         }
 
-        // 4. Side Pocket Knuckle Penalty
+        // 5. Side Pocket Knuckle Penalty
         if (pocket.type === 'side') {
-            const toPocketDir = Vec2.normalize(Vec2.subtract(pocket.position, targetBall.position));
-            const angleFromRail = Math.asin(Math.abs(toPocketDir.y)) * 180 / Math.PI;
+            const angleFromRail = Math.asin(Math.abs(pocketLine.y)) * 180 / Math.PI;
 
             if (angleFromRail < 45) {
                 // Severe penalty for shallow angles into side pockets
-                // 45° -> 0, 30° -> 20, 15° -> 60
                 const sidePenalty = Math.pow((45 - angleFromRail), 1.7) * 0.8;
                 score -= sidePenalty;
+                penalties.sidePocket = sidePenalty;
             }
         }
 
-        // 5. Blind Pocket Penalty (Optional)
-        // If the cut angle is such that we can't see the pocket? (Visual check)
-        // Usually covered by cutAngle, but extreme cuts are physically harder than math suggests
-        if (cutAngle > 70) score -= 20;
+        // 6. Blind Pocket Penalty
+        if (cutAngle > 70) {
+            score -= 20;
+            penalties.extremeCut = 20;
+        }
 
-        // Clamp 0-100
-        return Math.max(0, Math.min(100, score));
+        const finalScore = Math.max(0, Math.min(100, score));
+
+        if (debug) {
+            const ballName = targetBall.colorName || targetBall.number;
+            const pocketName = pocket.type + (pocket.position.x < this.table.center.x ? '-L' : '-R');
+            
+            let logStr = `   Eval ${ballName}->${pocketName} | Score: ${finalScore.toFixed(0)} | Cut: ${cutAngle.toFixed(1)}°`;
+            
+            logStr += ` | P: Angle -${penalties.angle?.toFixed(0) || 0}`;
+            logStr += ` AimDist -${penalties.aimDist?.toFixed(0) || 0}`;
+            logStr += ` PktDist ${penalties.pocketDist > 0 ? '-' : '+'}${Math.abs(penalties.pocketDist?.toFixed(0) || 0)}`;
+            
+            if (penalties.sidePocket) logStr += ` SideKnuckle -${penalties.sidePocket.toFixed(0)}`;
+            if (penalties.extremeCut) logStr += ` BlindCut -${penalties.extremeCut.toFixed(0)}`;
+            
+            aiLog(logStr);
+        }
+
+        return finalScore;
     }
 
     // Estimate where the cue ball physically stops
@@ -3238,7 +3314,7 @@ export class AI {
                     const minPowerToReach = 5 + (distanceToGhost / 40);
 
                     // Try different power levels
-                    for (const power of [8, 12, 18, 24, 30]) {
+                    for (const power of [4, 8, 12, 18, 24, 30]) {
                         // Skip power levels that won't reach the target ball
                         if (power < minPowerToReach) {
                             continue;
@@ -3332,63 +3408,131 @@ export class AI {
         return firstHitBall === targetBall;
     }
 
-    // Predict where cue ball ends up after a safety shot
+    // Simulate ball movement accounting for rails AND collisions with other balls
+    simulatePhysicsPath(startPos, direction, maxDistance) {
+        let currentPos = { x: startPos.x, y: startPos.y };
+        let currentDir = Vec2.normalize(direction);
+        let distRemaining = maxDistance;
+        const bounds = this.table.bounds;
+        const ballRadius = 12; // Approximation
+        
+        // Get obstacles (all balls on table except the one we just hit)
+        // We assume we just hit 'targetPos', so we shouldn't collide with it immediately again
+        const obstacles = this.game.balls.filter(b => !b.pocketed && !b.isCueBall);
+
+        // Limit simulation steps to prevent infinite loops
+        for (let step = 0; step < 5; step++) {
+            if (distRemaining <= 0) break;
+
+            // 1. Find nearest rail hit
+            let nearestRailDist = Infinity;
+            let hitRail = null;
+            const margin = ballRadius; // Stop before center crosses boundary
+
+            // (Reuse your existing rail check logic here, simplified for brevity)
+            if (currentDir.x < 0) {
+                const t = (bounds.left + margin - currentPos.x) / currentDir.x;
+                if (t > 0 && t < nearestRailDist) { nearestRailDist = t; hitRail = 'vert'; }
+            }
+            if (currentDir.x > 0) {
+                const t = (bounds.right - margin - currentPos.x) / currentDir.x;
+                if (t > 0 && t < nearestRailDist) { nearestRailDist = t; hitRail = 'vert'; }
+            }
+            if (currentDir.y < 0) {
+                const t = (bounds.top + margin - currentPos.y) / currentDir.y;
+                if (t > 0 && t < nearestRailDist) { nearestRailDist = t; hitRail = 'horiz'; }
+            }
+            if (currentDir.y > 0) {
+                const t = (bounds.bottom - margin - currentPos.y) / currentDir.y;
+                if (t > 0 && t < nearestRailDist) { nearestRailDist = t; hitRail = 'horiz'; }
+            }
+
+            // 2. Find nearest ball collision
+            let nearestBallDist = Infinity;
+            
+            for (const ball of obstacles) {
+                // Don't collide with balls behind us or too far
+                const toBall = Vec2.subtract(ball.position, currentPos);
+                const proj = Vec2.dot(toBall, currentDir);
+                if (proj <= 0 || proj > distRemaining + 20) continue;
+
+                // Check perpendicular distance
+                const closest = Vec2.add(currentPos, Vec2.multiply(currentDir, proj));
+                const dist = Vec2.distance(ball.position, closest);
+                
+                if (dist < ballRadius * 2) { // Collision!
+                    // Exact impact distance
+                    const backstep = Math.sqrt(Math.pow(ballRadius * 2, 2) - dist * dist);
+                    const impactDist = proj - backstep;
+                    
+                    if (impactDist > 1 && impactDist < nearestBallDist) {
+                        nearestBallDist = impactDist;
+                    }
+                }
+            }
+
+            // 3. Determine what happens first: Stop, Rail, or Ball?
+            const moveDist = Math.min(distRemaining, nearestRailDist, nearestBallDist);
+            
+            // Move the ball
+            currentPos = Vec2.add(currentPos, Vec2.multiply(currentDir, moveDist));
+            distRemaining -= moveDist;
+
+            // Handle Stop
+            if (moveDist === distRemaining) return currentPos; 
+
+            // Handle Ball Collision (Stop dead for safety prediction - mostly accurate enough)
+            if (moveDist === nearestBallDist) {
+                return currentPos; // We hit a ball, trajectory ends/deflects unpredictably. Stop here.
+            }
+
+            // Handle Rail Bounce
+            if (moveDist === nearestRailDist) {
+                // Reflect
+                if (hitRail === 'vert') currentDir.x *= -1;
+                else currentDir.y *= -1;
+                
+                // Lose energy on bounce
+                distRemaining *= 0.7; 
+            }
+        }
+        return currentPos;
+    }
+
+    // UPDATED prediction method utilizing the physics simulator
     predictSafetyCueBallPosition(_cueBallStart, targetPos, ghostBall, aimDir, power, spinY, contactAngle) {
-        // After contact, cue ball deflects based on cut angle
-        // Thinner cut = cue ball continues more in original direction
-        // Fuller hit = more deflection (up to 90° for stun shot)
-
         const angleRad = contactAngle * Math.PI / 180;
-
-        // Direction target ball will travel (roughly opposite of contact normal)
         const contactNormal = Vec2.normalize(Vec2.subtract(targetPos, ghostBall));
-
-        // Tangent line (perpendicular to contact)
         const tangent = { x: -contactNormal.y, y: contactNormal.x };
 
-        // For a stun shot, cue ball travels along tangent
-        // For topspin, cue ball follows through more
-        // For backspin, cue ball pulls back
-
+        // Determine initial deflection direction
         let deflectionDir;
         if (spinY > 0.3) {
-            // Backspin - pull back toward original direction
             deflectionDir = Vec2.normalize(Vec2.add(
                 Vec2.multiply(tangent, Math.cos(angleRad)),
                 Vec2.multiply(aimDir, -spinY * 0.5)
             ));
         } else if (spinY < -0.3) {
-            // Topspin - follow through
             deflectionDir = Vec2.normalize(Vec2.add(
                 Vec2.multiply(tangent, Math.cos(angleRad) * 0.5),
                 Vec2.multiply(contactNormal, 0.5)
             ));
         } else {
-            // Stun - follow tangent line
-            // Determine which way along tangent based on approach direction
             const dot = Vec2.dot(aimDir, tangent);
             deflectionDir = dot >= 0 ? tangent : Vec2.multiply(tangent, -1);
         }
 
-        // Travel distance depends on power, cut angle, and spin
-        // Thinner cuts transfer less energy to object ball, so cue ball keeps more speed
+        // Calculate total travel distance energy
         const energyRetained = Math.cos(angleRad) * 0.7 + 0.3;
         let travelDist = power * 20 * energyRetained;
 
-        // Backspin reduces travel, topspin increases
-        if (spinY > 0) {
-            travelDist *= (1 - spinY * 0.4);
-        } else if (spinY < 0) {
-            travelDist *= (1 - spinY * 0.3);
-        }
+        if (spinY > 0) travelDist *= (1 - spinY * 0.4);
+        else if (spinY < 0) travelDist *= (1 - spinY * 0.3);
 
-        // Calculate end position
-        let endPos = Vec2.add(targetPos, Vec2.multiply(deflectionDir, travelDist));
-
-        // Simulate bounces off rails
-        endPos = this.simulateRailBounces(targetPos, endPos);
-
-        return endPos;
+        // USE NEW PHYSICS SIMULATOR
+        // Start simulation from the target position (where contact happens)
+        // moving in the deflection direction
+        return this.simulatePhysicsPath(targetPos, deflectionDir, travelDist);
     }
 
     // Simple rail bounce simulation
@@ -3532,6 +3676,37 @@ export class AI {
             // Cap score low so we don't pick this safety
             // Even if we snookered 14 other balls, this score stays low.
             return { score: Math.min(20, safetyScore), snookerBall: null };
+        }
+
+        if (this.game.mode === GameMode.SNOOKER) {
+            
+            // 1. Determine where Baulk is (Assuming Baulk is on the Left, < kitchenLine)
+            const baulkLineX = this.table.kitchenLine;
+            const isBehindBaulk = cueBallEndPos.x < baulkLineX;
+
+            if (isBehindBaulk) {
+                // 2. Check if there are any easy Reds inside Baulk
+                // If there are reds in Baulk, putting the cue ball there isn't safe!
+                const redsInBaulk = opponentBalls.filter(b => 
+                    b.isRed && b.position.x < baulkLineX
+                ).length;
+
+                if (redsInBaulk === 0) {
+                    // HUGE BONUS: We are behind baulk, and all reds are down table.
+                    // This forces the opponent to hit a long shot.
+                    
+                    // Base bonus
+                    let baulkBonus = 50;
+
+                    // Extra bonus if we are deep in Baulk (near the cushion)
+                    const distToBaulkCushion = Math.abs(cueBallEndPos.x - this.table.bounds.left);
+                    if (distToBaulkCushion < 50) baulkBonus += 10;
+
+                    safetyScore += baulkBonus;
+
+                    aiLog('   + Baulk Safety Bonus applied');
+                }
+            }
         }
 
         // If we survived the "Hanger Check", add minor bonuses for quality of life

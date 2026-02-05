@@ -2423,9 +2423,9 @@ export class UI {
         this.ballGroups.style.position = 'absolute';
         this.ballGroups.style.bottom = '8px';
         this.ballGroups.style.top = 'auto';
-        this.ballGroups.style.left = '75%';
+        this.ballGroups.style.left = '55%';
         this.ballGroups.style.right = 'auto';
-        this.ballGroups.style.transform = 'translateX(-50%)';
+        this.ballGroups.style.transform = 'translateX(0%)';
         this.ballGroups.style.display = 'flex';
         this.ballGroups.style.flexDirection = 'row';
         this.ballGroups.style.alignItems = 'center';

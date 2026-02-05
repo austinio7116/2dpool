@@ -1799,13 +1799,13 @@ body {
 }
 
 #hud-info-panel {
-    left: 25%;
-    transform: translateX(-50%);
+    left: 45%;
+    transform: translateX(-100%);
 }
 
 #hud-players-panel {
-    left: 75%;
-    transform: translateX(-50%);
+    left: 55%;
+    transform: translateX(0%);
 }
 
 #hud-mode-name {

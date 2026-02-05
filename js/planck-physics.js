@@ -29,6 +29,11 @@ export class PlanckPhysics {
         // Gravitational acceleration (scaled m/s^2)
         this.g = 9.8;
 
+        // in constructor
+        this.substeps = 4; // default 1 
+        this.velIters = 16;        // OPTIONAL
+        this.posIters = 8;// OPTIONAL
+
         this.world = planck.World({
             gravity: planck.Vec2(0, 0)
         });
@@ -643,29 +648,30 @@ export class PlanckPhysics {
 
         this.syncBallsToPlanck(balls);
 
-        const fixedDt = (1.0 / 60.0) * this.speedMultiplier;
-        const dtSec = fixedDt; // Seconds
-        
+        const baseDt = (1.0 / 60.0) * this.speedMultiplier; // seconds
+        const stepDt = baseDt / this.substeps;              // seconds
+
+        // ✅ ADD TIME TO ACCUMULATOR
         this.accumulator += Math.min(deltaTime, 50) / 1000;
 
         let framesRun = 0;
-        while (this.accumulator >= fixedDt && framesRun < 3) {
-            
-            // 1. Apply our custom Cloth Forces (Magnus/Friction) BEFORE the physics step
+        while (this.accumulator >= baseDt && framesRun < 3) {
+
+            for (let s = 0; s < this.substeps; s++) {
+
+            // ✅ APPLY FRICTION FOR EACH BALL EACH SUBSTEP
             for (const ball of balls) {
                 if (ball.pocketed || ball.sinking) continue;
                 const body = this.ballToBody.get(ball);
-                if (body) {
-                    this.applyClothFriction(ball, body, dtSec);
-                }
+                if (body) this.applyClothFriction(ball, body, stepDt);
             }
 
-            // 2. Step the physics world
-            this.world.step(fixedDt, 8, 3);
-            
+            // ✅ STEP WORLD WITH SMALLER DT
+            this.world.step(stepDt, 16, 8);
             this.handlePockets(balls);
-            
-            this.accumulator -= fixedDt;
+            }
+
+            this.accumulator -= baseDt;
             framesRun++;
         }
 

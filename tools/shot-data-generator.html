@@ -387,50 +387,69 @@
             const targetY = TABLE_PADDING + TABLE_HEIGHT / 2;
 
             // Fixed pocket position (top-right corner)
-            const pocket = table.pockets[2]; // Top-right pocket
+            const pocket = table.pockets[2]; // Top-right pocket (verify index)
             const pocketX = pocket.position.x;
             const pocketY = pocket.position.y;
 
             // Target direction: from object ball to pocket
             const targetToPocketX = pocketX - targetX;
             const targetToPocketY = pocketY - targetY;
-            const targetToPocketLen = Math.sqrt(targetToPocketX * targetToPocketX + targetToPocketY * targetToPocketY);
+            const targetToPocketLen = Math.sqrt(
+                targetToPocketX * targetToPocketX + targetToPocketY * targetToPocketY
+            );
+
             const targetDirX = targetToPocketX / targetToPocketLen;
             const targetDirY = targetToPocketY / targetToPocketLen;
 
-            // The angle of the target direction (object ball to pocket)
+            // The angle of the target direction (object ball -> pocket)
             const targetAngle = Math.atan2(targetDirY, targetDirX);
             const intendedAngle = targetAngle * 180 / Math.PI;
 
-            // Ghost ball position
+            // Ghost ball position (where cue ball center should be at impact)
             const contactOffset = 2 * BALL_RADIUS;
             const ghostBallX = targetX - targetDirX * contactOffset;
             const ghostBallY = targetY - targetDirY * contactOffset;
 
-            // Cue ball approach angle (180° behind target + cutAngle offset)
-            const approachAngle = targetAngle + Math.PI - cutAngleRad;
+            /**
+             * IMPORTANT FIX:
+             * Place the cue ball "behind" the ghost ball along the *incoming* line.
+             * For a 0° cut, incomingAngle === targetAngle (straight-in).
+             * For non-zero cuts, rotate around the object-ball-to-pocket line.
+             *
+             * If you want both left/right cuts, you can randomize the sign:
+             *   const s = Math.random() < 0.5 ? -1 : 1;
+             *   const incomingAngle = targetAngle + s * cutAngleRad;
+             */
+            const incomingAngle = targetAngle + cutAngleRad; // or targetAngle - cutAngleRad
 
-            // Cue ball position
-            const cueBallX = ghostBallX - Math.cos(approachAngle) * distance;
-            const cueBallY = ghostBallY - Math.sin(approachAngle) * distance;
+            // Cue ball position (behind ghost ball)
+            const cueBallX = ghostBallX - Math.cos(incomingAngle) * distance;
+            const cueBallY = ghostBallY - Math.sin(incomingAngle) * distance;
 
             // Clamp to table bounds
-            const clampedCueX = Math.max(TABLE_PADDING + BALL_RADIUS + 5,
-                                         Math.min(TABLE_PADDING + TABLE_WIDTH - BALL_RADIUS - 5, cueBallX));
-            const clampedCueY = Math.max(TABLE_PADDING + BALL_RADIUS + 5,
-                                         Math.min(TABLE_PADDING + TABLE_HEIGHT - BALL_RADIUS - 5, cueBallY));
+            const minX = TABLE_PADDING + BALL_RADIUS + 5;
+            const maxX = TABLE_PADDING + TABLE_WIDTH - BALL_RADIUS - 5;
+            const minY = TABLE_PADDING + BALL_RADIUS + 5;
+            const maxY = TABLE_PADDING + TABLE_HEIGHT - BALL_RADIUS - 5;
 
-            // Create balls using actual Ball class
-            cueBall = new Ball(clampedCueX, clampedCueY, 0); // 0 = cue ball
-            targetBall = new Ball(targetX, targetY, 1); // 1 = solid ball
+            const inside =
+            cueBallX >= minX && cueBallX <= maxX &&
+            cueBallY >= minY && cueBallY <= maxY;
+
+            if (!inside) {
+            return null; // reject this configuration
+            }
+
+            cueBall = new Ball(cueBallX, cueBallY, 0);
+            targetBall = new Ball(targetX, targetY, 1);      // 1 = solid ball
 
             // Calculate shot direction (from cue ball to ghost ball)
-            const dirX = ghostBallX - clampedCueX;
-            const dirY = ghostBallY - clampedCueY;
+            const dirX = ghostBallX - cueBallX;
+            const dirY = ghostBallY - cueBallY;
             const dirLen = Math.sqrt(dirX * dirX + dirY * dirY);
             const direction = { x: dirX / dirLen, y: dirY / dirLen };
 
-            // Apply shot using the same logic as main.js executeShot
+            // Apply shot velocity
             const velocity = Vec2.multiply(direction, power);
             cueBall.velocity.x = velocity.x;
             cueBall.velocity.y = velocity.y;
@@ -441,11 +460,10 @@
             const naturalOmega = speed / R;
 
             // Spin.x = English (left/right), spin.y = Draw/Follow
-            // For this test, we're only varying spinY (draw/follow)
             const spin = { x: 0, y: spinY };
 
             // Z-Axis (English)
-            cueBall.spinZ = -spin.x * naturalOmega * 2.0 * 60;
+            cueBall.spinZ = 0;
 
             // X/Y Axis (Follow/Draw)
             const perpX = -direction.y;
@@ -461,72 +479,92 @@
 
             return {
                 intendedAngle,
-                cueBallPos: { x: clampedCueX, y: clampedCueY },
+                cueBallPos: { x: cueBallX, y: cueBallY },
                 targetPos: { x: targetX, y: targetY },
                 ghostBallPos: { x: ghostBallX, y: ghostBallY },
                 direction,
-                actualDistance: Math.sqrt((clampedCueX - targetX) ** 2 + (clampedCueY - targetY) ** 2)
+                actualDistance: Math.sqrt(
+                (cueBallX - targetX) ** 2 + (cueBallY - targetY) ** 2
+                )
             };
-        }
+            }
 
         function runSimulation(debug = false) {
             let collision = false;
             let targetVelocity = null;
-            let maxSteps = 300;
-            let step = 0;
 
             const balls = [cueBall, targetBall];
-            const initialCueVel = { x: cueBall.velocity.x, y: cueBall.velocity.y };
+
+            const maxSteps = 600;                 // a bit more headroom
+            const targetMoveEps = 0.02;           // lower than 0.1 so we catch earlier
+            const targetMoveEpsSq = targetMoveEps * targetMoveEps;
+
+            // Track previous target velocity so we can detect the first "kick"
+            let prevTVx = targetBall.velocity.x;
+            let prevTVy = targetBall.velocity.y;
 
             if (debug) {
-                console.log('Initial cue ball:', {
-                    pos: {...cueBall.position},
-                    vel: {...cueBall.velocity},
-                    forceSync: cueBall.forceSync
+                console.log("Initial cue ball:", {
+                pos: { ...cueBall.position },
+                vel: { ...cueBall.velocity },
+                forceSync: cueBall.forceSync
                 });
-                console.log('Initial target ball:', {
-                    pos: {...targetBall.position},
-                    vel: {...targetBall.velocity}
+                console.log("Initial target ball:", {
+                pos: { ...targetBall.position },
+                vel: { ...targetBall.velocity }
                 });
             }
 
-            // Run physics until collision detected or timeout
-            // Note: update() expects deltaTime in MILLISECONDS (default 16.67ms = 60fps)
-            while (step < maxSteps) {
+            for (let step = 0; step < maxSteps; step++) {
                 physics.update(balls, 16.67);
-                step++;
 
-                if (debug && step <= 5) {
-                    console.log(`Step ${step}: cue vel =`, cueBall.velocity.x.toFixed(2), cueBall.velocity.y.toFixed(2),
-                                'target vel =', targetBall.velocity.x.toFixed(2), targetBall.velocity.y.toFixed(2));
+                const tvx = targetBall.velocity.x;
+                const tvy = targetBall.velocity.y;
+
+                if (debug && step < 5) {
+                console.log(
+                    `Step ${step + 1}: cue vel=`,
+                    cueBall.velocity.x.toFixed(2),
+                    cueBall.velocity.y.toFixed(2),
+                    " target vel=",
+                    tvx.toFixed(3),
+                    tvy.toFixed(3)
+                );
                 }
 
-                // Check if target ball moved (collision occurred)
-                const targetMoved = Math.abs(targetBall.velocity.x) > 0.1 || Math.abs(targetBall.velocity.y) > 0.1;
+                // Detect first meaningful change in target velocity (impulse onset)
+                const dVx = tvx - prevTVx;
+                const dVy = tvy - prevTVy;
+                const dVSq = dVx * dVx + dVy * dVy;
 
-                if (targetMoved && !collision) {
-                    collision = true;
-                    // Run a few more steps to let velocity stabilize
-                    for (let i = 0; i < 3; i++) {
-                        physics.update(balls, 1/60);
-                    }
-                    targetVelocity = {
-                        x: targetBall.velocity.x,
-                        y: targetBall.velocity.y
-                    };
-                    if (debug) {
-                        console.log('Collision detected at step', step, 'target velocity:', targetVelocity);
-                    }
-                    break;
+                // Also require target to have some non-trivial speed (avoids noise)
+                const tSpeedSq = tvx * tvx + tvy * tvy;
+
+                if (!collision && dVSq > targetMoveEpsSq && tSpeedSq > targetMoveEpsSq) {
+                collision = true;
+                // Capture immediately on first kick
+                targetVelocity = { x: tvx, y: tvy };
+
+                if (debug) {
+                    console.log("Collision detected at step", step + 1, {
+                    targetVelocity,
+                    deltaV: { x: dVx, y: dVy }
+                    });
                 }
+                break;
+                }
+
+                prevTVx = tvx;
+                prevTVy = tvy;
             }
 
             if (debug && !collision) {
-                console.log('No collision after', maxSteps, 'steps. Final cue pos:', cueBall.position);
+                console.log("No collision after", maxSteps, "steps. Final cue pos:", cueBall.position);
             }
 
             return { collision, targetVelocity };
-        }
+            }
+
 
         function draw(params = null, setupData = null) {
             // Green felt
@@ -632,6 +670,12 @@
 
                 // Setup shot
                 const setupData = setupShot(params);
+
+                if (!setupData) {
+                    currentShotIndex++;
+                    updateProgress();
+                    continue;
+                }
 
                 // Visualize if speed > 0
                 if (simSpeed > 0) {

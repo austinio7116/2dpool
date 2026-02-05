@@ -53,16 +53,16 @@ function aiLogGroupEnd() {
 // Difficulty configurations
 const DIFFICULTY_SETTINGS = {
     easy: {
-        aimError: 3,          // Degrees of aim error
+        aimError: 1,          // Degrees of aim error
         thinkingDelay: 300,   // ms before shooting
         powerError: 0.20,      // Power variation
-        shotSelection: 'random' // Picks from top 50%
+        shotSelection: 'top3' // Picks from top 50%
     },
     medium: {
-        aimError: 1,
+        aimError: 0.4,
         thinkingDelay: 300,
         powerError: 0.10,
-        shotSelection: 'top3'  // Best of top 3
+        shotSelection: 'optimal'  // Best of top 3
     },
     hard: {
         aimError: 0.00,         // Small aim variation (1-2 degrees)

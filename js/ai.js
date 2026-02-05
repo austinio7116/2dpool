@@ -1046,9 +1046,9 @@ export class AI {
         // Hard AI: disciplined, refuses risky shots (Threshold 55-60)
         
         const thresholds = {
-            easy: 40,
-            medium: 50,
-            hard: 60 
+            easy: 60,
+            medium: 70,
+            hard: 80 
         };
         const minPotConfidence = thresholds[this.difficulty] || 65;
 
@@ -1076,81 +1076,64 @@ export class AI {
     // Generate variations (Soft/Med/Hard + Top/Stun/Back) for a specific pot
     analyzeShotVariants(cueBallPos, target, pocket, baseGeometry) {
         const variants = [];
-        const cutAngle = baseGeometry.cutAngle;
         
-        // Define power levels relative to the distance needed
-        // distanceToPocket comes from baseGeometry calculation
-        const dist = Vec2.distance(cueBallPos, baseGeometry.ghostBall) + 
-                     Vec2.distance(baseGeometry.ghostBall, pocket.position);
-        
-        // Base power needed just to reach pocket
-        const minPower = 5 + (dist / 45); 
+        // 1. Calculate the "Pure" Geometric Difficulty once
+        const baseDifficulty = this.calculatePottingDifficulty(cueBallPos, target, pocket);
 
-        // Define strategies
+        // Calculate distances for power scaling
+        const distCueToTarget = Vec2.distance(cueBallPos, target.position);
+        const distTargetToPocket = Vec2.distance(target.position, pocket.position);
+        const totalDist = distCueToTarget + distTargetToPocket;
+        
+        // Base power calculation
+        const minPower = 5 + (totalDist / 45); 
+
         const strategies = [
             { name: 'Soft Stun',   powerMult: 1, spinY: 0 },
             { name: 'Med Stun',    powerMult: 1.1, spinY: 0.05 },
-            { name: 'Soft Follow', powerMult: 0.9, spinY: -0.4 }, // Negative Y is usually Topspin in physics engines (check your coordinate system)
+            { name: 'Soft Follow', powerMult: 0.9, spinY: -0.4 },
             { name: 'Med Follow',  powerMult: 1.1, spinY: -0.6 },
-            { name: 'Soft Draw',   powerMult: 1.0, spinY: 0.4 },  // Positive Y is Draw/Backspin
+            { name: 'Soft Draw',   powerMult: 1.0, spinY: 0.4 }, 
             { name: 'Med Draw',    powerMult: 1.1, spinY: 0.6 },
-            { name: 'Hard Power',  powerMult: 1.5, spinY: 0 }     // Smash shot
+            { name: 'Hard Power',  powerMult: 1.5, spinY: 0 } 
         ];
 
         for (const strat of strategies) {
             let power = minPower * strat.powerMult;
             power = Math.min(power, 45); 
 
-            // 1. Predict scratch risk
-            const pathPrediction = this.predictCueBallPath({
+            // Predict Scratch
+            const prediction = this.predictCueBallPath({
                 target, pocket, ghostBall: baseGeometry.ghostBall,
-                direction: baseGeometry.direction, power: power, cutAngle: cutAngle
+                direction: baseGeometry.direction, power: power, cutAngle: baseGeometry.cutAngle
             }, strat.spinY);
             
-            if (pathPrediction.scratchRisk) continue;
+            if (prediction.scratchRisk) continue;
 
-            // 2. Predict End Position
+            // Predict Position
             const predictedEndPos = this.predictEndPosition({
                 ghostBall: baseGeometry.ghostBall, power: power
-            }, strat.spinY, pathPrediction.direction);
+            }, strat.spinY, prediction.direction);
             
-            // 3. Evaluate Position (Now includes Snooker Value Bonus)
+            // Evaluate Next Shot
             const positionScore = this.evaluatePositionQuality(predictedEndPos, target);
 
-            let sidePocketPenalty = 0;
+            // --- CALCULATE POT SCORE ---
+            // Start with base difficulty from helper
+            let potScore = baseDifficulty;
 
-            if (pocket.type === 'side') { // Assuming your pocket objects have a .type property
-                // Calculate the angle of the ball's path relative to the rail
-                // Side pockets are on horizontal rails, so we look at the angle from the X-axis
-                const toPocketDir = Vec2.normalize(Vec2.subtract(pocket.position, target.position));
-                
-                // Angle from horizontal: 0° = parallel to rail (impossible), 90° = straight in (easy)
-                const angleFromRail = Math.asin(Math.abs(toPocketDir.y)) * 180 / Math.PI;
+            // Apply Power Penalty (Higher power = lower accuracy)
+            // Hitting hard reduces effective pocket size
+            const powerPenalty = (power / 50) * 15;
+            potScore -= powerPenalty;
 
-                // User Rule: Shot gets MUCH harder when angle < 40 degrees
-                if (angleFromRail < 45) { // Threshold: 45 degrees
-                    // Exponential penalty: 
-                    // 45° -> 0 penalty
-                    // 30° -> 30 penalty (Significant)
-                    // 15° -> 90 penalty (Basically impossible)
-                    sidePocketPenalty = Math.pow((45 - angleFromRail), 1.6);
-                    
-                    // Add extra penalty for high power on shallow side pockets (rattle risk)
-                    if (strat.name.includes('Hard') || strat.name.includes('Med')) {
-                        sidePocketPenalty *= 1.5; 
-                    }
-                }
+            // Apply Side Pocket + High Power Risk
+            // If it's a side pocket shot and we are hitting hard, accuracy drops massively
+            if (pocket.type === 'side' && strat.name.includes('Hard')) {
+                 potScore -= 15; 
             }
 
-            // 4. Pot Difficulty (Risk Penalty)
-            const aimDifficulty = (cutAngle / 90) * 50; 
-            const powerPenalty = (power / 50) * 20; 
-            // Subtract the new sidePocketPenalty from the score
-            const potScore = Math.max(0, 100 - aimDifficulty - powerPenalty - sidePocketPenalty);
-
-            // 5. Composite Score
-            // Position score can be > 100 now (e.g. 142 for perfect black), so we don't clamp it.
-            // Weighting: 40% Potting Safety, 60% Position Quality
+            // Variants Weighting
             const compositeScore = (potScore * 0.4) + (positionScore * 0.6);
 
             variants.push({
@@ -1158,14 +1141,74 @@ export class AI {
                 target, pocket, power,
                 spin: { x: 0, y: strat.spinY },
                 powerLevel: strat.name,
-                potScore,
+                potScore: Math.max(0, potScore),
                 positionScore,
                 compositeScore,
                 cueBallEndPos: predictedEndPos
             });
         }
-
         return variants;
+    }
+
+    // Unified physics/geometry evaluator: Returns 0 (Impossible) to 100 (Guaranteed)
+    calculatePottingDifficulty(cueBallPos, targetBall, pocket) {
+        // 1. Basic Geometry
+        const distCueToTarget = Vec2.distance(cueBallPos, targetBall.position);
+        const distTargetToPocket = Vec2.distance(targetBall.position, pocket.position);
+        
+        const aimLine = Vec2.normalize(Vec2.subtract(targetBall.position, cueBallPos));
+        const pocketLine = Vec2.normalize(Vec2.subtract(pocket.position, targetBall.position));
+        const dot = Vec2.dot(aimLine, pocketLine);
+        const cutAngle = Math.acos(Math.max(-1, Math.min(1, dot))) * 180 / Math.PI;
+
+        // 2. Base Score from Angle (0 to 100)
+        // Steep drop-off after 60 degrees
+        let score = 100;
+        if (cutAngle > 80) return 0; // Impossible cut
+        
+        // Non-linear angle penalty
+        // 0° = 0 penalty, 30° = ~10 penalty, 60° = ~40 penalty
+        const anglePenalty = Math.pow(cutAngle / 60, 2) * 50;
+        score -= anglePenalty;
+
+        // 3. Distance Factors
+        // A: Cue to Target (Aiming Difficulty)
+        // Long shots are harder to aim precisely
+        const aimingPenalty = Math.max(0, (distCueToTarget - 400) / 10); // -1 pt per 10px over 400
+        score -= aimingPenalty;
+
+        // B: Target to Pocket (Precision Difficulty) - THE USER REQUEST
+        // If distance is short, margin for error is huge (Very Easy)
+        // If distance is long, margin for error is tiny (Very Hard)
+        if (distTargetToPocket < 150) {
+            score += 15; // Bonus for being close to pocket ("Hanger")
+        } else if (distTargetToPocket > 600) {
+            score -= 15; // Long pot penalty
+        } else {
+             // Linear penalty for medium-long range
+             score -= (distTargetToPocket - 150) / 20;
+        }
+
+        // 4. Side Pocket Knuckle Penalty
+        if (pocket.type === 'side') {
+            const toPocketDir = Vec2.normalize(Vec2.subtract(pocket.position, targetBall.position));
+            const angleFromRail = Math.asin(Math.abs(toPocketDir.y)) * 180 / Math.PI;
+
+            if (angleFromRail < 45) {
+                // Severe penalty for shallow angles into side pockets
+                // 45° -> 0, 30° -> 20, 15° -> 60
+                const sidePenalty = Math.pow((45 - angleFromRail), 1.7) * 0.8;
+                score -= sidePenalty;
+            }
+        }
+
+        // 5. Blind Pocket Penalty (Optional)
+        // If the cut angle is such that we can't see the pocket? (Visual check)
+        // Usually covered by cutAngle, but extreme cuts are physically harder than math suggests
+        if (cutAngle > 70) score -= 20;
+
+        // Clamp 0-100
+        return Math.max(0, Math.min(100, score));
     }
 
     // Estimate where the cue ball physically stops
@@ -1198,7 +1241,6 @@ export class AI {
     }
 
     // Look at the table from the predicted cue ball position: Is there a good next shot?
-    // Look at the table from the predicted cue ball position: Is there a good next shot?
     evaluatePositionQuality(predictedCuePos, ballJustHit) {
         // 1. Determine valid targets for the NEXT shot
         let nextTargets = [];
@@ -1224,64 +1266,35 @@ export class AI {
             nextTargets = this.getValidTargets().filter(b => b !== ballJustHit);
         }
 
-        if (nextTargets.length === 0) return 0; // No targets left (frame over?)
+        if (nextTargets.length === 0) return 0;
 
         let bestNextShotScore = 0;
 
-        // 2. Score the best available opportunity
         for (const nextBall of nextTargets) {
-             // Skip if path blocked
              if (!this.isPathClear(predictedCuePos, nextBall.position, [nextBall])) continue;
 
              for (const pocket of this.table.pockets) {
-                 const distToPocket = Vec2.distance(nextBall.position, pocket.position);
-                 const distToCue = Vec2.distance(predictedCuePos, nextBall.position);
+                 // 1. Get the Unified Difficulty Score
+                 const difficulty = this.calculatePottingDifficulty(predictedCuePos, nextBall, pocket);
                  
-                 // Calculate Angle
-                 const aimLine = Vec2.normalize(Vec2.subtract(nextBall.position, predictedCuePos));
-                 const pocketLine = Vec2.normalize(Vec2.subtract(pocket.position, nextBall.position));
-                 const dot = Vec2.dot(aimLine, pocketLine);
-                 const cutAngle = Math.acos(Math.max(-1, Math.min(1, dot))) * 180 / Math.PI;
+                 // If the shot is too hard (<20), it's not a valid "position" to play for
+                 if (difficulty < 20) continue;
 
-                 // --- STRICTER SCORING METRICS ---
+                 let finalScore = difficulty;
 
-                 // A. Angle Score (0-100)
-                 // Penalize angles > 30 degrees heavily. > 60 degrees is garbage.
-                 let angleScore = 0;
-                 if (cutAngle < 60) {
-                     // Non-linear drop off: 0°=100, 30°=50, 60°=0
-                     angleScore = Math.pow((1 - (cutAngle / 60)), 2) * 100;
-                 }
-
-                 // B. Distance Score (0-100)
-                 // Optimal distance is ~200-400px (control zone). 
-                 // Too close (<50) is awkward. Too far (>800) is hard.
-                 let distScore = 0;
-                 if (distToCue < 50) distScore = 20; // Too close!
-                 else if (distToCue < 400) distScore = 100; // Perfect zone
-                 else distScore = Math.max(0, 100 - ((distToCue - 400) * 0.15)); // Linear decay
-
-                 // C. Value Bonus (The Snooker Fix)
-                 let valueBonus = 0;
+                 // 2. Add Snooker Value Bonus
                  if (this.game.mode === GameMode.SNOOKER) {
                      const values = { red: 1, yellow: 2, green: 3, brown: 4, blue: 5, pink: 6, black: 7 };
                      const val = values[nextBall.colorName] || 1;
-                     
-                     // Black (7) gets +42 pts, Pink (6) gets +36 pts
-                     // This overpowers a mediocre position on a Red
-                     valueBonus = val * 6; 
+                     // Bonus: Black (+42), Pink (+36)
+                     finalScore += (val * 6);
                  }
 
-                 // Final Score for this specific ball/pocket combo
-                 // Geometry weights: 60% Angle, 40% Distance + Bonus
-                 const shotQuality = (angleScore * 0.6 + distScore * 0.4) + valueBonus;
-
-                 if (shotQuality > bestNextShotScore) {
-                     bestNextShotScore = shotQuality;
+                 if (finalScore > bestNextShotScore) {
+                     bestNextShotScore = finalScore;
                  }
              }
         }
-        
         return bestNextShotScore;
     }
 
@@ -3494,38 +3507,8 @@ export class AI {
                 // Is path to pocket clear?
                 if (this.isPathClear(opponentBall.position, pocket.position, [opponentBall])) {
                     
-                    const distCueToBall = Vec2.distance(cueBallEndPos, opponentBall.position);
-                    const distBallToPocket = Vec2.distance(opponentBall.position, pocket.position);
-                    
-                    // Calculate Angle
-                    const aimLine = Vec2.normalize(Vec2.subtract(opponentBall.position, cueBallEndPos));
-                    const pocketLine = Vec2.normalize(Vec2.subtract(pocket.position, opponentBall.position));
-                    const dot = Vec2.dot(aimLine, pocketLine);
-                    const cutAngle = Math.acos(Math.max(-1, Math.min(1, dot))) * 180 / Math.PI;
-
-                    // --- THREAT CALCULATION ---
-                    // How dangerous is this specific opportunity?
-                    
-                    let threat = 0;
-
-                    // 1. Angle Factor
-                    // >60 deg is very hard (low threat). <20 deg is easy (high threat).
-                    if (cutAngle > 60) threat = 10;
-                    else if (cutAngle > 45) threat = 30;
-                    else threat = 100 - cutAngle; // Linear increase: 45°=55 threat, 0°=100 threat
-
-                    // 2. Distance Penalty (Long shots are harder)
-                    const totalDist = distCueToBall + distBallToPocket;
-                    if (totalDist > 800) threat *= 0.4;      // Very long
-                    else if (totalDist > 500) threat *= 0.7; // Long
-                    else if (distCueToBall > 400) threat *= 0.9; // Medium cue distance
-                    
-                    // 3. Side Pocket Difficulty (using logic we discussed earlier)
-                    if (pocket.type === 'side') {
-                         const toPocketDir = Vec2.normalize(Vec2.subtract(pocket.position, opponentBall.position));
-                         const angleFromRail = Math.asin(Math.abs(toPocketDir.y)) * 180 / Math.PI;
-                         if (angleFromRail < 45) threat *= 0.5; // Much harder into side cushion
-                    }
+                    // UNIFIED CALL: How easy is this shot for the opponent?
+                    const threat = this.calculatePottingDifficulty(cueBallEndPos, opponentBall, pocket);
 
                     // TRACK THE HIGHEST THREAT
                     // If this specific shot is easier than anything else found so far, update the max threat.

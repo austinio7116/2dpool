@@ -2111,14 +2111,6 @@ body {
         top: 3px;
     }
 
-    #hud-info-panel {
-        left: 22%;
-    }
-
-    #hud-players-panel {
-        left: 78%;
-    }
-
     #hud-mode-name {
         padding-right: 4px;
         font-size: 0.6rem;
@@ -2231,12 +2223,6 @@ body {
         font-size: 1.5rem;
         gap: 10px;
         margin: 10px 0;
-    }
-
-    /* 9-ball HUD mobile positioning */
-    .ball-groups-9ball {
-        bottom: 6px !important;
-        left: 75% !important;
     }
 
     .ball-groups-9ball canvas{

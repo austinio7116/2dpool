@@ -22,7 +22,7 @@ TARGET = "angleError"
 FEATURES = ["cutAngle", "power"]  # x0=cutAngle, x1=power
 
 POWER_BRACKETS = None
-AUTO_BRACKETS_N = 25  # used only if POWER_BRACKETS=None
+AUTO_BRACKETS_N = 55  # used only if POWER_BRACKETS=None
 
 SPLIT_MIN = 10
 SPLIT_MAX = 60

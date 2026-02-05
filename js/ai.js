@@ -1870,16 +1870,16 @@ export class AI {
         // Power scales with distance - need more power for longer shots
         // Typical table is ~800px wide, so 400px is a medium shot
         // Base power of 15, scaling up with distance
-        let power = 5 + (totalDistance / 40);
+        let power = 5 + (totalDistance / 50);
 
         // Cut shots need more power because energy transfers less efficiently
         // At 45° cut, only ~70% of energy transfers to target ball
         // At 60° cut, only ~50% transfers
-        const cutFactor = 1 + (cutAngle / 60) * 0.5;
+        const cutFactor = 1 + (cutAngle / 50) * 0.5;
         power *= cutFactor;
 
-        // Clamp to reasonable range - minimum 5, max 50
-        return Math.max(5, Math.min(50, power));
+        // Clamp to reasonable range - minimum 5, max 55
+        return Math.max(5, Math.min(55, power));
     }
 
     // Execute the chosen shot

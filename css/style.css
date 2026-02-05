@@ -1256,7 +1256,7 @@ body {
 
 #game-hud {
     position: absolute;
-    top: 8px;
+    top: 4px;
     left: 0;
     right: 0;
     bottom: 0;
@@ -1801,6 +1801,7 @@ body {
 #hud-info-panel {
     left: 45%;
     transform: translateX(-100%);
+    padding: 1px 10px;
 }
 
 #hud-players-panel {

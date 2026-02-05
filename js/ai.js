@@ -5,7 +5,7 @@ import { Vec2 } from './utils.js';
 import { GameMode, GameState } from './game.js';
 
 // Debug logging - set to true to see AI decision making
-const AI_DEBUG = false;
+const AI_DEBUG = true;
 
 // Trained angle error prediction model (loaded dynamically if available)
 let angleModel = null;
@@ -1037,18 +1037,18 @@ export class AI {
         // 5. DEFINE CONFIDENCE THRESHOLD
         // Default Thresholds (Snooker)
         let thresholds = {
-            easy: 40,
+            easy: 60,
             medium: 50,
-            hard: 60 
+            hard: 40 
         };
 
         // ADJUSTMENT: For Pool modes (8-ball, 9-ball), lower thresholds by 20
         // Pool pockets are generally more forgiving, and the table is smaller
         if (this.game.mode !== GameMode.SNOOKER) {
             thresholds = {
-                easy: 30,
-                medium: 40,
-                hard: 40 
+                easy: 40,
+                medium: 30,
+                hard: 20 
             };
             aiLog('Pool Mode detected: Lowering confidence thresholds by 20 points');
         }
@@ -2352,7 +2352,7 @@ export class AI {
 
         if (angleModelLoaded && angleModel) {
             // Use trained model to predict angle error
-            const predictedError = angleModel.predictAngleError(cutAngleDeg, spinY, power);
+            const predictedError = angleModel.predictAngleError(cutAngleDeg, cueToBall, power);
             throwAngle = predictedError;
             const adjustmentRad = (predictedError * Math.PI / 180) * cutSign;
 

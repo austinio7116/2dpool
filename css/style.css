@@ -2240,8 +2240,8 @@ body {
     }
 
     .ball-groups-9ball canvas{
-        width: 32px !important;
-        height: 32px !important;
+        width: 22px !important;
+        height: 22px !important;
     }
 }
 /* Loading spinner */

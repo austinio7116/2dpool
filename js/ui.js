@@ -2211,7 +2211,7 @@ export class UI {
         targetLabel.style.letterSpacing = '0.5px';
 
         // Target Ball Size 24px
-        const targetCanvas = this.renderBallPreviewCanvas(lowestBall, this.selectedBallSet, 24);
+        const targetCanvas = this.renderBallPreviewCanvas(lowestBall, this.selectedBallSet, 22);
         
         targetWrapper.appendChild(targetLabel);
         if (targetCanvas) {
@@ -2232,7 +2232,7 @@ export class UI {
 
             for (const ballNum of railSequence) {
                 // Rail Ball Size 16px
-                const smallCanvas = this.renderBallPreviewCanvas(ballNum, this.selectedBallSet, 24);
+                const smallCanvas = this.renderBallPreviewCanvas(ballNum, this.selectedBallSet, 22);
                 if (smallCanvas) {
                     smallCanvas.style.opacity = '0.7';
                     railWrapper.appendChild(smallCanvas);

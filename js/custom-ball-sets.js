@@ -39,7 +39,7 @@ const DEFAULT_CUSTOM_BALL_SETS = [
         colors: {
             cue: '#FFFEF0',
             group1: '#e6a800',
-            group2: '#63031b',
+            group2: '#7a0120',
             eightBall: '#000000'
         },
         options: {
@@ -53,10 +53,10 @@ const DEFAULT_CUSTOM_BALL_SETS = [
             numberBorderColor: '#000000',
             numberCircleRadialLines: 3,
             radialLinesColor: '#000000',
-            stripeThickness: 0.61,
-            numberCircleRadius: 0.72,
-            borderWidth: 1,
-            numberScale: 1,
+            stripeThickness: 0.67,
+            numberCircleRadius: 0.63,
+            borderWidth: 1.7,
+            numberScale: 1.05,
             stripeOrientation: 'horizontal'
         },
         isPredefined: false,
@@ -84,10 +84,10 @@ const DEFAULT_CUSTOM_BALL_SETS = [
             numberBorderColor: '#000000',
             numberCircleRadialLines: 2,
             radialLinesColor: '#000000',
-            stripeThickness: 0.63,
-            numberCircleRadius: 0.65,
-            borderWidth: 1,
-            numberScale: 1,
+            stripeThickness: 0.6,
+            numberCircleRadius: 0.51,
+            borderWidth: 2,
+            numberScale: 1.1,
             stripeOrientation: 'horizontal'
         },
         isPredefined: false,
@@ -160,56 +160,8 @@ const DEFAULT_CUSTOM_BALL_SETS = [
         }
     },
     {
-        id: 'default-vintage',
-        name: 'Vintage',
-        style: 'stripe',
-        colors: {
-            cue: '#FFFEF0',
-            group1: '#FFD700',
-            group2: '#0000CD',
-            eightBall: '#000000'
-        },
-        options: {
-            hasStripes: true,
-            showNumbers: true,
-            striped8Ball: false,
-            stripeBackgroundColor: '#ffe999',
-            numberCircleColor: '#fff7db',
-            numberTextColor: '#000000',
-            numberBorder: false,
-            numberBorderColor: '#000000',
-            numberCircleRadialLines: 0,
-            radialLinesColor: '#000000',
-            stripeThickness: 0.56,
-            numberCircleRadius: 0.65,
-            borderWidth: 1,
-            numberScale: 1.05,
-            stripeOrientation: 'vertical'
-        },
-        isPredefined: false,
-        isDefault: true,
-        advancedMode: true,
-        ballColors: {
-            1: '#c2a500',
-            2: '#000052',
-            3: '#9e0000',
-            4: '#370042',
-            5: '#c24e00',
-            6: '#004713',
-            7: '#660000',
-            8: '#000000',
-            9: '#c2a500',
-            10: '#000052',
-            11: '#9e0000',
-            12: '#370042',
-            13: '#c24e00',
-            14: '#004713',
-            15: '#660000'
-        }
-    },
-    {
         id: 'default-vintage2',
-        name: 'Vintage 2',
+        name: 'Vintage',
         style: 'stripe',
         colors: {
             cue: '#FFFEF0',
@@ -228,10 +180,10 @@ const DEFAULT_CUSTOM_BALL_SETS = [
             numberBorderColor: '#383838',
             numberCircleRadialLines: 2,
             radialLinesColor: '#ffe999',
-            stripeThickness: 0.53,
-            numberCircleRadius: 0.65,
-            borderWidth: 1.4,
-            numberScale: 0.9,
+            stripeThickness: 0.58,
+            numberCircleRadius: 0.64,
+            borderWidth: 2,
+            numberScale: 1.1,
             stripeOrientation: 'vertical'
         },
         isPredefined: false,

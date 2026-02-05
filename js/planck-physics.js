@@ -30,7 +30,7 @@ export class PlanckPhysics {
         this.g = 9.8;
 
         // in constructor
-        this.substeps = 4; // default 1 
+        this.substeps = 10; // default 1 
         this.velIters = 16;        // OPTIONAL
         this.posIters = 8;// OPTIONAL
 

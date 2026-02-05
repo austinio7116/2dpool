@@ -21,14 +21,8 @@ TARGET = "angleError"
 # Training features: spinY intentionally excluded (kept only for JS signature compatibility)
 FEATURES = ["cutAngle", "power"]  # x0=cutAngle, x1=power
 
-POWER_BRACKETS = [
-    (0, 10),
-    (10, 20),
-    (20, 30),
-    (30, 40),
-    (40, 1000),
-]
-AUTO_BRACKETS_N = 5  # used only if POWER_BRACKETS=None
+POWER_BRACKETS = None
+AUTO_BRACKETS_N = 25  # used only if POWER_BRACKETS=None
 
 SPLIT_MIN = 10
 SPLIT_MAX = 60

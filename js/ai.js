@@ -5,7 +5,7 @@ import { Vec2 } from './utils.js';
 import { GameMode, GameState } from './game.js';
 
 // Debug logging - set to true to see AI decision making
-const AI_DEBUG = false;
+const AI_DEBUG = true;
 
 // Trained angle error prediction model (loaded dynamically if available)
 let angleModel = null;
@@ -916,7 +916,7 @@ export class AI {
 
             // Adjust power based on table size (15 reds = full size, 6 reds = mini)
             const isFullSize = redBalls.length >= 15;
-            basePower = isFullSize ? 55 : 46;
+            basePower = isFullSize ? 35 : 35;
             aiLog('Table size:', isFullSize ? 'FULL (15 reds)' : 'MINI', '| Red count:', redBalls.length);
             aiLog('Target red:', `Ball at (${targetBall.position.x.toFixed(1)}, ${targetBall.position.y.toFixed(1)})`);
 
@@ -924,7 +924,7 @@ export class AI {
             // Thin cut on the right side of the ball
             // Full-size tables need thinner contact to avoid sending cue ball into the pack
             const ballRadius = targetBall.radius || 12;
-            const thinCutOffset = isFullSize ? ballRadius * + 0.5 + (Math.random() - 0.5) * 0.01 : ballRadius * + 0.5 + (Math.random() - 0.5) * 0.01;
+            const thinCutOffset = isFullSize ? ballRadius * + 1.8 + (Math.random() - 0.5) * 0.01 : ballRadius * + 1.7 + (Math.random() - 0.5) * 0.01;
             aiLog('Thin cut offset:', thinCutOffset.toFixed(2), '(', isFullSize ? '0.5x' : '0.5x', 'ball radius)');
 
             // Offset perpendicular to aim line

@@ -924,6 +924,8 @@ class PoolGame {
             spin: aimState.spin,
             spinIndicator: aimState.spinIndicator,
             showSpinIndicator: canShoot,
+            isSettingSpin: aimState.isSettingSpin,
+            isTouchSpin: aimState.isTouchSpin,
             aiVisualization: this.ai.getVisualization(),
             showDZone: showDZone
         };

@@ -150,7 +150,7 @@ export class Renderer {
         }
 
         if (state.showSpinIndicator) {
-            this.drawSpinIndicator(state.spinIndicator, state.spin);
+            this.drawSpinIndicator(state.spinIndicator, state.spin, state.isSettingSpin, state.isTouchSpin);
         }
 
         if (state.aiming && state.cueBall && !state.cueBall.pocketed) {
@@ -963,7 +963,7 @@ export class Renderer {
         ctx.fill();
     }
 
-    drawSpinIndicator(indicator, spin) {
+    drawSpinIndicator(indicator, spin, isSettingSpin, isTouchSpin) {
         const ctx = this.ctx;
         const x = indicator.x;
         const y = indicator.y;
@@ -1018,6 +1018,110 @@ export class Renderer {
         ctx.font = '10px Arial';
         ctx.textAlign = 'center';
         ctx.fillText('SPIN', x, y + r + 18);
+
+        // Draw enlarged floating indicator when actively adjusting spin on touch
+        if (isSettingSpin && isTouchSpin) {
+            this.drawFloatingSpinIndicator(indicator, spin);
+        }
+    }
+
+    drawFloatingSpinIndicator(indicator, spin) {
+        const ctx = this.ctx;
+        const scale = 2.5;
+        const fr = indicator.radius * scale; // Floating indicator radius
+
+        // Position: above and to the right of the original, clear of the thumb
+        const fx = indicator.x + fr + 20;
+        const fy = indicator.y - fr - 40;
+
+        ctx.save();
+
+        // Connecting line from original indicator to floating one
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([4, 4]);
+        ctx.beginPath();
+        ctx.moveTo(indicator.x, indicator.y);
+        ctx.lineTo(fx, fy);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Drop shadow for the floating indicator
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+        ctx.beginPath();
+        ctx.arc(fx + 3, fy + 3, fr + 8, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Background circle
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+        ctx.beginPath();
+        ctx.arc(fx, fy, fr + 8, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Outer ring highlight
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // Cue ball face (ivory gradient)
+        const ballGradient = ctx.createRadialGradient(
+            fx - fr * 0.2, fy - fr * 0.2, 0,
+            fx, fy, fr
+        );
+        ballGradient.addColorStop(0, '#FFFEF0');
+        ballGradient.addColorStop(0.5, '#F0F0E0');
+        ballGradient.addColorStop(1, '#C0C0B0');
+
+        ctx.fillStyle = ballGradient;
+        ctx.beginPath();
+        ctx.arc(fx, fy, fr, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.strokeStyle = '#999';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // Crosshairs
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.15)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(fx - fr, fy);
+        ctx.lineTo(fx + fr, fy);
+        ctx.moveTo(fx, fy - fr);
+        ctx.lineTo(fx, fy + fr);
+        ctx.stroke();
+
+        // Spin dot (larger, more visible)
+        const dotX = fx + spin.x * fr * 0.7;
+        const dotY = fy + spin.y * fr * 0.7;
+        const dotRadius = 10;
+
+        // Dot glow
+        const glowGradient = ctx.createRadialGradient(dotX, dotY, 0, dotX, dotY, dotRadius * 2.5);
+        glowGradient.addColorStop(0, 'rgba(255, 50, 50, 0.4)');
+        glowGradient.addColorStop(1, 'rgba(255, 50, 50, 0)');
+        ctx.fillStyle = glowGradient;
+        ctx.beginPath();
+        ctx.arc(dotX, dotY, dotRadius * 2.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Dot itself
+        ctx.fillStyle = '#ff3333';
+        ctx.beginPath();
+        ctx.arc(dotX, dotY, dotRadius, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.strokeStyle = '#cc0000';
+        ctx.lineWidth = 2.5;
+        ctx.stroke();
+
+        // White center highlight on dot
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+        ctx.beginPath();
+        ctx.arc(dotX - 2, dotY - 2, dotRadius * 0.35, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.restore();
     }
 
     drawAimLine(cueBall, direction, power, trajectory) {

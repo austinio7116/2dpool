@@ -20,6 +20,9 @@ export class Input {
         // y: -1 (bottom/draw) to 1 (top/follow)
         this.spin = Vec2.create(0, 0);
         this.isSettingSpin = false;
+        this.isTouchSpin = false;
+        this.spinTouchStart = null;
+        this.spinAtTouchStart = null;
 
         // Spin indicator position and size (positioned in bottom-left corner, away from pockets)
         this.spinIndicator = {
@@ -101,7 +104,9 @@ export class Input {
     isOverSpinIndicator(pos) {
         const dx = pos.x - this.spinIndicator.x;
         const dy = pos.y - this.spinIndicator.y;
-        return (dx * dx + dy * dy) < (this.spinIndicator.radius * this.spinIndicator.radius);
+        // Use a larger hit area (1.5x radius) for easier touch targeting
+        const hitRadius = this.spinIndicator.radius * 1.5;
+        return (dx * dx + dy * dy) < (hitRadius * hitRadius);
     }
 
     handleMouseMove(event) {
@@ -258,7 +263,9 @@ export class Input {
         // Check if touching spin indicator
         if (this.canShoot && !this.ballInHandMode && this.isOverSpinIndicator(this.mousePos)) {
             this.isSettingSpin = true;
-            this.updateSpin();
+            this.isTouchSpin = true;
+            this.spinTouchStart = Vec2.clone(this.mousePos);
+            this.spinAtTouchStart = Vec2.create(this.spin.x, this.spin.y);
             return;
         }
 
@@ -323,6 +330,9 @@ export class Input {
 
         if (this.isSettingSpin) {
             this.isSettingSpin = false;
+            this.isTouchSpin = false;
+            this.spinTouchStart = null;
+            this.spinAtTouchStart = null;
             this.isMouseDown = false;
             return;
         }
@@ -357,12 +367,23 @@ export class Input {
     }
 
     updateSpin() {
-        const dx = this.mousePos.x - this.spinIndicator.x;
-        const dy = this.mousePos.y - this.spinIndicator.y;
-        const maxOffset = this.spinIndicator.radius * 0.7;
+        if (this.isTouchSpin && this.spinTouchStart && this.spinAtTouchStart) {
+            // Touch: delta-based movement for precision (thumb doesn't obscure)
+            const dx = this.mousePos.x - this.spinTouchStart.x;
+            const dy = this.mousePos.y - this.spinTouchStart.y;
+            const sensitivity = this.spinIndicator.radius * 0.7;
 
-        this.spin.x = clamp(dx / maxOffset, -1, 1);
-        this.spin.y = clamp(dy / maxOffset, -1, 1);
+            this.spin.x = clamp(this.spinAtTouchStart.x + dx / sensitivity, -1, 1);
+            this.spin.y = clamp(this.spinAtTouchStart.y + dy / sensitivity, -1, 1);
+        } else {
+            // Mouse: absolute positioning within the indicator
+            const dx = this.mousePos.x - this.spinIndicator.x;
+            const dy = this.mousePos.y - this.spinIndicator.y;
+            const maxOffset = this.spinIndicator.radius * 0.7;
+
+            this.spin.x = clamp(dx / maxOffset, -1, 1);
+            this.spin.y = clamp(dy / maxOffset, -1, 1);
+        }
     }
 
     updateAim() {
@@ -434,7 +455,8 @@ export class Input {
             mousePos: this.mousePos,
             spin: this.spin,
             spinIndicator: this.spinIndicator,
-            isSettingSpin: this.isSettingSpin
+            isSettingSpin: this.isSettingSpin,
+            isTouchSpin: this.isTouchSpin
         };
     }
 

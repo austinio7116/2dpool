@@ -5,7 +5,7 @@ import { Vec2 } from './utils.js';
 import { GameMode, GameState } from './game.js';
 
 // Debug logging - set to true to see AI decision making
-const AI_DEBUG = true;
+const AI_DEBUG = false;
 
 // Trained angle error prediction model (loaded dynamically if available)
 let angleModel = null;

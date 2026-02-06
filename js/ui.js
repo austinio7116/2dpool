@@ -2332,7 +2332,9 @@ export class UI {
         }
 
         if (info.state === GameState.GAME_OVER) {
-            this.showGameOverWithMatch(info.winner, info.gameOverReason, info.match);
+            // Update HUD one final time so scores reflect the last pot/foul
+            this.updateUnifiedHUD(info, info.match);
+            this.showGameOverWithMatch(info.winner, info.gameOverReason, info.match, info);
             return;
         }
 
@@ -2734,7 +2736,7 @@ export class UI {
     }
 
     // Show game over with match context
-    showGameOverWithMatch(winner, reason, matchInfo) {
+    showGameOverWithMatch(winner, reason, matchInfo, gameInfo = null) {
         this.gameOverScreen.classList.remove('hidden');
         this.freeplayControls.classList.add('hidden');
         if (this.snookerHud) this.snookerHud.classList.add('hidden');
@@ -2778,6 +2780,77 @@ export class UI {
             } else {
                 this.btnNextFrame.classList.add('hidden');
             }
+        }
+
+        // Show snooker match stats
+        if (gameInfo && gameInfo.snookerStats && gameInfo.mode === 'snooker') {
+            this.showSnookerStats(gameInfo.snookerStats, gameInfo);
+        } else {
+            this.hideSnookerStats();
+        }
+    }
+
+    // Display snooker match statistics on the game-over screen
+    showSnookerStats(stats, gameInfo) {
+        let statsEl = document.getElementById('snooker-stats-display');
+        if (!statsEl) return;
+
+        statsEl.classList.remove('hidden');
+
+        const p1 = stats.player1;
+        const p2 = stats.player2;
+
+        const p1Name = 'Player 1';
+        const p2Name = this.aiEnabled ? 'AI' : 'Player 2';
+
+        const potPct1 = p1.totalShots > 0 ? Math.round((p1.potShots / p1.totalShots) * 100) : 0;
+        const potPct2 = p2.totalShots > 0 ? Math.round((p2.potShots / p2.totalShots) * 100) : 0;
+
+        const longPotPct1 = p1.longPotAttempts > 0 ? Math.round((p1.longPots / p1.longPotAttempts) * 100) : 0;
+        const longPotPct2 = p2.longPotAttempts > 0 ? Math.round((p2.longPots / p2.longPotAttempts) * 100) : 0;
+
+        statsEl.innerHTML = `
+            <div class="snooker-stats-header">Match Statistics</div>
+            <table class="snooker-stats-table">
+                <thead>
+                    <tr>
+                        <th></th>
+                        <th>${p1Name}</th>
+                        <th>${p2Name}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>High Break</td>
+                        <td>${p1.highBreak}</td>
+                        <td>${p2.highBreak}</td>
+                    </tr>
+                    <tr>
+                        <td>Pot Success</td>
+                        <td>${potPct1}%</td>
+                        <td>${potPct2}%</td>
+                    </tr>
+                    <tr>
+                        <td>Long Pots</td>
+                        <td>${p1.longPotAttempts > 0 ? p1.longPots + '/' + p1.longPotAttempts + ' (' + longPotPct1 + '%)' : '-'}</td>
+                        <td>${p2.longPotAttempts > 0 ? p2.longPots + '/' + p2.longPotAttempts + ' (' + longPotPct2 + '%)' : '-'}</td>
+                    </tr>
+                    <tr>
+                        <td>Fouls</td>
+                        <td>${p1.fouls}</td>
+                        <td>${p2.fouls}</td>
+                    </tr>
+                </tbody>
+            </table>
+        `;
+    }
+
+    // Hide snooker stats display
+    hideSnookerStats() {
+        const statsEl = document.getElementById('snooker-stats-display');
+        if (statsEl) {
+            statsEl.classList.add('hidden');
+            statsEl.innerHTML = '';
         }
     }
 

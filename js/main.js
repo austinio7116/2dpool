@@ -336,6 +336,9 @@ class PoolGame {
         if (this.game.mode !== GameMode.SNOOKER) return;
         if (this.game.state === GameState.GAME_OVER) return;
 
+        // Finalize any in-progress break before ending
+        this.game.finalizeCurrentBreak();
+
         // Set winner to the other player
         this.game.winner = this.game.currentPlayer === 1 ? 2 : 1;
         this.game.gameOverReason = 'Frame conceded';
@@ -574,7 +577,7 @@ class PoolGame {
     }
 
     handleGameOver(winner, reason, match) {
-        this.ui.showGameOverWithMatch(winner, reason, match);
+        this.ui.showGameOverWithMatch(winner, reason, match, this.game.getGameInfo());
         this.input.setCanShoot(false);
 
         // Clear saved match if match is complete or single frame

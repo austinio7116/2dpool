@@ -2100,6 +2100,55 @@ body {
     background: linear-gradient(135deg, #4d9a47 0%, #2d5a27 100%);
 }
 
+/* Snooker Match Statistics */
+#snooker-stats-display {
+    margin: 10px 0;
+    padding: 8px 12px;
+    background: rgba(0, 0, 0, 0.4);
+    border-radius: 6px;
+    border: 1px solid rgba(255, 215, 0, 0.2);
+}
+
+.snooker-stats-header {
+    color: #ffd700;
+    font-size: 0.85rem;
+    font-weight: bold;
+    text-align: center;
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.snooker-stats-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8rem;
+}
+
+.snooker-stats-table thead th {
+    color: #aaa;
+    font-weight: normal;
+    padding: 2px 8px;
+    text-align: center;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.snooker-stats-table thead th:first-child {
+    text-align: left;
+}
+
+.snooker-stats-table tbody td {
+    color: #fff;
+    padding: 3px 8px;
+    text-align: center;
+}
+
+.snooker-stats-table tbody td:first-child {
+    color: #aaa;
+    text-align: left;
+    font-size: 0.75rem;
+}
+
 /* ============================================
    MOBILE RESPONSIVE - HUD PANELS
    ============================================ */

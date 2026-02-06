@@ -79,6 +79,9 @@ export class Game {
         this.isFreeBall = false;            // True when free ball is in effect
         this.freeBallNomination = null;     // The ball nominated as free ball
 
+        // Snooker match stats (persist across frames)
+        this.snookerStats = this.createEmptyStats();
+
         // Match state (frame scoring)
         this.match = {
             bestOf: 1,
@@ -151,6 +154,9 @@ export class Game {
         this.nextColorInSequence = 'yellow';
         this.consecutiveMisses = 0;
         this.wasSnookeredBeforeShot = false;
+
+        // Reset match stats for new match
+        this.snookerStats = this.createEmptyStats();
 
         // Initialize match if bestOf provided in options
         if (options.bestOf !== undefined) {
@@ -293,6 +299,10 @@ export class Game {
             // Track if player was snookered before shot (for 3 miss rule)
             // Miss rule only applies if player had a clear shot available
             this.wasSnookeredBeforeShot = this.isPlayerSnookered();
+
+            // Track shot count for stats
+            const playerKey = this.currentPlayer === 1 ? 'player1' : 'player2';
+            this.snookerStats[playerKey].totalShots++;
         }
 
         this.state = GameState.BALLS_MOVING;
@@ -1011,6 +1021,7 @@ export class Game {
             info.pendingFoulDecision = this.pendingFoulDecision;
             info.isFreeBall = this.isFreeBall;
             info.freeBallNomination = this.freeBallNomination;
+            info.snookerStats = this.snookerStats;
         }
 
         return info;
@@ -1122,10 +1133,38 @@ export class Game {
         this.isFreeBall = false;
         this.freeBallNomination = null;
 
-        // 5. Execute Game Logic
+        // 5. Detect long pot attempt (before branching on foul/pot/safety)
+        // A long pot attempt = first ball hit was far from cue ball at shot time
+        let isLongPotAttempt = false;
+        if (firstHit && this.preShotState) {
+            const tableWidth = this.table.bounds.right - this.table.bounds.left;
+            const longPotThreshold = tableWidth * 0.35;
+            const cueBallPreShot = this.preShotState.balls.find(b => b.isCueBall);
+            const hitBallPreShot = this.preShotState.balls.find(b => b.number === firstHit.number);
+            if (cueBallPreShot && hitBallPreShot) {
+                const dist = Vec2.distance(
+                    { x: cueBallPreShot.x, y: cueBallPreShot.y },
+                    { x: hitBallPreShot.x, y: hitBallPreShot.y }
+                );
+                isLongPotAttempt = dist > longPotThreshold;
+            }
+        }
+
+        // Track long pot attempt for current player
+        if (isLongPotAttempt) {
+            const playerKey = this.currentPlayer === 1 ? 'player1' : 'player2';
+            this.snookerStats[playerKey].longPotAttempts++;
+        }
+
+        // 6. Execute Game Logic
 
         // Handle Foul Scenario - WPBSA rules: opponent decides
         if (isFoul) {
+            // Track foul stats
+            const foulPlayerKey = this.currentPlayer === 1 ? 'player1' : 'player2';
+            this.snookerStats[foulPlayerKey].fouls++;
+
+            this.finalizeCurrentBreak();
             this.currentBreak = 0; // Reset break
 
             // Respot colors that were pocketed on foul
@@ -1201,6 +1240,16 @@ export class Game {
             this.currentBreak += turnScore;
             this.highestBreak = Math.max(this.highestBreak, this.currentBreak);
 
+            // Track pot stats
+            const potPlayerKey = this.currentPlayer === 1 ? 'player1' : 'player2';
+            this.snookerStats[potPlayerKey].potShots++;
+            this.snookerStats[potPlayerKey].totalPoints += turnScore;
+
+            // Track successful long pot (attempt already counted above)
+            if (isLongPotAttempt) {
+                this.snookerStats[potPlayerKey].longPots++;
+            }
+
             // Respotting on Valid Pot:
             // Free ball colour must ALWAYS be respotted, even in colors phase
             if (pottedFreeBall && pottedFreeBall.isColor) {
@@ -1237,6 +1286,7 @@ export class Game {
         // Handle Valid Safety (No Pot, No Foul)
         else {
             this.consecutiveMisses = 0;  // Reset miss counter (good safety)
+            this.finalizeCurrentBreak();
             this.currentBreak = 0;
             this.nominatedColor = null;  // Clear nomination on turn change
             this.handleSnookerTurnChange(false);
@@ -1741,6 +1791,8 @@ export class Game {
 
     // End the snooker game
     endSnookerGame() {
+        this.finalizeCurrentBreak();
+
         if (this.player1Score > this.player2Score) {
             this.winner = 1;
             this.gameOverReason = `Player 1 wins ${this.player1Score}-${this.player2Score}`;
@@ -1811,6 +1863,41 @@ export class Game {
         };
     }
 
+    // Create empty stats object for snooker match tracking
+    createEmptyStats() {
+        return {
+            player1: {
+                totalShots: 0,
+                potShots: 0,        // shots where at least one ball was validly potted
+                longPots: 0,        // successful long distance pots
+                longPotAttempts: 0,  // shots where first ball hit was far away
+                fouls: 0,
+                highBreak: 0,
+                totalPoints: 0
+            },
+            player2: {
+                totalShots: 0,
+                potShots: 0,
+                longPots: 0,
+                longPotAttempts: 0,
+                fouls: 0,
+                highBreak: 0,
+                totalPoints: 0
+            }
+        };
+    }
+
+    // Finalize the current break into per-player stats
+    finalizeCurrentBreak() {
+        if (this.currentBreak > 0) {
+            const playerKey = this.currentPlayer === 1 ? 'player1' : 'player2';
+            this.snookerStats[playerKey].highBreak = Math.max(
+                this.snookerStats[playerKey].highBreak,
+                this.currentBreak
+            );
+        }
+    }
+
     // Serialize game state for saving
     serializeState() {
         const ballsData = this.balls.map(ball => ({
@@ -1865,7 +1952,8 @@ export class Game {
             colorsPhase: this.colorsPhase,
             nextColorInSequence: this.nextColorInSequence,
             currentBreak: this.currentBreak,
-            highestBreak: this.highestBreak
+            highestBreak: this.highestBreak,
+            snookerStats: this.snookerStats
         };
     }
 
@@ -1907,6 +1995,7 @@ export class Game {
         this.nextColorInSequence = data.nextColorInSequence || 'yellow';
         this.currentBreak = data.currentBreak || 0;
         this.highestBreak = data.highestBreak || 0;
+        this.snookerStats = data.snookerStats || this.createEmptyStats();
 
         // Restore ball positions - must be done after balls are created
         if (data.balls && this.balls.length > 0) {

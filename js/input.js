@@ -26,8 +26,8 @@ export class Input {
 
         // Spin indicator position and size (positioned in bottom-left corner, away from pockets)
         this.spinIndicator = {
-            x: 50,
-            y: 0,  // Will be set based on canvas height
+            x: 35,  // radius(30) + background padding(5), flush with left edge
+            y: 0,   // Will be set based on canvas height
             radius: 30
         };
 
@@ -85,8 +85,8 @@ export class Input {
     }
 
     setCanvasSize(width, height) {
-        // Position spin indicator at bottom left, but away from corner pocket
-        this.spinIndicator.x = 50;
+        // Position spin indicator flush with left edge
+        this.spinIndicator.x = this.spinIndicator.radius + 5;  // radius + background padding
         this.spinIndicator.y = height / 2;  // Center vertically, away from pockets
     }
 

@@ -1214,11 +1214,13 @@ export class Renderer {
     drawPowerMeter(power) {
         const ctx = this.ctx;
 
-        // Position power meter to the right of the spin indicator
-        const meterX = 90;
-        const meterY = this.table.canvasHeight / 2 - 50;
+        // Position power meter above the spin indicator, centered on it
+        const spinCenterX = 35; // matches spin indicator x
+        const spinTop = this.table.canvasHeight / 2 - 35; // spin indicator top edge
         const meterWidth = 18;
         const meterHeight = 100;
+        const meterX = spinCenterX - meterWidth / 2;
+        const meterY = spinTop - meterHeight - 20; // 20px gap above spin indicator
 
         ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
         ctx.strokeStyle = '#444';
@@ -1244,7 +1246,7 @@ export class Renderer {
         ctx.fillStyle = '#fff';
         ctx.font = '9px Arial';
         ctx.textAlign = 'center';
-        ctx.fillText('POWER', meterX + meterWidth / 2, meterY + meterHeight + 14);
+        ctx.fillText('POWER', meterX + meterWidth / 2, meterY - 6);
     }
 
     lightenColor(color, percent) {

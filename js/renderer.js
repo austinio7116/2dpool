@@ -90,6 +90,9 @@ export class Renderer {
             this.colorizeOverlays[tableNum] = img;
         }
 
+        this.cueImage = new Image();
+        this.cueImage.src = 'assets/cue.png';
+
         // HSB adjustments for current table
         this.currentHSBAdjustments = null;
 
@@ -1062,42 +1065,44 @@ export class Renderer {
     drawCueStick(cueBall, direction, power, pullBack) {
         const ctx = this.ctx;
 
-        if (!direction) return;
+        // Exit if image isn't ready
+        if (!direction || !this.cueImage.complete) return;
 
         const angle = Vec2.angle(direction);
-        const cueLength = 280;
-        const cueWidth = 8;
-        const backDistance = cueBall.radius + 8 + (pullBack || 0);
+        
+        // 1. SCALING: 
+        // Your image is very tall (1146px). We scale it to a reasonable game size (~400px).
+        // We maintain the aspect ratio (32/1146) so it doesn't look stretched.
+        const cueLength = 400; 
+        const aspectRatio = 32 / 1146; // approx 0.028
+        const cueWidth = cueLength * aspectRatio; // approx 11px wide
+        
+        // Distance from ball center to cue tip
+        const backDistance = cueBall.radius + 4 + (pullBack || 0);
 
         ctx.save();
+        
+        // 2. POSITIONING: Move to ball center
         ctx.translate(cueBall.position.x, cueBall.position.y);
-        ctx.rotate(angle + Math.PI);
+        
+        // 3. ROTATION:
+        // Your image is Vertical (Tip=Top).
+        // Aiming East (0 rad) -> We want cue West.
+        // Canvas +Y is Down. Rotation of +90deg (PI/2) makes +Y point Left (West).
+        // So 'angle + Math.PI / 2' aligns the image's vertical axis behind the ball.
+        ctx.rotate(angle + Math.PI / 2);
 
-        const gradient = ctx.createLinearGradient(backDistance, 0, backDistance + cueLength, 0);
-        gradient.addColorStop(0, '#F5DEB3');
-        gradient.addColorStop(0.05, '#DEB887');
-        gradient.addColorStop(0.1, '#8B4513');
-        gradient.addColorStop(0.6, '#654321');
-        gradient.addColorStop(1, '#1a1a1a');
-
-        ctx.fillStyle = gradient;
-        ctx.beginPath();
-        ctx.moveTo(backDistance, -cueWidth / 4);
-        ctx.lineTo(backDistance + cueLength, -cueWidth);
-        ctx.lineTo(backDistance + cueLength, cueWidth);
-        ctx.lineTo(backDistance, cueWidth / 4);
-        ctx.closePath();
-        ctx.fill();
-
-        // Ferrule
-        ctx.fillStyle = '#FFFEF0';
-        ctx.fillRect(backDistance, -cueWidth / 4, 10, cueWidth / 2);
-
-        // Tip with chalk
-        ctx.fillStyle = '#4169E1';
-        ctx.beginPath();
-        ctx.arc(backDistance, 0, cueWidth / 4, 0, Math.PI * 2);
-        ctx.fill();
+        // 4. DRAWING:
+        // Tip is at y=0 in the image.
+        // We draw at y = backDistance (positive Y is now "behind" the ball).
+        // We offset x by half width to center it.
+        ctx.drawImage(
+            this.cueImage, 
+            -cueWidth / 2,   // X: Center horizontally
+            backDistance,    // Y: Start drawing at the offset distance
+            cueWidth, 
+            cueLength
+        );
 
         ctx.restore();
     }

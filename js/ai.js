@@ -1274,7 +1274,7 @@ export class AI {
         // B: Target to Pocket
         let lengthPenalty = 0;
         if (distTargetToPocket < 150) {
-             lengthPenalty = (distTargetToPocket) / 10;
+             lengthPenalty = (distTargetToPocket - 150) / 5;
              score += lengthPenalty; 
              penalties.pocketDist = -lengthPenalty; 
         } else if (distTargetToPocket > 600) {

@@ -169,6 +169,13 @@ class PoolGame {
         this.ui.onFreeBallNomination = (ball) => this.handleFreeBallNomination(ball);
     }
 
+    // Check if current player is controlled by AI (training mode = both players)
+    isCurrentPlayerAI() {
+        if (!this.ai.enabled) return false;
+        if (this.ai.trainingMode) return true;
+        return this.game.currentPlayer === 2;
+    }
+
     async startGame(mode, options = {}) {
         // Show loading spinner
         const loadingOverlay = document.getElementById('loading-overlay');
@@ -457,7 +464,7 @@ class PoolGame {
 
             // If AI attempted placement and failed, fall back to a valid position
             // This handles cases where AI calculates an invalid position (e.g., outside D-zone)
-            if (this.ai.enabled && this.game.currentPlayer === 2 &&
+            if (this.isCurrentPlayerAI() &&
                 this.game.state === GameState.BALL_IN_HAND) {
 
                 let validPos;
@@ -482,8 +489,8 @@ class PoolGame {
     handleStateChange(state) {
         this.ui.updateFromGameInfo(this.game.getGameInfo());
 
-        // Check if it's AI's turn
-        const isAITurn = this.ai.enabled && this.game.currentPlayer === 2;
+        // Check if it's AI's turn (in training mode, both players are AI)
+        const isAITurn = this.isCurrentPlayerAI();
 
         if (state === GameState.BALL_IN_HAND) {
             // Determine placement mode based on game type
@@ -560,8 +567,8 @@ class PoolGame {
         this.ui.showFoul(reason, isMiss);
         this.audio.playScratch();
 
-        // If the AI (player 2) committed this foul, record it for foul avoidance
-        if (this.ai.enabled && this.game.currentPlayer === 2) {
+        // If the AI committed this foul, record it for foul avoidance
+        if (this.isCurrentPlayerAI()) {
             this.ai.recordFoul();
         }
     }
@@ -590,7 +597,8 @@ class PoolGame {
         // At this point, currentPlayer is still the fouling player
         const foulingPlayer = this.game.currentPlayer;
         const decisionMaker = foulingPlayer === 1 ? 2 : 1;
-        const isAIDecision = this.ai.enabled && decisionMaker === 2;
+        // In training mode, both players are AI; otherwise only player 2 is AI
+        const isAIDecision = this.ai.enabled && (this.ai.trainingMode || decisionMaker === 2);
 
         if (isAIDecision) {
             // AI makes the decision
@@ -631,7 +639,7 @@ class PoolGame {
 
     // Handle request for color nomination (when shooting without aiming at a color)
     handleNominationRequired() {
-        const isAITurn = this.ai.enabled && this.game.currentPlayer === 2;
+        const isAITurn = this.isCurrentPlayerAI();
 
         if (isAITurn) {
             // AI nominates a color (default to highest available)
@@ -651,7 +659,7 @@ class PoolGame {
 
     // Handle free ball awarded (after foul leaves player snookered)
     handleFreeBallAwarded() {
-        const isAITurn = this.ai.enabled && this.game.currentPlayer === 2;
+        const isAITurn = this.isCurrentPlayerAI();
 
         if (isAITurn) {
             // AI nominates the best free ball
@@ -814,8 +822,8 @@ class PoolGame {
         this.input.setCueBall(this.game.cueBall);
         this.input.resetSpin();
 
-        // Check if it's AI's turn after resume
-        if (aiEnabled && this.game.currentPlayer === 2) {
+        // Check if it's AI's turn after resume (training mode = both players)
+        if (this.isCurrentPlayerAI()) {
             this.input.setCanShoot(false);
         } else {
             this.input.setCanShoot(true);
@@ -825,7 +833,7 @@ class PoolGame {
         this.ui.updateFromGameInfo(this.game.getGameInfo());
 
         // Trigger AI turn if needed
-        if (aiEnabled && this.game.currentPlayer === 2) {
+        if (this.isCurrentPlayerAI()) {
             setTimeout(() => this.ai.takeTurn(), 500);
         }
     }

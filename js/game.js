@@ -1257,7 +1257,7 @@ export class Game {
     applySnookerDecision(decision) {
         if (!this.pendingFoulDecision) return;
 
-        const { wasScratched, offendingPlayer, canRestore, isFreeBall } = this.pendingFoulDecision;
+        const { wasScratched, offendingPlayer, canRestore, isFreeBall, penalty } = this.pendingFoulDecision;
 
         // Clear nomination on any decision
         this.nominatedColor = null;
@@ -1316,6 +1316,9 @@ export class Game {
                     this.restoreState(this.preShotState);
                     // After restore, maintain the offending player's turn
                     this.currentPlayer = offendingPlayer;
+                    // Re-apply foul penalty (restoreState reverts scores to pre-shot values)
+                    const opponent = offendingPlayer === 1 ? 2 : 1;
+                    this.awardSnookerPoints(opponent, penalty);
                 }
                 this.state = GameState.PLAYING;
                 break;

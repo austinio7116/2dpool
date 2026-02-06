@@ -5,7 +5,7 @@ import { Vec2 } from './utils.js';
 import { GameMode, GameState } from './game.js';
 
 // Debug logging - set to true to see AI decision making
-const AI_DEBUG = true;
+const AI_DEBUG = false;
 
 // Trained angle error prediction model (loaded dynamically if available)
 let angleModel = null;
@@ -77,6 +77,7 @@ export class AI {
         this.difficulty = 'medium';
         this.enabled = false;
         this.isThinking = false;
+        this.trainingMode = false;  // AI plays both sides (demo mode)
 
         // Callbacks
         this.onShot = null;         // Called when AI wants to shoot
@@ -133,7 +134,12 @@ export class AI {
     }
 
     setDifficulty(difficulty) {
-        if (DIFFICULTY_SETTINGS[difficulty]) {
+        // Training mode: AI plays both sides using hard difficulty
+        if (difficulty === 'training') {
+            this.trainingMode = true;
+            this.difficulty = 'hard';
+        } else if (DIFFICULTY_SETTINGS[difficulty]) {
+            this.trainingMode = false;
             this.difficulty = difficulty;
         }
     }
@@ -351,9 +357,11 @@ export class AI {
     }
 
 
-    // Called when it's the AI's turn (player 2)
+    // Called when it's the AI's turn (player 2, or either player in training mode)
     takeTurn() {
-        if (!this.enabled || !this.game || this.game.currentPlayer !== 2) {
+        // In training mode, AI plays both sides; otherwise only player 2
+        const isAIPlayer = this.trainingMode || this.game.currentPlayer === 2;
+        if (!this.enabled || !this.game || !isAIPlayer) {
             return;
         }
 
@@ -3314,13 +3322,13 @@ export class AI {
                     const minPowerToReach = 5 + (distanceToGhost / 40);
 
                     // Try different power levels
-                    for (const power of [4, 8, 12, 18, 24, 30]) {
+                    for (const power of [2, 3, 4, 5, 6, 8, 10, 12, 18, 21, 26, 30, 38, 45]) {
                         // Skip power levels that won't reach the target ball
                         if (power < minPowerToReach) {
                             continue;
                         }
                         // Try with and without backspin
-                        for (const spinY of [0, 0.5]) { // 0 = stun, 0.5 = backspin
+                        for (const spinY of [-0.5,-0.2, 0, 0.2, 0.5]) { // 0 = stun, 0.5 = backspin
                             // Predict where cue ball ends up
                             const cueBallEndPos = this.predictSafetyCueBallPosition(
                                 cueBall.position, target.position, ghostBall,
@@ -3630,7 +3638,6 @@ export class AI {
             const isVisible = this.isPathClear(cueBallEndPos, opponentBall.position, [opponentBall]);
 
             if (!isVisible) {
-                totalSnookers++;
                 
                 // Track which ball is snookering them (for debugging/visuals)
                 if (!bestSnookerBall) {
@@ -3721,9 +3728,7 @@ export class AI {
         if (nearestDist > 600) safetyScore += 10; // Good distance safety
 
         // 2. Snooker Bonus: Even if not totally safe, snookering more balls limits their options
-        if (totalSnookers > 0) {
-            safetyScore += (totalSnookers * 2); 
-        }
+        // removed - not helpful
 
         // 3. Rail Bonus: Freezing cue ball to rail is annoying for opponent
         const bounds = this.table.bounds;

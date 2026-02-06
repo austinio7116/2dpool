@@ -3113,7 +3113,7 @@ export class UI {
     loadAIDifficulty() {
         try {
             const saved = localStorage.getItem('poolGame_aiDifficulty');
-            if (saved && ['easy', 'medium', 'hard'].includes(saved)) {
+            if (saved && ['easy', 'medium', 'hard', 'training'].includes(saved)) {
                 return saved;
             }
         } catch (e) {

@@ -744,8 +744,8 @@ body {
 
 /* Custom Ball Set Creator */
 .creator-content {
-    width: 550px;
-    max-width: 90vw;
+    width: 900px;
+    max-width: 95vw;
 }
 
 .creator-layout {
@@ -1111,6 +1111,121 @@ body {
 
 .save-btn:hover {
     background: linear-gradient(135deg, #3d7a37 0%, #2d5a27 100%);
+}
+
+/* Font selector */
+.font-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 4px;
+}
+
+.font-row > label {
+    font-size: 0.8rem;
+    color: #ccc;
+    white-space: nowrap;
+}
+
+.font-select {
+    padding: 4px 8px;
+    border: 2px solid #4a4a6a;
+    background: rgba(40, 40, 60, 0.8);
+    color: #fff;
+    font-size: 0.8rem;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.font-select:focus {
+    outline: none;
+    border-color: #ffd700;
+}
+
+/* Creator Controls Grid (2-column layout) */
+.creator-controls-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px 20px;
+}
+
+/* Texture Controls */
+.texture-section {
+    margin-top: 4px;
+}
+
+.texture-toggle {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+}
+
+.texture-btn {
+    padding: 4px 10px;
+    border: 2px solid #4a4a6a;
+    background: rgba(40, 40, 60, 0.8);
+    color: #aaa;
+    font-size: 0.7rem;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.texture-btn:hover {
+    border-color: #6a6a8a;
+}
+
+.texture-btn.active {
+    border-color: #ffd700;
+    background: rgba(60, 60, 80, 0.9);
+    color: #fff;
+}
+
+.texture-color-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 6px;
+}
+
+.texture-color-row.hidden {
+    display: none;
+}
+
+.texture-mode-toggle {
+    display: flex;
+    gap: 4px;
+}
+
+.texture-mode-btn {
+    padding: 4px 10px;
+    border: 2px solid #4a4a6a;
+    background: rgba(40, 40, 60, 0.8);
+    color: #aaa;
+    font-size: 0.7rem;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.texture-mode-btn:hover {
+    border-color: #6a6a8a;
+}
+
+.texture-mode-btn.active {
+    border-color: #ffd700;
+    background: rgba(60, 60, 80, 0.9);
+    color: #fff;
+}
+
+/* Mobile: collapse grid to 1 column and revert modal width */
+@media (max-width: 600px) {
+    .creator-content {
+        width: 95vw;
+    }
+    .creator-controls-grid {
+        grid-template-columns: 1fr;
+    }
 }
 
 /* Custom Table Creator */

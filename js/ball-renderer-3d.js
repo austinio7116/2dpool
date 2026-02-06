@@ -94,6 +94,11 @@ export class BallRenderer3D {
             key += `-${options.borderWidth ?? 1.0}`;
             key += `-${options.numberScale ?? 1.0}`;
             key += `-${options.stripeOrientation || 'horizontal'}`;
+            key += `-${options.numberCircleOpacity ?? 1.0}`;
+            key += `-${options.texture || 'none'}`;
+            key += `-${options.textureColorMode || 'auto'}`;
+            key += `-${options.textureColor || ''}`;
+            key += `-${options.numberFont || 'Arial'}`;
         }
         return key;
     }
@@ -111,7 +116,8 @@ export class BallRenderer3D {
         // Only truly solid color balls without any features need just 1 frame
         const hasRadialLines = (renderOptions.numberCircleRadialLines || 0) > 0;
         const showNumber = renderOptions.showNumber !== false && ballNumber !== 0 && (!isUKBall || isEightBall) && !isSnookerBall;
-        const needsRotation = isStripe || isSnookerBall || hasRadialLines || showNumber;
+        const hasTexture = renderOptions.texture && renderOptions.texture !== 'none';
+        const needsRotation = isStripe || isSnookerBall || hasRadialLines || showNumber || hasTexture;
 
         const framesToRender = needsRotation ? this.frameCount : 1;
         const frames = [];
@@ -146,7 +152,10 @@ export class BallRenderer3D {
                                      ball.showNumber === false || ball.numberCircleRadialLines > 0 ||
                                      ball.stripeThickness !== 0.55 || ball.numberCircleRadius !== 0.66 ||
                                      ball.borderWidth !== 1.0 || ball.numberScale !== 1.0 ||
-                                     ball.stripeOrientation === 'vertical' || ball.radialLinesColor;
+                                     ball.stripeOrientation === 'vertical' || ball.radialLinesColor ||
+                                     (ball.numberCircleOpacity != null && ball.numberCircleOpacity !== 1.0) ||
+                                     (ball.texture && ball.texture !== 'none') ||
+                                     (ball.numberFont && ball.numberFont !== 'Arial');
 
             if (hasCustomOptions) {
                 const options = {
@@ -162,7 +171,12 @@ export class BallRenderer3D {
                     numberCircleRadius: ball.numberCircleRadius ?? 0.66,
                     borderWidth: ball.borderWidth ?? 1.0,
                     numberScale: ball.numberScale ?? 1.0,
-                    stripeOrientation: ball.stripeOrientation || 'horizontal'
+                    stripeOrientation: ball.stripeOrientation || 'horizontal',
+                    numberCircleOpacity: ball.numberCircleOpacity ?? 1.0,
+                    texture: ball.texture || 'none',
+                    textureColorMode: ball.textureColorMode || 'auto',
+                    textureColor: ball.textureColor || '#FFFFFF',
+                    numberFont: ball.numberFont || 'Arial'
                 };
 
                 ballsToCache.push({
@@ -287,6 +301,12 @@ export class BallRenderer3D {
         const numberBorderRgb = this.hexToRgb(numberOptions.numberBorderColor || '#000000');
         const radius = this.sphereRadius;
 
+        // Texture parameters
+        const texture = numberOptions.texture || 'none';
+        const hasTexture = texture !== 'none';
+        const textureColorMode = numberOptions.textureColorMode || 'auto';
+        const textureColorRgb = hasTexture ? this.hexToRgb(numberOptions.textureColor || '#FFFFFF') : null;
+
         // Stripe is a band around the equator - latitude based
         // stripeHalfWidth is in terms of latitude (0 = equator, 1 = pole)
         const stripeLatitude = numberOptions.stripeThickness ?? 0.55; // Stripe covers from equator toward poles
@@ -343,6 +363,10 @@ export class BallRenderer3D {
                     r = rgb.r;
                     g = rgb.g;
                     b = rgb.b;
+                    if (hasTexture) {
+                        const tex = this.applyTexture(r, g, b, texture, textureColorMode, textureColorRgb, localX, localY, localZ);
+                        r = tex.r; g = tex.g; b = tex.b;
+                    }
                 } else {
                     // American balls, striped balls, and UK 8-ball have number spots
                     // Number spot is at the "front" of the ball in local coords (0, 0, 1)
@@ -382,6 +406,10 @@ export class BallRenderer3D {
                             r = rgb.r;
                             g = rgb.g;
                             b = rgb.b;
+                            if (hasTexture) {
+                                const tex = this.applyTexture(r, g, b, texture, textureColorMode, textureColorRgb, localX, localY, localZ);
+                                r = tex.r; g = tex.g; b = tex.b;
+                            }
                         } else {
                             // Stripe background color (poles)
                             r = stripeBackgroundRgb.r;
@@ -399,6 +427,10 @@ export class BallRenderer3D {
                             r = rgb.r;
                             g = rgb.g;
                             b = rgb.b;
+                            if (hasTexture) {
+                                const tex = this.applyTexture(r, g, b, texture, textureColorMode, textureColorRgb, localX, localY, localZ);
+                                r = tex.r; g = tex.g; b = tex.b;
+                            }
                         }
                     }
                 }
@@ -456,11 +488,15 @@ export class BallRenderer3D {
             ctx.stroke();
         }
 
-        // Draw circle background (on top of border)
+        // Draw circle background (on top of border) with configurable opacity
+        const circleOpacity = options.numberCircleOpacity ?? 1.0;
+        ctx.save();
+        ctx.globalAlpha = circleOpacity;
         ctx.fillStyle = options.numberCircleColor || '#FFFFFF';
         ctx.beginPath();
         ctx.arc(centerX, centerY, circleRadius, 0, Math.PI * 2);
         ctx.fill();
+        ctx.restore();
 
         // Draw radial lines if enabled (on top of border, starting from outer edge)
         if (options.numberBorder && options.numberCircleRadialLines > 0) {
@@ -489,8 +525,9 @@ export class BallRenderer3D {
         }
 
         // Draw number text (on top of everything)
+        const fontFamily = options.numberFont || 'Arial';
         ctx.fillStyle = options.numberTextColor || '#000000';
-        ctx.font = `bold ${textureSize * 0.50 * numberScale}px Arial`; // Scale number size
+        ctx.font = `bold ${textureSize * 0.50 * numberScale}px ${fontFamily}`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(number.toString(), centerX, centerY + textureSize * 0.02);
@@ -553,7 +590,174 @@ export class BallRenderer3D {
         };
     }
 
-    // Old 2D overlay methods removed - text is now properly rendered onto the 3D sphere
+    // Hash function for pseudo-random noise
+    hash3(x, y, z) {
+        // Integer lattice hash
+        let ix = Math.floor(x), iy = Math.floor(y), iz = Math.floor(z);
+        let fx = x - ix, fy = y - iy, fz = z - iz;
+        // Smoothstep for interpolation
+        fx = fx * fx * (3 - 2 * fx);
+        fy = fy * fy * (3 - 2 * fy);
+        fz = fz * fz * (3 - 2 * fz);
+
+        const h = (a, b, c) => {
+            let n = a * 127.1 + b * 311.7 + c * 74.7;
+            n = Math.sin(n) * 43758.5453;
+            return n - Math.floor(n);
+        };
+
+        // Trilinear interpolation of 8 corner hashes
+        const c000 = h(ix, iy, iz);
+        const c100 = h(ix + 1, iy, iz);
+        const c010 = h(ix, iy + 1, iz);
+        const c110 = h(ix + 1, iy + 1, iz);
+        const c001 = h(ix, iy, iz + 1);
+        const c101 = h(ix + 1, iy, iz + 1);
+        const c011 = h(ix, iy + 1, iz + 1);
+        const c111 = h(ix + 1, iy + 1, iz + 1);
+
+        const x0 = c000 + fx * (c100 - c000);
+        const x1 = c010 + fx * (c110 - c010);
+        const x2 = c001 + fx * (c101 - c001);
+        const x3 = c011 + fx * (c111 - c011);
+        const y0 = x0 + fy * (x1 - x0);
+        const y1 = x2 + fy * (x3 - x2);
+        return y0 + fz * (y1 - y0);
+    }
+
+    // Fractal Brownian Motion noise
+    fbm3(x, y, z, octaves = 4) {
+        let value = 0, amplitude = 0.5, frequency = 1;
+        for (let i = 0; i < octaves; i++) {
+            value += amplitude * this.hash3(x * frequency, y * frequency, z * frequency);
+            amplitude *= 0.5;
+            frequency *= 2;
+        }
+        return value;
+    }
+
+    // Get texture modifier for a given texture type at a local sphere position
+    getTextureModifier(texture, localX, localY, localZ) {
+        switch (texture) {
+            case 'camouflage': {
+                // FBM noise posterized to 2 hard-edge tones
+                const scale = 4.0;
+                const noise = this.fbm3(localX * scale, localY * scale, localZ * scale, 4);
+                const dark = noise < 0.48;
+                return { intensity: dark ? 0.85 : 0, factor: dark ? 0.55 : 1.0 };
+            }
+            case 'striped': {
+                // Diagonal thin parallel lines
+                const wave = Math.sin((localY) * 40);
+                const inLine = wave > 0;
+                return { intensity: inLine ? 0.8 : 0, factor: inLine ? 0.7 : 1.0 };
+            }
+            case 'marbled': {
+                // Turbulent sine veins
+                const t = localX * 10 + Math.sin(localY * 8 + localZ * 6) * 2 + Math.cos(localZ * 12 + localX * 4) * 1.5;
+                const vein = Math.abs(Math.sin(t));
+                const inVein = vein > 0.92;
+                return { intensity: inVein ? 0.9 : 0, factor: inVein ? 0.6 : 1.0 };
+            }
+            case 'sparkly': {
+                // Position hash for sparse sparkle pixels (~8%)
+                const hash = Math.sin(localX * 127.1 + localY * 311.7 + localZ * 74.7) * 43758.5453;
+                const fract = hash - Math.floor(hash);
+                const isSparkle = fract > 0.92;
+                return { intensity: isSparkle ? 1.0 : 0, factor: isSparkle ? 1.4 : 1.0 };
+            }
+            case 'hexagonal': {
+                // Honeycomb hex cell pattern using nearest-center distance
+                const hScale = 5;
+                const hx = localX * hScale, hy = localY * hScale, hz = localZ * hScale;
+                // Use 2 of the 3 axes for hex grid (project onto a plane)
+                const q = hx * 0.6667 + hy * 0.3333;
+                const r2 = hy * 0.5774;
+                // Hex grid rounding
+                const qi = Math.round(q), ri = Math.round(r2);
+                const fq = q - qi, fr = r2 - ri;
+                const edgeDist = Math.max(Math.abs(fq), Math.abs(fr), Math.abs(fq + fr));
+                const onEdge = edgeDist > 0.42;
+                return { intensity: onEdge ? 0.7 : 0, factor: onEdge ? 0.6 : 1.0 };
+            }
+            case 'crackle': {
+                // Voronoi-style cracks: find distance to nearest vs second nearest random point
+                const cScale = 6;
+                const cx = localX * cScale, cy = localY * cScale, cz = localZ * cScale;
+                const cix = Math.floor(cx), ciy = Math.floor(cy), ciz = Math.floor(cz);
+                let d1 = 99, d2 = 99;
+                const ch = (a, b, c) => {
+                    const n = Math.sin(a * 127.1 + b * 311.7 + c * 74.7) * 43758.5453;
+                    return n - Math.floor(n);
+                };
+                for (let di = -1; di <= 1; di++) {
+                    for (let dj = -1; dj <= 1; dj++) {
+                        for (let dk = -1; dk <= 1; dk++) {
+                            const ni = cix + di, nj = ciy + dj, nk = ciz + dk;
+                            const px = ni + ch(ni, nj, nk);
+                            const py = nj + ch(ni + 17, nj + 31, nk + 7);
+                            const pz = nk + ch(ni + 59, nj + 13, nk + 43);
+                            const ddx = cx - px, ddy = cy - py, ddz = cz - pz;
+                            const dist = Math.sqrt(ddx * ddx + ddy * ddy + ddz * ddz);
+                            if (dist < d1) { d2 = d1; d1 = dist; }
+                            else if (dist < d2) { d2 = dist; }
+                        }
+                    }
+                }
+                const crack = d2 - d1;
+                const isCrack = crack < 0.08;
+                return { intensity: isCrack ? 0.9 : 0, factor: isCrack ? 0.45 : 1.0 };
+            }
+            case 'galaxy': {
+                // Swirling nebula: FBM with spiral distortion
+                const gScale = 3.0;
+                const gx = localX * gScale, gy = localY * gScale, gz = localZ * gScale;
+                // Spiral twist based on distance from axis
+                const dist = Math.sqrt(gx * gx + gy * gy);
+                const angle = Math.atan2(gy, gx) + dist * 2.5;
+                const sx = Math.cos(angle) * dist;
+                const sy = Math.sin(angle) * dist;
+                const noise = this.fbm3(sx * 2, sy * 2, gz * 2, 5);
+                // Multi-tone: bright spots in swirl arms
+                const bright = noise > 0.55;
+                return { intensity: bright ? 0.8 : noise * 0.3, factor: bright ? 1.4 : 0.85 + noise * 0.3 };
+            }
+            case 'woodgrain': {
+                // Concentric rings with FBM distortion
+                const wScale = 3.0;
+                const wx = localX * wScale, wy = localY * wScale, wz = localZ * wScale;
+                const distortion = this.fbm3(wx * 2, wy * 2, wz * 2, 3) * 0.8;
+                const ring = Math.sin((Math.sqrt(wx * wx + wz * wz) + distortion) * 18);
+                const isGrain = ring > 0.5;
+                return { intensity: isGrain ? 0.6 : 0, factor: isGrain ? 0.7 : 1.0 };
+            }
+            default:
+                return { intensity: 0, factor: 1.0 };
+        }
+    }
+
+    // Apply texture effect to an RGB color
+    applyTexture(r, g, b, texture, textureColorMode, textureColorRgb, localX, localY, localZ) {
+        const mod = this.getTextureModifier(texture, localX, localY, localZ);
+        if (mod.intensity === 0 && mod.factor === 1.0) return { r, g, b };
+
+        if (textureColorMode === 'single' && textureColorRgb) {
+            // Blend toward textureColor by intensity
+            const t = mod.intensity;
+            return {
+                r: Math.round(r * (1 - t) + textureColorRgb.r * t),
+                g: Math.round(g * (1 - t) + textureColorRgb.g * t),
+                b: Math.round(b * (1 - t) + textureColorRgb.b * t)
+            };
+        } else {
+            // Auto mode: multiply by factor (lighten/darken)
+            return {
+                r: Math.min(255, Math.max(0, Math.round(r * mod.factor))),
+                g: Math.min(255, Math.max(0, Math.round(g * mod.factor))),
+                b: Math.min(255, Math.max(0, Math.round(b * mod.factor)))
+            };
+        }
+    }
 
     calculateSpecular(normal) {
         // Primary specular highlight from main light source
@@ -624,6 +828,7 @@ export class BallRenderer3D {
         const isUKBall = ball.isUKBall || false;
         const isEightBall = ball.isEightBall || false;
         const isSnookerBall = ball.isSnookerBall || false;
+        const hasTexture = ball.texture && ball.texture !== 'none';
 
         // Check for custom rendering options
         const hasCustomOptions = ball.numberCircleColor || ball.numberTextColor ||
@@ -631,7 +836,9 @@ export class BallRenderer3D {
                                  ball.showNumber === false || ball.numberCircleRadialLines > 0 ||
                                  ball.stripeThickness !== 0.55 || ball.numberCircleRadius !== 0.66 ||
                                  ball.borderWidth !== 1.0 || ball.numberScale !== 1.0 ||
-                                 ball.stripeOrientation === 'vertical' || ball.radialLinesColor;
+                                 ball.stripeOrientation === 'vertical' || ball.radialLinesColor ||
+                                 (ball.numberCircleOpacity != null && ball.numberCircleOpacity !== 1.0) ||
+                                 (ball.texture && ball.texture !== 'none');
 
         // Build options object for custom balls
         const options = hasCustomOptions ? {
@@ -647,14 +854,19 @@ export class BallRenderer3D {
             numberCircleRadius: ball.numberCircleRadius ?? 0.66,
             borderWidth: ball.borderWidth ?? 1.0,
             numberScale: ball.numberScale ?? 1.0,
-            stripeOrientation: ball.stripeOrientation || 'horizontal'
+            stripeOrientation: ball.stripeOrientation || 'horizontal',
+            numberCircleOpacity: ball.numberCircleOpacity ?? 1.0,
+            texture: ball.texture || 'none',
+            textureColorMode: ball.textureColorMode || 'auto',
+            textureColor: ball.textureColor || '#FFFFFF',
+            numberFont: ball.numberFont || 'Arial'
         } : null;
 
         // Use cached frames (works for both standard and custom balls now)
         const frames = this.generateBallFrames(ball.number, baseColor, isStripe, isUKBall, isEightBall, isSnookerBall, options);
 
         // UK balls (except 8-ball) and snooker balls are solid color - use fixed frame so lighting stays consistent
-        if ((isUKBall && !isEightBall) || isSnookerBall) {
+        if ((isUKBall && !isEightBall && !hasTexture) || isSnookerBall) {
             return frames[0];
         }
 
@@ -683,10 +895,12 @@ export class BallRenderer3D {
         ctx.imageSmoothingEnabled = true;
         ctx.imageSmoothingQuality = 'high';
 
+        const hasTexture = ball.texture && ball.texture !== 'none';
+
         if (ball.isCueBall) {
             const frames = this.generateBallFrames(0, '#FFFFFF', false);
             ctx.drawImage(frames[0], -drawSize / 2, -drawSize / 2, drawSize, drawSize);
-        } else if ((ball.isUKBall && !ball.isEightBall) || ball.isSnookerBall) {
+        } else if ((ball.isUKBall && !ball.isEightBall && !hasTexture) || ball.isSnookerBall) {
             // UK solid balls and snooker balls - no rotation so they all look identical
             const frame = this.getFrame(ball);
             ctx.drawImage(frame, -drawSize / 2, -drawSize / 2, drawSize, drawSize);

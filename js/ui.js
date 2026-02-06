@@ -150,6 +150,19 @@ export class UI {
         this.solidOrientationVertical = document.getElementById('solid-orientation-vertical');
         this.solidStripeOrientation = 'horizontal';
 
+        // Solid mode circle opacity
+        this.solidCircleOpacitySlider = document.getElementById('solid-circle-opacity');
+        this.solidCircleOpacityValue = document.getElementById('solid-circle-opacity-value');
+
+        // Solid mode texture controls
+        this.solidTextureToggle = document.getElementById('solid-texture-toggle');
+        this.solidTextureColorRow = document.getElementById('solid-texture-color-row');
+        this.solidTextureModeToggle = document.getElementById('solid-texture-mode-toggle');
+        this.solidTextureColorField = document.getElementById('solid-texture-color-field');
+        this.solidCreatorTexture = 'none';
+        this.solidCreatorTextureColorMode = 'auto';
+        this.solidNumberFontSelect = document.getElementById('solid-number-font');
+
         // Stripe mode elements
         this.stripeModeOptions = document.getElementById('stripe-mode-options');
         this.simpleColorPickers = document.getElementById('simple-color-pickers');
@@ -180,6 +193,19 @@ export class UI {
         this.orientationHorizontal = document.getElementById('orientation-horizontal');
         this.orientationVertical = document.getElementById('orientation-vertical');
         this.stripeOrientation = 'horizontal';
+
+        // Stripe mode circle opacity
+        this.circleOpacitySlider = document.getElementById('circle-opacity');
+        this.circleOpacityValue = document.getElementById('circle-opacity-value');
+
+        // Stripe mode texture controls
+        this.stripeTextureToggle = document.getElementById('stripe-texture-toggle');
+        this.stripeTextureColorRow = document.getElementById('stripe-texture-color-row');
+        this.stripeTextureModeToggle = document.getElementById('stripe-texture-mode-toggle');
+        this.stripeTextureColorField = document.getElementById('stripe-texture-color-field');
+        this.creatorTexture = 'none';
+        this.creatorTextureColorMode = 'auto';
+        this.stripeNumberFontSelect = document.getElementById('stripe-number-font');
 
         // Table creator elements
         this.customTableNameInput = document.getElementById('custom-table-name');
@@ -556,6 +582,35 @@ export class UI {
             this.updateCreatorPreview();
         });
 
+        // Solid mode font select
+        this.solidNumberFontSelect?.addEventListener('change', () => this.updateCreatorPreview());
+
+        // Solid mode circle opacity slider
+        this.solidCircleOpacitySlider?.addEventListener('input', (e) => {
+            if (this.solidCircleOpacityValue) this.solidCircleOpacityValue.textContent = parseFloat(e.target.value).toFixed(2);
+            this.updateCreatorPreview();
+        });
+
+        // Solid mode texture controls
+        this.solidTextureToggle?.querySelectorAll('.texture-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                this.solidTextureToggle.querySelectorAll('.texture-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                this.solidCreatorTexture = btn.dataset.texture;
+                this.solidTextureColorRow?.classList.toggle('hidden', this.solidCreatorTexture === 'none');
+                this.updateCreatorPreview();
+            });
+        });
+        this.solidTextureModeToggle?.querySelectorAll('.texture-mode-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                this.solidTextureModeToggle.querySelectorAll('.texture-mode-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                this.solidCreatorTextureColorMode = btn.dataset.mode;
+                this.solidTextureColorField?.classList.toggle('hidden', btn.dataset.mode !== 'single');
+                this.updateCreatorPreview();
+            });
+        });
+
         // Stripe mode color picker changes
         this.colorSolids?.addEventListener('input', () => this.updateCreatorPreview());
         this.colorStripes?.addEventListener('input', () => this.updateCreatorPreview());
@@ -619,6 +674,35 @@ export class UI {
             this.orientationVertical.classList.add('active');
             this.orientationHorizontal?.classList.remove('active');
             this.updateCreatorPreview();
+        });
+
+        // Stripe mode font select
+        this.stripeNumberFontSelect?.addEventListener('change', () => this.updateCreatorPreview());
+
+        // Stripe mode circle opacity slider
+        this.circleOpacitySlider?.addEventListener('input', (e) => {
+            if (this.circleOpacityValue) this.circleOpacityValue.textContent = parseFloat(e.target.value).toFixed(2);
+            this.updateCreatorPreview();
+        });
+
+        // Stripe mode texture controls
+        this.stripeTextureToggle?.querySelectorAll('.texture-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                this.stripeTextureToggle.querySelectorAll('.texture-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                this.creatorTexture = btn.dataset.texture;
+                this.stripeTextureColorRow?.classList.toggle('hidden', this.creatorTexture === 'none');
+                this.updateCreatorPreview();
+            });
+        });
+        this.stripeTextureModeToggle?.querySelectorAll('.texture-mode-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                this.stripeTextureModeToggle.querySelectorAll('.texture-mode-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                this.creatorTextureColorMode = btn.dataset.mode;
+                this.stripeTextureColorField?.classList.toggle('hidden', btn.dataset.mode !== 'single');
+                this.updateCreatorPreview();
+            });
         });
 
         // Table creator sliders
@@ -918,7 +1002,12 @@ export class UI {
             numberCircleRadius: config.numberCircleRadius,
             borderWidth: config.borderWidth,
             numberScale: config.numberScale,
-            stripeOrientation: config.stripeOrientation
+            stripeOrientation: config.stripeOrientation,
+            numberCircleOpacity: config.numberCircleOpacity,
+            texture: config.texture,
+            textureColorMode: config.textureColorMode,
+            textureColor: config.textureColor,
+            numberFont: config.numberFont
         };
 
         try {
@@ -1228,6 +1317,28 @@ export class UI {
                 this.solidOrientationHorizontal?.classList.add('active');
                 this.solidOrientationVertical?.classList.remove('active');
             }
+
+            // Load font
+            if (this.solidNumberFontSelect) this.solidNumberFontSelect.value = set.options?.numberFont || 'Arial';
+
+            // Load circle opacity
+            if (this.solidCircleOpacitySlider) {
+                this.solidCircleOpacitySlider.value = set.options?.numberCircleOpacity ?? 1.0;
+                if (this.solidCircleOpacityValue) this.solidCircleOpacityValue.textContent = (set.options?.numberCircleOpacity ?? 1.0).toFixed(2);
+            }
+
+            // Load texture
+            this.solidCreatorTexture = set.options?.texture || 'none';
+            this.solidCreatorTextureColorMode = set.options?.textureColorMode || 'auto';
+            this.solidTextureToggle?.querySelectorAll('.texture-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.texture === this.solidCreatorTexture);
+            });
+            this.solidTextureColorRow?.classList.toggle('hidden', this.solidCreatorTexture === 'none');
+            this.solidTextureModeToggle?.querySelectorAll('.texture-mode-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.mode === this.solidCreatorTextureColorMode);
+            });
+            this.solidTextureColorField?.classList.toggle('hidden', this.solidCreatorTextureColorMode !== 'single');
+            this.setSwatchColor('solid-texture-color', set.options?.textureColor || '#FFFFFF');
         } else {
             // Load stripe mode values
             this.setSwatchColor('solids', set.colors?.group1 || '#FFD700');
@@ -1279,6 +1390,28 @@ export class UI {
                 this.orientationHorizontal?.classList.add('active');
                 this.orientationVertical?.classList.remove('active');
             }
+
+            // Load font
+            if (this.stripeNumberFontSelect) this.stripeNumberFontSelect.value = set.options?.numberFont || 'Arial';
+
+            // Load circle opacity
+            if (this.circleOpacitySlider) {
+                this.circleOpacitySlider.value = set.options?.numberCircleOpacity ?? 1.0;
+                if (this.circleOpacityValue) this.circleOpacityValue.textContent = (set.options?.numberCircleOpacity ?? 1.0).toFixed(2);
+            }
+
+            // Load texture
+            this.creatorTexture = set.options?.texture || 'none';
+            this.creatorTextureColorMode = set.options?.textureColorMode || 'auto';
+            this.stripeTextureToggle?.querySelectorAll('.texture-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.texture === this.creatorTexture);
+            });
+            this.stripeTextureColorRow?.classList.toggle('hidden', this.creatorTexture === 'none');
+            this.stripeTextureModeToggle?.querySelectorAll('.texture-mode-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.mode === this.creatorTextureColorMode);
+            });
+            this.stripeTextureColorField?.classList.toggle('hidden', this.creatorTextureColorMode !== 'single');
+            this.setSwatchColor('stripe-texture-color', set.options?.textureColor || '#FFFFFF');
 
             // Load advanced mode
             if (set.advancedMode && set.ballColors) {
@@ -1366,6 +1499,28 @@ export class UI {
         this.solidOrientationHorizontal?.classList.add('active');
         this.solidOrientationVertical?.classList.remove('active');
 
+        // Reset solid font
+        if (this.solidNumberFontSelect) this.solidNumberFontSelect.value = 'Arial';
+
+        // Reset solid circle opacity
+        if (this.solidCircleOpacitySlider) {
+            this.solidCircleOpacitySlider.value = 1;
+            if (this.solidCircleOpacityValue) this.solidCircleOpacityValue.textContent = '1.00';
+        }
+
+        // Reset solid texture
+        this.solidCreatorTexture = 'none';
+        this.solidCreatorTextureColorMode = 'auto';
+        this.solidTextureToggle?.querySelectorAll('.texture-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.texture === 'none');
+        });
+        this.solidTextureColorRow?.classList.add('hidden');
+        this.solidTextureModeToggle?.querySelectorAll('.texture-mode-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.mode === 'auto');
+        });
+        this.solidTextureColorField?.classList.add('hidden');
+        this.setSwatchColor('solid-texture-color', '#FFFFFF');
+
         // Reset stripe mode fields
         this.setSwatchColor('solids', '#FFD700');
         this.setSwatchColor('stripes', '#0000CD');
@@ -1426,6 +1581,28 @@ export class UI {
         this.stripeOrientation = 'horizontal';
         this.orientationHorizontal?.classList.add('active');
         this.orientationVertical?.classList.remove('active');
+
+        // Reset stripe font
+        if (this.stripeNumberFontSelect) this.stripeNumberFontSelect.value = 'Arial';
+
+        // Reset stripe circle opacity
+        if (this.circleOpacitySlider) {
+            this.circleOpacitySlider.value = 1;
+            if (this.circleOpacityValue) this.circleOpacityValue.textContent = '1.00';
+        }
+
+        // Reset stripe texture
+        this.creatorTexture = 'none';
+        this.creatorTextureColorMode = 'auto';
+        this.stripeTextureToggle?.querySelectorAll('.texture-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.texture === 'none');
+        });
+        this.stripeTextureColorRow?.classList.add('hidden');
+        this.stripeTextureModeToggle?.querySelectorAll('.texture-mode-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.mode === 'auto');
+        });
+        this.stripeTextureColorField?.classList.add('hidden');
+        this.setSwatchColor('stripe-texture-color', '#FFFFFF');
 
         // Reset modal title and button text for create mode
         const modalTitle = this.creatorModal.querySelector('.modal-header h2');
@@ -1611,7 +1788,12 @@ export class UI {
                     numberCircleRadius: parseFloat(this.solidCircleRadiusSlider?.value || '0.80'),
                     borderWidth: parseFloat(this.solidBorderWidthSlider?.value || '1.0'),
                     numberScale: parseFloat(this.solidNumberScaleSlider?.value || '1.0'),
-                    stripeOrientation: this.solidStripeOrientation || 'horizontal'
+                    stripeOrientation: this.solidStripeOrientation || 'horizontal',
+                    numberCircleOpacity: parseFloat(this.solidCircleOpacitySlider?.value ?? '1'),
+                    texture: this.solidCreatorTexture || 'none',
+                    textureColorMode: this.solidCreatorTextureColorMode || 'auto',
+                    textureColor: this.getSwatchColor('solid-texture-color'),
+                    numberFont: this.solidNumberFontSelect?.value || 'Arial'
                 }
             };
         } else {
@@ -1640,7 +1822,12 @@ export class UI {
                     numberCircleRadius: parseFloat(this.circleRadiusSlider?.value || '0.5'),
                     borderWidth: parseFloat(this.borderWidthSlider?.value || '1.0'),
                     numberScale: parseFloat(this.numberScaleSlider?.value || '1.0'),
-                    stripeOrientation: this.stripeOrientation || 'horizontal'
+                    stripeOrientation: this.stripeOrientation || 'horizontal',
+                    numberCircleOpacity: parseFloat(this.circleOpacitySlider?.value ?? '1'),
+                    texture: this.creatorTexture || 'none',
+                    textureColorMode: this.creatorTextureColorMode || 'auto',
+                    textureColor: this.getSwatchColor('stripe-texture-color'),
+                    numberFont: this.stripeNumberFontSelect?.value || 'Arial'
                 }
             };
 
@@ -1708,7 +1895,12 @@ export class UI {
                     numberCircleRadius: parseFloat(this.solidCircleRadiusSlider?.value || '0.80'),
                     borderWidth: parseFloat(this.solidBorderWidthSlider?.value || '1.0'),
                     numberScale: parseFloat(this.solidNumberScaleSlider?.value || '1.0'),
-                    stripeOrientation: this.solidStripeOrientation || 'horizontal'
+                    stripeOrientation: this.solidStripeOrientation || 'horizontal',
+                    numberCircleOpacity: parseFloat(this.solidCircleOpacitySlider?.value ?? '1'),
+                    texture: this.solidCreatorTexture || 'none',
+                    textureColorMode: this.solidCreatorTextureColorMode || 'auto',
+                    textureColor: this.getSwatchColor('solid-texture-color'),
+                    numberFont: this.solidNumberFontSelect?.value || 'Arial'
                 }
             };
         } else {
@@ -1735,7 +1927,12 @@ export class UI {
                     numberCircleRadius: parseFloat(this.circleRadiusSlider?.value || '0.5'),
                     borderWidth: parseFloat(this.borderWidthSlider?.value || '1.0'),
                     numberScale: parseFloat(this.numberScaleSlider?.value || '1.0'),
-                    stripeOrientation: this.stripeOrientation || 'horizontal'
+                    stripeOrientation: this.stripeOrientation || 'horizontal',
+                    numberCircleOpacity: parseFloat(this.circleOpacitySlider?.value ?? '1'),
+                    texture: this.creatorTexture || 'none',
+                    textureColorMode: this.creatorTextureColorMode || 'auto',
+                    textureColor: this.getSwatchColor('stripe-texture-color'),
+                    numberFont: this.stripeNumberFontSelect?.value || 'Arial'
                 }
             };
 

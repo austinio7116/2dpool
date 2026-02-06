@@ -35,7 +35,12 @@ export class Ball {
         this.borderWidth = 1.0;  // Border width scale (default 1.0)
         this.numberScale = 1.0;  // Number text scale (default 1.0)
         this.stripeOrientation = 'horizontal';  // Stripe orientation: 'horizontal' or 'vertical'
-        
+        this.numberCircleOpacity = 1.0;  // Number circle background opacity
+        this.texture = 'none';  // Procedural texture: 'none', 'camouflage', 'striped', 'marbled', 'sparkly'
+        this.textureColorMode = 'auto';  // 'auto' or 'single'
+        this.textureColor = '#FFFFFF';  // Custom texture color
+        this.numberFont = 'Arial';  // Font for number text
+
         // VISUALS
         this.rotation = 0; // Legacy 2D rotation (can map to Z-spin)
         this.rollAngle = 0;

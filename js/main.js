@@ -279,6 +279,11 @@ class PoolGame {
             ball.borderWidth = config.borderWidth ?? 1.0;
             ball.numberScale = config.numberScale ?? 1.0;
             ball.stripeOrientation = config.stripeOrientation || 'horizontal';
+            ball.numberCircleOpacity = config.numberCircleOpacity ?? 1.0;
+            ball.texture = config.texture || 'none';
+            ball.textureColorMode = config.textureColorMode || 'auto';
+            ball.textureColor = config.textureColor || '#FFFFFF';
+            ball.numberFont = config.numberFont || 'Arial';
         }
 
         // Progress callback for loading bar

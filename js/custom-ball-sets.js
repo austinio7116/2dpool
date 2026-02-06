@@ -385,7 +385,12 @@ export class CustomBallSetManager {
                 numberCircleRadius: setData.options?.numberCircleRadius ?? 0.5,
                 borderWidth: setData.options?.borderWidth ?? 1.0,
                 numberScale: setData.options?.numberScale ?? 1.0,
-                stripeOrientation: setData.options?.stripeOrientation || 'horizontal'
+                stripeOrientation: setData.options?.stripeOrientation || 'horizontal',
+                numberCircleOpacity: setData.options?.numberCircleOpacity ?? 1.0,
+                texture: setData.options?.texture || 'none',
+                textureColorMode: setData.options?.textureColorMode || 'auto',
+                textureColor: setData.options?.textureColor || '#FFFFFF',
+                numberFont: setData.options?.numberFont || 'Arial'
             },
             isPredefined: false,
             createdAt: Date.now()
@@ -435,7 +440,12 @@ export class CustomBallSetManager {
                 numberCircleRadius: setData.options?.numberCircleRadius ?? 0.5,
                 borderWidth: setData.options?.borderWidth ?? 1.0,
                 numberScale: setData.options?.numberScale ?? 1.0,
-                stripeOrientation: setData.options?.stripeOrientation || 'horizontal'
+                stripeOrientation: setData.options?.stripeOrientation || 'horizontal',
+                numberCircleOpacity: setData.options?.numberCircleOpacity ?? 1.0,
+                texture: setData.options?.texture || 'none',
+                textureColorMode: setData.options?.textureColorMode || 'auto',
+                textureColor: setData.options?.textureColor || '#FFFFFF',
+                numberFont: setData.options?.numberFont || 'Arial'
             },
             isPredefined: false,
             createdAt: existingSet.createdAt,
@@ -656,7 +666,12 @@ export class CustomBallSetManager {
             numberCircleRadius: ballSet.options?.numberCircleRadius ?? 0.66,
             borderWidth: ballSet.options?.borderWidth ?? 1.0,
             numberScale: ballSet.options?.numberScale ?? 1.0,
-            stripeOrientation: ballSet.options?.stripeOrientation || 'horizontal'
+            stripeOrientation: ballSet.options?.stripeOrientation || 'horizontal',
+            numberCircleOpacity: ballSet.options?.numberCircleOpacity ?? 1.0,
+            texture: ballSet.options?.texture || 'none',
+            textureColorMode: ballSet.options?.textureColorMode || 'auto',
+            textureColor: ballSet.options?.textureColor || '#FFFFFF',
+            numberFont: ballSet.options?.numberFont || 'Arial'
         };
     }
 

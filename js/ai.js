@@ -5,7 +5,7 @@ import { Vec2 } from './utils.js';
 import { GameMode, GameState } from './game.js';
 
 // Debug logging - set to true to see AI decision making
-const AI_DEBUG = false;
+const AI_DEBUG = true;
 
 // Trained angle error prediction model (loaded dynamically if available)
 let angleModel = null;
@@ -1199,7 +1199,7 @@ export class AI {
                 }
 
                 // Calculate Composite Score
-                const compositeScore = (potScore * 0.5) + (positionScore * 0.5);
+                const compositeScore = (potScore * 0.9) + (positionScore * 0.1);
 
                 // Name generation for debugging
                 let typeName = 'Stun';
@@ -1274,7 +1274,7 @@ export class AI {
         // B: Target to Pocket
         let lengthPenalty = 0;
         if (distTargetToPocket < 150) {
-             lengthPenalty = (distTargetToPocket - 150) / 5;
+             lengthPenalty = -1 * (distTargetToPocket - 150) / 5;
              score += lengthPenalty; 
              penalties.pocketDist = -lengthPenalty; 
         } else if (distTargetToPocket > 600) {

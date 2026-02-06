@@ -96,6 +96,7 @@ export class AI {
         // Shot tracking for data collection
         this.pendingShot = null;  // Current shot being tracked
         this.shotHistory = [];    // All tracked shots
+        this.lastTurnPlayer = null;
 
         // Track last shot that resulted in a foul (to avoid repeated fouls)
         this.lastFoulShot = null;  // { targetId, pocketIndex, cutAngle, direction }
@@ -363,6 +364,22 @@ export class AI {
         const isAIPlayer = this.trainingMode || this.game.currentPlayer === 2;
         if (!this.enabled || !this.game || !isAIPlayer) {
             return;
+        }
+
+        // NEW: Detect Turn Shift
+        // If the current player is different from the last time we actively played,
+        // it means the opponent took a turn in between.
+        if (this.lastTurnPlayer !== this.game.currentPlayer) {
+             // Exception: Snooker 'Restore' puts balls back, so we SHOULD keep foul memory.
+             // But for standard play, clear it.
+             const isRestore = this.game.pendingFoulDecision?.decision === 'restore';
+             
+             if (!isRestore) {
+                 this.clearFoulTracking();
+                 aiLog('[AI] New turn detected - clearing previous foul memory');
+             }
+             
+             this.lastTurnPlayer = this.game.currentPlayer;
         }
 
         if (this.game.state === GameState.BALL_IN_HAND) {
@@ -1122,73 +1139,87 @@ export class AI {
         // 1. Calculate the "Pure" Geometric Difficulty once
         const baseDifficulty = this.calculatePottingDifficulty(cueBallPos, target, pocket, true);
 
-        // Calculate distances for power scaling
+        // 1. Calculate Minimum Power Needed
         const distCueToTarget = Vec2.distance(cueBallPos, target.position);
         const distTargetToPocket = Vec2.distance(target.position, pocket.position);
         const totalDist = distCueToTarget + distTargetToPocket;
         
-        // Base power calculation
-        const minPower = 5 + (totalDist / 45); 
+        // Base friction + cut angle inefficiency (45° cut needs ~1.5x power)
+        const cutFactor = 1 + (baseGeometry.cutAngle / 90);
+        const minPowerToReach = (totalDist / 45) * cutFactor + 2; // +2 buffer
 
-        const strategies = [
-            { name: 'Soft Stun',   powerMult: 1, spinY: 0 },
-            { name: 'Med Stun',    powerMult: 1.1, spinY: 0.05 },
-            { name: 'Soft Follow', powerMult: 0.9, spinY: -0.4 },
-            { name: 'Med Follow',  powerMult: 1.1, spinY: -0.6 },
-            { name: 'Soft Draw',   powerMult: 1.0, spinY: 0.4 }, 
-            { name: 'Med Draw',    powerMult: 1.1, spinY: 0.6 },
-            { name: 'Hard Power',  powerMult: 1.5, spinY: 0 } 
-        ];
+        // 2. Define Your Sweep Arrays
+        // (Using the values you provided)
+        const powerLevels = [2.5, 3.5, 4.5, 5.5, 6.5, 8.5, 10.5, 13.5, 18.5, 21.5, 26.5, 39.5, 38.5, 45.5];
+        const spinLevels = [-0.9, -0.5, -0.2, 0, 0.2, 0.5, 0.9]; // 0=Stun, >0=Draw, <0=Follow
 
-        for (const strat of strategies) {
-            let power = minPower * strat.powerMult;
-            power = Math.min(power, 45); 
-
-            // Predict Scratch
-            const prediction = this.predictCueBallPath({
-                target, pocket, ghostBall: baseGeometry.ghostBall,
-                direction: baseGeometry.direction, power: power, cutAngle: baseGeometry.cutAngle
-            }, strat.spinY);
+        // 3. Iterate All Permutations
+        for (const power of powerLevels) {
             
-            if (prediction.scratchRisk) continue;
+            // FILTER: Skip powers that are too soft to reach the pocket
+            if (power < minPowerToReach) continue;
 
-            // Predict Position
-            const predictedEndPos = this.predictEndPosition({
-                ghostBall: baseGeometry.ghostBall, power: power
-            }, strat.spinY, prediction.direction);
-            
-            // Evaluate Next Shot
-            const positionScore = this.evaluatePositionQuality(predictedEndPos, target);
+            for (const spinY of spinLevels) {
+                
+                // OPTIONAL: Skip high-spin on very low power (physics breakdown)
+                // Backspin needs some speed to "bite", but this is up to you.
+                // if (Math.abs(spinY) > 0.4 && power < 8) continue;
 
-            // --- CALCULATE POT SCORE ---
-            // Start with base difficulty from helper
-            let potScore = baseDifficulty;
+                // --- SIMULATION LOGIC ---
 
-            // Apply Power Penalty (Higher power = lower accuracy)
-            // Hitting hard reduces effective pocket size
-            const powerPenalty = (power / 50) * 15;
-            potScore -= powerPenalty;
+                // Predict Scratch
+                const prediction = this.predictCueBallPath({
+                    target, pocket, ghostBall: baseGeometry.ghostBall,
+                    direction: baseGeometry.direction, power: power, cutAngle: baseGeometry.cutAngle
+                }, spinY);
+                
+                if (prediction.scratchRisk) continue;
 
-            // Apply Side Pocket + High Power Risk
-            // If it's a side pocket shot and we are hitting hard, accuracy drops massively
-            if (pocket.type === 'side' && strat.name.includes('Hard')) {
-                 potScore -= 15; 
+                // Predict Position
+                const predictedEndPos = this.predictEndPosition({
+                    ghostBall: baseGeometry.ghostBall, power: power
+                }, spinY, prediction.direction);
+                
+                // Evaluate Next Shot
+                const positionScore = this.evaluatePositionQuality(predictedEndPos, target);
+
+                // --- SCORING LOGIC ---
+                
+                // Start with base geometric difficulty
+                let potScore = baseDifficulty;
+
+                // Apply Power Penalty (Higher power = lower accuracy)
+                // This is crucial so it prefers the "Softest" successful power
+                const powerPenalty = (power / 50) * 15;
+                potScore -= powerPenalty;
+
+                // Apply Side Pocket + High Power Risk
+                if (pocket.type === 'side' && power > 30) {
+                    potScore -= 15; 
+                }
+
+                // Calculate Composite Score
+                const compositeScore = (potScore * 0.5) + (positionScore * 0.5);
+
+                // Name generation for debugging
+                let typeName = 'Stun';
+                if (spinY > 0.1) typeName = 'Draw';
+                if (spinY < -0.1) typeName = 'Follow';
+
+                variants.push({
+                    ...baseGeometry,
+                    target, pocket, 
+                    power,
+                    spin: { x: 0, y: spinY },
+                    powerLevel: `${typeName} (${power})`, // e.g., "Draw (18)"
+                    potScore: Math.max(0, potScore),
+                    positionScore,
+                    compositeScore,
+                    cueBallEndPos: predictedEndPos
+                });
             }
-
-            // Variants Weighting
-            const compositeScore = (potScore * 0.5) + (positionScore * 0.5);
-
-            variants.push({
-                ...baseGeometry,
-                target, pocket, power,
-                spin: { x: 0, y: strat.spinY },
-                powerLevel: strat.name,
-                potScore: Math.max(0, potScore),
-                positionScore,
-                compositeScore,
-                cueBallEndPos: predictedEndPos
-            });
         }
+
         return variants;
     }
 

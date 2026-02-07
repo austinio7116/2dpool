@@ -1,0 +1,907 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2D Pool — ELO Tournament</title>
+    <script type="importmap">
+    {
+        "imports": {
+            "planck": "https://esm.sh/planck-js@1.0.6"
+        }
+    }
+    </script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background: #1a1a2e;
+            color: #e0e0e0;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        h1 {
+            text-align: center;
+            color: #00d4aa;
+            margin-bottom: 6px;
+            font-size: 1.6rem;
+        }
+        .subtitle {
+            text-align: center;
+            color: #888;
+            margin-bottom: 20px;
+            font-size: 0.85rem;
+        }
+        .controls {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+            align-items: center;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        button {
+            background: #00d4aa;
+            color: #1a1a2e;
+            border: none;
+            padding: 10px 24px;
+            border-radius: 6px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+        button:hover { opacity: 0.85; }
+        button:disabled { opacity: 0.4; cursor: not-allowed; }
+        .config-group {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            color: #aaa;
+            font-size: 0.85rem;
+        }
+        .config-group label { white-space: nowrap; }
+        .config-group input {
+            width: 60px;
+            background: #16213e;
+            border: 1px solid #444;
+            color: #e0e0e0;
+            padding: 4px 8px;
+            border-radius: 4px;
+            text-align: center;
+        }
+        .progress-section {
+            background: #16213e;
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 20px;
+        }
+        .progress-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+            font-size: 0.85rem;
+        }
+        .progress-bar-bg {
+            background: #0f3460;
+            border-radius: 4px;
+            height: 8px;
+            overflow: hidden;
+        }
+        .progress-bar-fill {
+            background: #00d4aa;
+            height: 100%;
+            width: 0%;
+            transition: width 0.3s;
+            border-radius: 4px;
+        }
+        .tables-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+        .result-table {
+            background: #16213e;
+            border-radius: 8px;
+            padding: 16px;
+            overflow-x: auto;
+        }
+        .result-table h3 {
+            color: #00d4aa;
+            margin-bottom: 10px;
+            font-size: 1rem;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.82rem;
+        }
+        th {
+            text-align: left;
+            padding: 6px 8px;
+            border-bottom: 2px solid #0f3460;
+            color: #00d4aa;
+            white-space: nowrap;
+        }
+        td {
+            padding: 5px 8px;
+            border-bottom: 1px solid #0f3460;
+            white-space: nowrap;
+        }
+        tr:hover td { background: rgba(0,212,170,0.05); }
+        .rank { color: #888; }
+        .persona-chip {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 6px;
+            vertical-align: middle;
+        }
+        .elo-up { color: #4caf50; }
+        .elo-down { color: #f44336; }
+        .log-section {
+            background: #16213e;
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 20px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .log-section h3 {
+            color: #00d4aa;
+            margin-bottom: 10px;
+            font-size: 1rem;
+        }
+        .log-entry {
+            font-size: 0.78rem;
+            padding: 2px 0;
+            color: #bbb;
+            font-family: 'Consolas', 'Monaco', monospace;
+        }
+        .log-entry .winner { color: #4caf50; font-weight: 600; }
+        .log-entry .draw { color: #ff9800; }
+        .log-entry .mode-tag {
+            display: inline-block;
+            background: #0f3460;
+            color: #00d4aa;
+            padding: 1px 6px;
+            border-radius: 3px;
+            font-size: 0.72rem;
+            margin-right: 4px;
+        }
+        @media (max-width: 600px) {
+            .tables-container { grid-template-columns: 1fr; }
+            .controls { flex-direction: column; }
+        }
+    </style>
+</head>
+<body>
+    <h1>2D Pool &mdash; ELO Tournament</h1>
+    <p class="subtitle">Round-robin AI vs AI across all competitive game modes</p>
+
+    <div class="controls">
+        <div class="config-group">
+            <label for="games-per-pair">Games per pairing per mode:</label>
+            <input type="number" id="games-per-pair" value="10" min="2" max="100" step="2">
+        </div>
+        <button id="start-btn">Start Tournament</button>
+    </div>
+
+    <div class="progress-section" id="progress-section" style="display:none;">
+        <div class="progress-info">
+            <span id="progress-matchup">—</span>
+            <span id="progress-count">0 / 0</span>
+        </div>
+        <div class="progress-bar-bg">
+            <div class="progress-bar-fill" id="progress-bar"></div>
+        </div>
+    </div>
+
+    <div class="tables-container" id="tables-container"></div>
+
+    <div class="log-section" id="log-section" style="display:none;">
+        <h3>Game Log</h3>
+        <div id="log-entries"></div>
+    </div>
+
+    <script type="module">
+        import { Table } from './js/table.js';
+        import { PlanckPhysics } from './js/planck-physics.js';
+        import { Game, GameMode, GameState } from './js/game.js';
+        import { AI } from './js/ai.js';
+        import { AI_PERSONAS } from './js/ai-personas.js';
+        import { Vec2 } from './js/utils.js';
+
+        // ─── HeadlessGame ─────────────────────────────────────────────
+        class HeadlessGame {
+            constructor() {
+                this.table = new Table();
+                this.physics = new PlanckPhysics(this.table);
+                this.game = new Game(this.table);
+                this.ai = new AI();
+
+                this.ai.setGameReferences(this.game, this.table);
+                this.ai.setPhysics(this.physics);
+                this.ai.initializePocketGeometry(this.physics);
+
+                this._shotResolver = null;
+                this._shotPending = false;
+                this._turns = 0;
+                this._currentTableStyle = 1;
+
+                this._bindCallbacks();
+            }
+
+            _bindCallbacks() {
+                // AI fires shot → we apply it and resolve the pending promise
+                this.ai.onShot = (direction, power, spin) => {
+                    this._executeShot(direction, power, spin);
+                };
+
+                // AI places cue ball
+                this.ai.onBallPlacement = (position) => {
+                    this._placeCueBall(position);
+                };
+
+                // No-op UI callbacks
+                this.ai.onThinkingStart = () => {};
+                this.ai.onThinkingEnd = () => {};
+
+                // Game state changes drive AI turns
+                this.game.onStateChange = (state) => {
+                    this._handleStateChange(state);
+                };
+
+                this.game.onFoul = (reason, isMiss) => {
+                    // Record foul for AI's avoidance logic
+                    if (this.ai.enabled) {
+                        this.ai.recordFoul();
+                    }
+                };
+
+                this.game.onGameOver = (winner, reason, match) => {
+                    this._gameOverResult = { winner, reason, match };
+                };
+
+                this.game.onBallPocketed = () => {};
+
+                // Snooker callbacks
+                this.game.onFoulDecision = (foulInfo) => {
+                    this._handleFoulDecision(foulInfo);
+                };
+                this.game.onNominationRequired = () => {
+                    this._handleNominationRequired();
+                };
+                this.game.onNominationChange = () => {};
+                this.game.onFreeBallAwarded = () => {
+                    this._handleFreeBallAwarded();
+                };
+                this.game.onFreeBallNominated = () => {};
+                this.game.onMissWarning = () => {};
+            }
+
+            startGame(mode, persona1, persona2, breakingPlayer, tableStyle = 1) {
+                this._gameOverResult = null;
+                this._turns = 0;
+                this._shotPending = false;
+                this._shotResolver = null;
+
+                // Switch table style if needed (mirrors main.js onTableChange)
+                if (tableStyle !== this._currentTableStyle) {
+                    this._currentTableStyle = tableStyle;
+                    this.table.setTableStyle(tableStyle);
+                    this.physics.setTableStyle(tableStyle);
+                    this.game.setTableStyle(tableStyle);
+                    this.ai.setPhysics(this.physics);
+                    this.ai.initializePocketGeometry(this.physics);
+                }
+
+                this.physics.reset();
+
+                // Configure AI in training mode (both players are AI)
+                this.ai.setEnabled(true);
+                this.ai.trainingMode = true;
+                this.ai.setPersona(persona2);   // player 2
+                this.ai.setPersona2(persona1);  // player 1
+                this.ai.setGameReferences(this.game, this.table);
+                this.ai.initializePocketGeometry(this.physics);
+
+                // Clear any stale foul tracking
+                this.ai.clearFoulTracking();
+                this.ai.lastTurnPlayer = null;
+
+                // Start the game
+                this.game.startGame(mode, {
+                    startingPlayer: breakingPlayer,
+                    bestOf: 1
+                });
+            }
+
+            async playToCompletion() {
+                const MAX_TURNS = 200;
+                const MAX_PHYSICS_FRAMES = 5000;
+
+                // The game starts in BALL_IN_HAND state.
+                // onStateChange was already called by game.startGame() → we need to
+                // kick the AI for the initial state.
+                this._triggerAI();
+
+                while (!this._gameOverResult && this._turns < MAX_TURNS) {
+                    // Wait for AI to fire a shot (resolves when executeShot is called)
+                    const shotFired = await this._waitForShot(10000);
+                    if (!shotFired) {
+                        // Timeout or stuck — force draw
+                        return { winner: null, turns: this._turns, reason: 'AI timeout' };
+                    }
+
+                    if (this._gameOverResult) break;
+
+                    // Run physics until balls stop
+                    // Must use do-while: the first update() call syncs the shot
+                    // velocity to Planck (via syncBallsToPlanck/forceSync), so
+                    // areBallsMoving() would return false if checked before update.
+                    let frames = 0;
+                    do {
+                        const events = this.physics.update(this.game.balls, 16.67);
+                        this._processEvents(events);
+                        for (const ball of this.game.balls) {
+                            if (ball.sinking) ball.update();
+                        }
+                        frames++;
+                        if (this._gameOverResult) break;
+                    } while (this.physics.areBallsMoving(this.game.balls) && frames < MAX_PHYSICS_FRAMES);
+
+                    if (this._gameOverResult) break;
+
+                    // Force-stop if physics ran too long
+                    if (frames >= MAX_PHYSICS_FRAMES) {
+                        for (const ball of this.game.balls) {
+                            if (!ball.pocketed) {
+                                ball.stop();
+                                ball.spin.x = 0;
+                                ball.spin.y = 0;
+                                ball.spinZ = 0;
+                                ball.isSliding = false;
+                            }
+                        }
+                    }
+
+                    // Balls stopped — evaluate turn
+                    this.game.onBallsStopped();
+                    this._turns++;
+
+                    if (this._gameOverResult) break;
+
+                    // onBallsStopped triggers onStateChange which triggers _handleStateChange
+                    // which calls _triggerAI — so the next shot promise should already be set up.
+                    // But for snooker AWAITING_DECISION, the decision handler also triggers AI.
+                    // Give any pending setTimeout callbacks a chance to fire.
+                    await this._yieldMicrotask();
+                }
+
+                if (!this._gameOverResult && this._turns >= MAX_TURNS) {
+                    return { winner: null, turns: this._turns, reason: 'Max turns exceeded' };
+                }
+
+                return {
+                    winner: this._gameOverResult?.winner || null,
+                    turns: this._turns,
+                    reason: this._gameOverResult?.reason || 'unknown'
+                };
+            }
+
+            _processEvents(events) {
+                for (const event of events) {
+                    if (event.type === 'ball') {
+                        this.game.onBallCollision(event.ballA, event.ballB);
+                    } else if (event.type === 'pocket') {
+                        this.game.onBallPocket(event.ball);
+                    }
+                }
+            }
+
+            _executeShot(direction, power, spin) {
+                if (this.game.state !== GameState.PLAYING) return;
+                if (!this.game.cueBall || this.game.cueBall.pocketed) return;
+                if (this._shotPending) return; // guard against double-fire
+
+                this._shotPending = true;
+
+                const cueBall = this.game.cueBall;
+
+                // Replicate main.js executeShot logic exactly
+                const velocity = Vec2.multiply(direction, power);
+                cueBall.velocity.x = velocity.x;
+                cueBall.velocity.y = velocity.y;
+
+                const speed = Math.sqrt(velocity.x * velocity.x + velocity.y * velocity.y);
+                const R = cueBall.radius;
+                const naturalOmega = speed / R;
+
+                cueBall.spinZ = -spin.x * naturalOmega * 2.0 * 60;
+
+                const perpX = -direction.y;
+                const perpY = direction.x;
+
+                const rollingSpinX = perpX * naturalOmega * 60;
+                const rollingSpinY = perpY * naturalOmega * 60;
+
+                const spinFactor = spin.y * 5;
+                cueBall.spin.x = rollingSpinX * spinFactor;
+                cueBall.spin.y = rollingSpinY * spinFactor;
+
+                cueBall.forceSync = true;
+                cueBall.isSliding = true;
+
+                this.game.onShotTaken();
+
+                // Resolve the pending shot promise
+                if (this._shotResolver) {
+                    const resolve = this._shotResolver;
+                    this._shotResolver = null;
+                    resolve(true);
+                }
+            }
+
+            _placeCueBall(position) {
+                let placementMode = 'anywhere';
+                if (this.game.mode === GameMode.SNOOKER) {
+                    placementMode = 'dzone';
+                } else if (this.game.isBreakShot || this.game.mode === GameMode.UK_EIGHT_BALL) {
+                    placementMode = 'kitchen';
+                }
+
+                if (this.game.canPlaceCueBall(position, placementMode)) {
+                    this.game.placeCueBall(position, placementMode);
+                } else {
+                    // Fallback
+                    let validPos;
+                    if (placementMode === 'dzone') {
+                        validPos = this.table.findValidDPosition(this.game.balls, this.table.center.y);
+                    } else if (placementMode === 'kitchen') {
+                        validPos = this.table.findValidKitchenPosition(this.game.balls, this.table.center.y);
+                    } else {
+                        validPos = this.table.findValidCueBallPosition(this.game.balls, this.table.center.y);
+                    }
+                    if (validPos && this.game.canPlaceCueBall(validPos, placementMode)) {
+                        this.game.placeCueBall(validPos, placementMode);
+                    }
+                }
+            }
+
+            _handleStateChange(state) {
+                if (state === GameState.BALL_IN_HAND) {
+                    // Position cue ball for AI
+                    let validPos;
+                    if (this.game.mode === GameMode.SNOOKER) {
+                        validPos = this.table.findValidDPosition(this.game.balls, this.table.center.y);
+                    } else if (this.game.isBreakShot || this.game.mode === GameMode.UK_EIGHT_BALL) {
+                        validPos = this.table.findValidKitchenPosition(this.game.balls, this.table.center.y);
+                    } else {
+                        validPos = this.table.findValidCueBallPosition(this.game.balls, this.table.center.y);
+                    }
+                    if (validPos) {
+                        this.game.cueBall.setPosition(validPos.x, validPos.y);
+                        this.game.cueBall.pocketed = false;
+                        this.game.cueBall.sinking = false;
+                        this.game.cueBall.velocity.x = 0;
+                        this.game.cueBall.velocity.y = 0;
+                    }
+                }
+
+                // Trigger AI for actionable states
+                // Note: AWAITING_DECISION is handled by _handleFoulDecision
+                // (called from game.onFoulDecision before onStateChange)
+                if (state === GameState.BALL_IN_HAND ||
+                    state === GameState.PLAYING) {
+                    this._triggerAI();
+                }
+            }
+
+            _handleFoulDecision(foulInfo) {
+                // The decision maker is the opponent of the fouling player
+                const foulingPlayer = this.game.currentPlayer;
+                const decision = this.ai.makeSnookerFoulDecision(foulInfo);
+                // Apply immediately (synchronous in headless mode)
+                setTimeout(() => {
+                    this.game.applySnookerDecision(decision);
+                }, 1);
+            }
+
+            _handleNominationRequired() {
+                const nomination = this.ai.chooseColorNomination(this.game.balls);
+                this.game.setNominatedColor(nomination);
+            }
+
+            _handleFreeBallAwarded() {
+                this.ai.nominateFreeBall();
+            }
+
+            _triggerAI() {
+                // Reset shot pending flag so the next shot can resolve
+                this._shotPending = false;
+                // Schedule AI turn with minimal delay (the AI uses setTimeout internally)
+                setTimeout(() => {
+                    if (!this._gameOverResult) {
+                        this.ai.takeTurn();
+                    }
+                }, 1);
+            }
+
+            _waitForShot(timeoutMs) {
+                return new Promise((resolve) => {
+                    // If shot was already fired synchronously, resolve immediately
+                    if (this._shotPending) {
+                        resolve(true);
+                        return;
+                    }
+
+                    let settled = false;
+
+                    const timer = setTimeout(() => {
+                        if (!settled) {
+                            settled = true;
+                            this._shotResolver = null;
+                            resolve(false);
+                        }
+                    }, timeoutMs);
+
+                    this._shotResolver = (val) => {
+                        if (!settled) {
+                            settled = true;
+                            clearTimeout(timer);
+                            resolve(val);
+                        }
+                    };
+                });
+            }
+
+            _yieldMicrotask() {
+                return new Promise(resolve => setTimeout(resolve, 0));
+            }
+        }
+
+        // ─── ELO Calculation ──────────────────────────────────────────
+        const K = 32;
+
+        function eloExpected(ratingA, ratingB) {
+            return 1 / (1 + Math.pow(10, (ratingB - ratingA) / 400));
+        }
+
+        function eloUpdate(ratingA, ratingB, scoreA) {
+            const expectedA = eloExpected(ratingA, ratingB);
+            const expectedB = 1 - expectedA;
+            const scoreB = 1 - scoreA;
+            return {
+                newA: ratingA + K * (scoreA - expectedA),
+                newB: ratingB + K * (scoreB - expectedB)
+            };
+        }
+
+        // ─── Tournament Runner ────────────────────────────────────────
+        const MODES = [
+            { key: '8ball',       mode: GameMode.EIGHT_BALL,    label: '8-Ball',       tableStyle: 1 },
+            { key: '9ball',       mode: GameMode.NINE_BALL,     label: '9-Ball',       tableStyle: 1 },
+            { key: 'uk8ball',     mode: GameMode.UK_EIGHT_BALL, label: 'UK 8-Ball',    tableStyle: 7 },
+            { key: 'minisnooker', mode: GameMode.SNOOKER,       label: 'Mini Snooker', tableStyle: 8 },
+            { key: 'snooker',     mode: GameMode.SNOOKER,       label: 'Snooker',      tableStyle: 9 }
+        ];
+
+        function createFastPersona(persona) {
+            return { ...persona, thinkingDelay: 1 };
+        }
+
+        class Tournament {
+            constructor(gamesPerPair = 10) {
+                this.gamesPerPair = gamesPerPair;
+                this.personas = AI_PERSONAS.map(createFastPersona);
+                this.running = false;
+                this.aborted = false;
+
+                // Per-mode ratings
+                this.ratings = {};
+                for (const m of MODES) {
+                    this.ratings[m.key] = {};
+                    for (const p of this.personas) {
+                        this.ratings[m.key][p.id] = { elo: 1500, wins: 0, losses: 0, draws: 0 };
+                    }
+                }
+
+                // Combined ratings
+                this.combined = {};
+                for (const p of this.personas) {
+                    this.combined[p.id] = { elo: 1500, wins: 0, losses: 0, draws: 0 };
+                }
+
+                this.totalGames = 0;
+                this.completedGames = 0;
+                this.log = [];
+            }
+
+            // Generate all individual games as a flat list, then shuffle
+            generateGameList() {
+                const games = [];
+                const pairings = [];
+                for (let i = 0; i < this.personas.length; i++) {
+                    for (let j = i + 1; j < this.personas.length; j++) {
+                        pairings.push([this.personas[i], this.personas[j]]);
+                    }
+                }
+
+                for (const modeInfo of MODES) {
+                    for (const [pA, pB] of pairings) {
+                        const half = this.gamesPerPair / 2;
+                        for (let g = 0; g < this.gamesPerPair; g++) {
+                            games.push({
+                                modeInfo,
+                                p1: pA,
+                                p2: pB,
+                                breakingPlayer: g < half ? 1 : 2,
+                                tableStyle: modeInfo.tableStyle
+                            });
+                        }
+                    }
+                }
+
+                // Fisher-Yates shuffle
+                for (let i = games.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [games[i], games[j]] = [games[j], games[i]];
+                }
+
+                return games;
+            }
+
+            async run() {
+                this.running = true;
+                this.aborted = false;
+                const games = this.generateGameList();
+                this.totalGames = games.length;
+                this.completedGames = 0;
+
+                showProgress(true);
+                showLog(true);
+                updateProgress('Starting...', 0, this.totalGames);
+
+                const headless = new HeadlessGame();
+
+                for (const game of games) {
+                    if (this.aborted) break;
+
+                    const { modeInfo, p1, p2, breakingPlayer, tableStyle } = game;
+
+                    updateProgress(
+                        `${modeInfo.label}: ${p1.name} vs ${p2.name}`,
+                        this.completedGames,
+                        this.totalGames
+                    );
+
+                    let result;
+                    try {
+                        headless.startGame(modeInfo.mode, p1, p2, breakingPlayer, tableStyle);
+                        result = await headless.playToCompletion();
+                    } catch (err) {
+                        console.error(`Error in ${p1.name} vs ${p2.name} (${modeInfo.label}):`, err);
+                        result = { winner: null, turns: 0, reason: 'Error: ' + err.message };
+                    }
+
+                    // Map winner (player number) to persona
+                    let scoreA, scoreB;
+                    let winnerName;
+                    if (result.winner === 1) {
+                        scoreA = 1; scoreB = 0;
+                        winnerName = p1.name;
+                    } else if (result.winner === 2) {
+                        scoreA = 0; scoreB = 1;
+                        winnerName = p2.name;
+                    } else {
+                        scoreA = 0.5; scoreB = 0.5;
+                        winnerName = null;
+                    }
+
+                    // Update per-mode ratings
+                    const modeRatings = this.ratings[modeInfo.key];
+                    const { newA, newB } = eloUpdate(
+                        modeRatings[p1.id].elo,
+                        modeRatings[p2.id].elo,
+                        scoreA
+                    );
+                    modeRatings[p1.id].elo = newA;
+                    modeRatings[p2.id].elo = newB;
+                    if (scoreA === 1) { modeRatings[p1.id].wins++; modeRatings[p2.id].losses++; }
+                    else if (scoreA === 0) { modeRatings[p1.id].losses++; modeRatings[p2.id].wins++; }
+                    else { modeRatings[p1.id].draws++; modeRatings[p2.id].draws++; }
+
+                    // Update combined ratings
+                    const { newA: cA, newB: cB } = eloUpdate(
+                        this.combined[p1.id].elo,
+                        this.combined[p2.id].elo,
+                        scoreA
+                    );
+                    this.combined[p1.id].elo = cA;
+                    this.combined[p2.id].elo = cB;
+                    if (scoreA === 1) { this.combined[p1.id].wins++; this.combined[p2.id].losses++; }
+                    else if (scoreA === 0) { this.combined[p1.id].losses++; this.combined[p2.id].wins++; }
+                    else { this.combined[p1.id].draws++; this.combined[p2.id].draws++; }
+
+                    this.completedGames++;
+
+                    // Log
+                    const entry = {
+                        mode: modeInfo.label,
+                        p1: p1.name,
+                        p2: p2.name,
+                        winner: winnerName,
+                        turns: result.turns,
+                        reason: result.reason
+                    };
+                    this.log.push(entry);
+                    appendLogEntry(entry);
+
+                    // Update tables every game
+                    renderTables(this);
+
+                    // Yield to browser for UI updates
+                    await new Promise(r => setTimeout(r, 0));
+                }
+
+                updateProgress(
+                    this.aborted ? 'Tournament aborted' : 'Tournament complete!',
+                    this.completedGames,
+                    this.totalGames
+                );
+                this.running = false;
+                document.getElementById('start-btn').disabled = false;
+                document.getElementById('start-btn').textContent = 'Start Tournament';
+
+                // Console summary
+                this._printConsole();
+            }
+
+            abort() {
+                this.aborted = true;
+            }
+
+            _printConsole() {
+                for (const m of MODES) {
+                    const rows = this._sortedRows(this.ratings[m.key]);
+                    console.log(`\n=== ${m.label} ===`);
+                    console.table(rows);
+                }
+                const combinedRows = this._sortedRows(this.combined);
+                console.log('\n=== COMBINED ===');
+                console.table(combinedRows);
+            }
+
+            _sortedRows(ratingsMap) {
+                return this.personas
+                    .map(p => ({
+                        Persona: p.name,
+                        ELO: Math.round(ratingsMap[p.id].elo),
+                        W: ratingsMap[p.id].wins,
+                        L: ratingsMap[p.id].losses,
+                        D: ratingsMap[p.id].draws
+                    }))
+                    .sort((a, b) => b.ELO - a.ELO);
+            }
+        }
+
+        // ─── UI Helpers ───────────────────────────────────────────────
+        const progressSection = document.getElementById('progress-section');
+        const progressBar = document.getElementById('progress-bar');
+        const progressMatchup = document.getElementById('progress-matchup');
+        const progressCount = document.getElementById('progress-count');
+        const tablesContainer = document.getElementById('tables-container');
+        const logSection = document.getElementById('log-section');
+        const logEntries = document.getElementById('log-entries');
+
+        function showProgress(show) {
+            progressSection.style.display = show ? 'block' : 'none';
+        }
+
+        function showLog(show) {
+            logSection.style.display = show ? 'block' : 'none';
+        }
+
+        function updateProgress(matchup, completed, total) {
+            progressMatchup.textContent = matchup;
+            progressCount.textContent = `${completed} / ${total}`;
+            const pct = total > 0 ? (completed / total * 100) : 0;
+            progressBar.style.width = pct + '%';
+        }
+
+        function appendLogEntry(entry) {
+            const div = document.createElement('div');
+            div.className = 'log-entry';
+            const modeTag = `<span class="mode-tag">${entry.mode}</span>`;
+            if (entry.winner) {
+                div.innerHTML = `${modeTag} <span class="winner">${entry.winner}</span> beat ${entry.winner === entry.p1 ? entry.p2 : entry.p1} (${entry.turns} turns, ${entry.reason})`;
+            } else {
+                div.innerHTML = `${modeTag} <span class="draw">${entry.p1} vs ${entry.p2}: Draw</span> (${entry.turns} turns, ${entry.reason})`;
+            }
+            logEntries.prepend(div);
+
+            // Keep log manageable
+            while (logEntries.children.length > 200) {
+                logEntries.removeChild(logEntries.lastChild);
+            }
+        }
+
+        function renderTables(tournament) {
+            tablesContainer.innerHTML = '';
+
+            // Per-mode tables
+            for (const m of MODES) {
+                renderTable(tournament, m.label, tournament.ratings[m.key]);
+            }
+
+            // Combined table
+            renderTable(tournament, 'Combined', tournament.combined);
+        }
+
+        function renderTable(tournament, label, ratingsMap) {
+            const section = document.createElement('div');
+            section.className = 'result-table';
+
+            const sorted = tournament.personas
+                .map(p => ({
+                    persona: p,
+                    ...ratingsMap[p.id]
+                }))
+                .sort((a, b) => b.elo - a.elo);
+
+            let html = `<h3>${label}</h3>`;
+            html += `<table><thead><tr>
+                <th>#</th><th>Persona</th><th>ELO</th><th>W</th><th>L</th><th>D</th><th>Win%</th>
+            </tr></thead><tbody>`;
+
+            sorted.forEach((row, i) => {
+                const total = row.wins + row.losses + row.draws;
+                const winPct = total > 0 ? (row.wins / total * 100).toFixed(0) : '—';
+                const eloDelta = Math.round(row.elo - 1500);
+                const deltaClass = eloDelta >= 0 ? 'elo-up' : 'elo-down';
+                const deltaStr = eloDelta >= 0 ? `+${eloDelta}` : `${eloDelta}`;
+
+                html += `<tr>
+                    <td class="rank">${i + 1}</td>
+                    <td><span class="persona-chip" style="background:${row.persona.color}"></span>${row.persona.name}</td>
+                    <td>${Math.round(row.elo)} <small class="${deltaClass}">(${deltaStr})</small></td>
+                    <td>${row.wins}</td>
+                    <td>${row.losses}</td>
+                    <td>${row.draws}</td>
+                    <td>${winPct}%</td>
+                </tr>`;
+            });
+
+            html += '</tbody></table>';
+            section.innerHTML = html;
+            tablesContainer.appendChild(section);
+        }
+
+        // ─── Startup ─────────────────────────────────────────────────
+        let activeTournament = null;
+
+        document.getElementById('start-btn').addEventListener('click', () => {
+            const btn = document.getElementById('start-btn');
+
+            if (activeTournament && activeTournament.running) {
+                activeTournament.abort();
+                btn.textContent = 'Start Tournament';
+                btn.disabled = true; // re-enabled when abort completes
+                return;
+            }
+
+            const gpp = parseInt(document.getElementById('games-per-pair').value) || 10;
+            // Ensure even number for fair break alternation
+            const gamesPerPair = gpp % 2 === 0 ? gpp : gpp + 1;
+
+            activeTournament = new Tournament(gamesPerPair);
+            btn.textContent = 'Stop Tournament';
+            activeTournament.run();
+        });
+    </script>
+</body>
+</html>

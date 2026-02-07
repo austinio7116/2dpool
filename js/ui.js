@@ -3475,7 +3475,7 @@ export class UI {
             card.innerHTML = `
                 <div class="persona-card-header">
                     <img class="persona-avatar" src="assets/avatars/${persona.initial}.png" alt="${persona.name}">
-                    <div class="persona-card-name">${persona.name}</div>
+                    <div class="persona-card-name">${persona.name}<span class="persona-elo">ELO ${persona.elo}</span></div>
                 </div>
                 <div class="persona-stats">
                     ${statBar('Accuracy', accuracy, 100, '#4CAF50')}

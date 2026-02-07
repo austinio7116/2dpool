@@ -1459,7 +1459,7 @@ export class AI {
             }
         }
 
-        if (nextTargets.length === 0) return 100;
+        if (nextTargets.length === 0) return { score: 100, nextBall: null };
 
         // --- NEW: RESPOTTING LOGIC ---
         // Calculate where the ball we just hit will be respotted so we don't plan a shot through it

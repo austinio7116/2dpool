@@ -133,8 +133,8 @@ function runSingleGame(modeKey, personaA, personaB, startingPlayer) {
     ai.setPersona(personaBConfig);
     ai.setPersona2(personaAConfig);
     ai.setEnabled(true);
-    ai.setPhysics(physics);
     ai.setGameReferences(game, table);
+    ai.setPhysics(physics);
 
     ai.onShot = (direction, power, spin) => executeShot(game, direction, power, spin);
     ai.onBallPlacement = (position) => placeCueBall(game, table, position);

@@ -691,15 +691,20 @@ export class BallRenderer3D {
                 return { intensity: isSparkle ? 1.0 : 0, factor: isSparkle ? 1.4 : 1.0 };
             }
             case 'hexagonal': {
-                // Honeycomb hex cell pattern using nearest-center distance
+                // Honeycomb hex cell pattern using proper axial hex coordinates
                 const hScale = 5;
-                const hx = localX * hScale, hy = localY * hScale, hz = localZ * hScale;
-                // Use 2 of the 3 axes for hex grid (project onto a plane)
-                const q = hx * 0.6667 + hy * 0.3333;
-                const r2 = hy * 0.5774;
-                // Hex grid rounding
-                const qi = Math.round(q), ri = Math.round(r2);
-                const fq = q - qi, fr = r2 - ri;
+                const hx = localX * hScale, hy = localY * hScale;
+                // Convert to axial hex coordinates (flat-top hexagons)
+                const q = (2 / 3) * hx;
+                const r2 = (-1 / 3) * hx + (Math.sqrt(3) / 3) * hy;
+                // Cube coordinate rounding for nearest hex center
+                const s = -q - r2;
+                let rq = Math.round(q), rr = Math.round(r2), rs = Math.round(s);
+                const dq = Math.abs(rq - q), dr = Math.abs(rr - r2), ds = Math.abs(rs - s);
+                if (dq > dr && dq > ds) rq = -rr - rs;
+                else if (dr > ds) rr = -rq - rs;
+                // Fractional distance from hex center
+                const fq = q - rq, fr = r2 - rr;
                 const edgeDist = Math.max(Math.abs(fq), Math.abs(fr), Math.abs(fq + fr));
                 const onEdge = edgeDist > 0.42;
                 return { intensity: onEdge ? 0.7 : 0, factor: onEdge ? 0.6 : 1.0 };

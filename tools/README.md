@@ -2,6 +2,27 @@
 
 Tools for collecting and analyzing AI shot data to improve aim accuracy.
 
+## Headless ELO Tournament Runner
+
+Run AI-vs-AI tournaments headlessly to rank the built-in personas across all game modes:
+
+```bash
+npm install
+node tools/elo-tournament.mjs --games 50 --modes 8ball,9ball,uk8ball,snooker --k 24 --out elo-results.json
+```
+
+**Options**
+
+- `--games`: Games per pairing per mode (default: 50)
+- `--modes`: Comma-separated list of modes (default: `8ball,9ball,uk8ball,snooker`)
+- `--k`: ELO K-factor (default: 24)
+- `--seed`: Deterministic RNG seed
+- `--max-shots`: Shot limit before counting a draw (default: 500)
+- `--max-ticks`: Physics ticks per shot before counting a draw (default: 1500)
+- `--out`: Write results JSON to a file
+
+The script runs completely headless (no DOM or canvas) and prints overall + per-mode rankings. The `--out` file includes the full rating table and win/loss/draw records.
+
 ## Data Collection
 
 ### Option 1: Automated Bulk Generation (Recommended for Training)

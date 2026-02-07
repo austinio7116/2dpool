@@ -691,21 +691,30 @@ export class BallRenderer3D {
                 return { intensity: isSparkle ? 1.0 : 0, factor: isSparkle ? 1.4 : 1.0 };
             }
             case 'hexagonal': {
-                // Honeycomb hex cell pattern using proper axial hex coordinates
+                // Honeycomb hex pattern using triplanar projection for even sphere coverage
                 const hScale = 5;
-                const hx = localX * hScale, hy = localY * hScale;
-                // Convert to axial hex coordinates (flat-top hexagons)
-                const q = (2 / 3) * hx;
-                const r2 = (-1 / 3) * hx + (Math.sqrt(3) / 3) * hy;
-                // Cube coordinate rounding for nearest hex center
-                const s = -q - r2;
-                let rq = Math.round(q), rr = Math.round(r2), rs = Math.round(s);
-                const dq = Math.abs(rq - q), dr = Math.abs(rr - r2), ds = Math.abs(rs - s);
-                if (dq > dr && dq > ds) rq = -rr - rs;
-                else if (dr > ds) rr = -rq - rs;
-                // Fractional distance from hex center
-                const fq = q - rq, fr = r2 - rr;
-                const edgeDist = Math.max(Math.abs(fq), Math.abs(fr), Math.abs(fq + fr));
+                // Hex edge distance for 2D coordinates using axial hex coords
+                const hexEdge2D = (px, py) => {
+                    const q = (2 / 3) * px;
+                    const r = (-1 / 3) * px + 0.57735 * py;
+                    const s = -q - r;
+                    let rq = Math.round(q), rr = Math.round(r), rs = Math.round(s);
+                    const dq = Math.abs(rq - q), dr = Math.abs(rr - r), ds = Math.abs(rs - s);
+                    if (dq > dr && dq > ds) rq = -rr - rs;
+                    else if (dr > ds) rr = -rq - rs;
+                    const fq = q - rq, fr = r - rr;
+                    return Math.max(Math.abs(fq), Math.abs(fr), Math.abs(fq + fr));
+                };
+                // Compute hex on each axis-aligned plane
+                const eYZ = hexEdge2D(localY * hScale, localZ * hScale);
+                const eXZ = hexEdge2D(localX * hScale, localZ * hScale);
+                const eXY = hexEdge2D(localX * hScale, localY * hScale);
+                // Blend weights: dominant normal axis gets highest weight (pow 4 for sharp blend)
+                const ax = localX * localX, ay = localY * localY, az = localZ * localZ;
+                let wx = ax * ax, wy = ay * ay, wz = az * az;
+                const wSum = wx + wy + wz + 1e-10;
+                wx /= wSum; wy /= wSum; wz /= wSum;
+                const edgeDist = wx * eYZ + wy * eXZ + wz * eXY;
                 const onEdge = edgeDist > 0.42;
                 return { intensity: onEdge ? 0.7 : 0, factor: onEdge ? 0.6 : 1.0 };
             }

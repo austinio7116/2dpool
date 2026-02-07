@@ -176,6 +176,15 @@ class PoolGame {
         return this.game.currentPlayer === 2;
     }
 
+    // Run callback after precaching completes (or immediately with delay if not precaching)
+    _deferUntilReady(callback) {
+        if (this._precaching) {
+            this._pendingAfterPrecache = callback;
+        } else {
+            setTimeout(callback, 300);
+        }
+    }
+
     async startGame(mode, options = {}) {
         // Show loading spinner
         const loadingOverlay = document.getElementById('loading-overlay');
@@ -243,7 +252,24 @@ class PoolGame {
 
         // Apply selected ball set appearance (works for both custom and predefined sets)
         if (selectedBallSet && mode !== GameMode.SNOOKER) {
-            await this.applyCustomBallSet(selectedBallSet);
+            this.applyCustomBallSet(selectedBallSet);
+        }
+
+        // Pre-generate 3D ball frames for ALL balls (default and custom)
+        // Pause game loop rendering so it doesn't steal frame generation work
+        this._precaching = true;
+        const progressCallback = (progress) => {
+            if (progressBar) progressBar.style.width = `${progress}%`;
+            if (progressText) progressText.textContent = `${Math.round(progress)}%`;
+        };
+        await this.renderer.ballRenderer3D.precacheBallSet(this.game.balls, progressCallback);
+        this._precaching = false;
+
+        // Fire any AI turn that was deferred during precaching
+        if (this._pendingAfterPrecache) {
+            const callback = this._pendingAfterPrecache;
+            this._pendingAfterPrecache = null;
+            setTimeout(callback, 300);
         }
 
         this.input.setCueBall(this.game.cueBall);
@@ -256,7 +282,7 @@ class PoolGame {
         if (loadingOverlay) loadingOverlay.classList.add('hidden');
     }
 
-    async applyCustomBallSet(ballSet) {
+    applyCustomBallSet(ballSet) {
         if (!ballSet || !this.game.balls) return;
 
         const ballSetManager = this.ui.ballSetManager;
@@ -291,17 +317,6 @@ class PoolGame {
             ball.textureColor = config.textureColor || '#FFFFFF';
             ball.numberFont = config.numberFont || 'Arial';
         }
-
-        // Progress callback for loading bar
-        const progressBar = document.getElementById('loading-progress-bar');
-        const progressText = document.getElementById('loading-progress-text');
-        const progressCallback = (progress) => {
-            if (progressBar) progressBar.style.width = `${progress}%`;
-            if (progressText) progressText.textContent = `${Math.round(progress)}%`;
-        };
-
-        // Pre-generate frames for custom ball set (do NOT clear cache - reuse cached frames when possible)
-        await this.renderer.ballRenderer3D.precacheBallSet(this.game.balls, progressCallback);
     }
 
     playAgain() {
@@ -540,8 +555,8 @@ class PoolGame {
             this.input.setCanShoot(false);
 
             if (isAITurn) {
-                // AI handles ball placement
-                setTimeout(() => this.ai.takeTurn(), 300);
+                // AI handles ball placement (deferred if precaching)
+                this._deferUntilReady(() => this.ai.takeTurn());
             } else {
                 // Human player places ball
                 this.input.enterBallInHandMode(this.game.cueBall, (pos) => {
@@ -557,9 +572,9 @@ class PoolGame {
             }
 
             if (isAITurn) {
-                // AI's turn to shoot
+                // AI's turn to shoot (deferred if precaching)
                 this.input.setCanShoot(false);
-                setTimeout(() => this.ai.takeTurn(), 300);
+                this._deferUntilReady(() => this.ai.takeTurn());
             } else {
                 // Human player's turn - AI must have completed their shot without fouling
                 // Clear AI's foul tracking since they didn't foul
@@ -868,8 +883,13 @@ class PoolGame {
         }
         this.lastTime = currentTime;
 
-        this.update(deltaTime);
-        this.render();
+        // Skip update/render during precaching - the game loop's render() would
+        // call drawBall() → getFrame() → generateBallFrames() for all balls,
+        // stealing work from precacheBallSet before it can report progress
+        if (!this._precaching) {
+            this.update(deltaTime);
+            this.render();
+        }
 
         requestAnimationFrame((t) => this.gameLoop(t));
     }

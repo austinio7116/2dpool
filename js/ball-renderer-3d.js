@@ -17,6 +17,7 @@ export class BallRenderer3D {
         this.frameCache = new Map();
         this.CACHE_PREFIX = 'ballFrames_';
         this.CACHE_VERSION = 'v2'; // Increment to invalidate old caches
+        this._cacheGeneration = 0; // Incremented on clearCache() to invalidate ball-object refs
 
         this.init();
         // Clear corrupt cache on startup to prevent invisible balls
@@ -76,6 +77,42 @@ export class BallRenderer3D {
         }
     }
 
+    // Build options object for a ball, or return null if default
+    _buildBallOptions(ball) {
+        const hasCustomOptions = ball.numberCircleColor || ball.numberTextColor ||
+                                 ball.numberBorder || ball.stripeBackgroundColor ||
+                                 ball.showNumber === false || ball.numberCircleRadialLines > 0 ||
+                                 ball.stripeThickness !== 0.55 || ball.numberCircleRadius !== 0.66 ||
+                                 ball.borderWidth !== 1.0 || ball.numberScale !== 1.0 ||
+                                 ball.stripeOrientation === 'vertical' || ball.radialLinesColor ||
+                                 (ball.numberCircleOpacity != null && ball.numberCircleOpacity !== 1.0) ||
+                                 (ball.texture && ball.texture !== 'none') ||
+                                 (ball.numberFont && ball.numberFont !== 'Arial');
+
+        if (!hasCustomOptions) return null;
+
+        return {
+            showNumber: ball.showNumber !== false,
+            stripeBackgroundColor: ball.stripeBackgroundColor,
+            numberCircleColor: ball.numberCircleColor,
+            numberTextColor: ball.numberTextColor,
+            numberBorder: ball.numberBorder,
+            numberBorderColor: ball.numberBorderColor,
+            numberCircleRadialLines: ball.numberCircleRadialLines || 0,
+            radialLinesColor: ball.radialLinesColor,
+            stripeThickness: ball.stripeThickness ?? 0.55,
+            numberCircleRadius: ball.numberCircleRadius ?? 0.66,
+            borderWidth: ball.borderWidth ?? 1.0,
+            numberScale: ball.numberScale ?? 1.0,
+            stripeOrientation: ball.stripeOrientation || 'horizontal',
+            numberCircleOpacity: ball.numberCircleOpacity ?? 1.0,
+            texture: ball.texture || 'none',
+            textureColorMode: ball.textureColorMode || 'auto',
+            textureColor: ball.textureColor || '#FFFFFF',
+            numberFont: ball.numberFont || 'Arial'
+        };
+    }
+
     // Generate cache key for a ball (includes custom options)
     generateCacheKey(ballNumber, baseColor, isStripe, isUKBall = false, isEightBall = false, isSnookerBall = false, options = null) {
         let key = `${ballNumber}-${baseColor}-${isStripe}-${isUKBall}-${isEightBall}-${isSnookerBall}`;
@@ -117,7 +154,7 @@ export class BallRenderer3D {
         const hasRadialLines = (renderOptions.numberCircleRadialLines || 0) > 0;
         const showNumber = renderOptions.showNumber !== false && ballNumber !== 0 && (!isUKBall || isEightBall) && !isSnookerBall;
         const hasTexture = renderOptions.texture && renderOptions.texture !== 'none';
-        const needsRotation = isStripe || isSnookerBall || hasRadialLines || showNumber || hasTexture;
+        const needsRotation = (isStripe && !isSnookerBall) || hasRadialLines || showNumber || hasTexture;
 
         const framesToRender = needsRotation ? this.frameCount : 1;
         const frames = [];
@@ -142,68 +179,26 @@ export class BallRenderer3D {
 
     // Pre-cache all frames for a set of balls (call on game start or ball set change)
     async precacheBallSet(balls, progressCallback = null) {
-        const ballsToCache = [];
-
-        for (const ball of balls) {
-            if (ball.pocketed) continue;
-
-            const hasCustomOptions = ball.numberCircleColor || ball.numberTextColor ||
-                                     ball.numberBorder || ball.stripeBackgroundColor ||
-                                     ball.showNumber === false || ball.numberCircleRadialLines > 0 ||
-                                     ball.stripeThickness !== 0.55 || ball.numberCircleRadius !== 0.66 ||
-                                     ball.borderWidth !== 1.0 || ball.numberScale !== 1.0 ||
-                                     ball.stripeOrientation === 'vertical' || ball.radialLinesColor ||
-                                     (ball.numberCircleOpacity != null && ball.numberCircleOpacity !== 1.0) ||
-                                     (ball.texture && ball.texture !== 'none') ||
-                                     (ball.numberFont && ball.numberFont !== 'Arial');
-
-            if (hasCustomOptions) {
-                const options = {
-                    showNumber: ball.showNumber !== false,
-                    stripeBackgroundColor: ball.stripeBackgroundColor,
-                    numberCircleColor: ball.numberCircleColor,
-                    numberTextColor: ball.numberTextColor,
-                    numberBorder: ball.numberBorder,
-                    numberBorderColor: ball.numberBorderColor,
-                    numberCircleRadialLines: ball.numberCircleRadialLines || 0,
-                    radialLinesColor: ball.radialLinesColor,
-                    stripeThickness: ball.stripeThickness ?? 0.55,
-                    numberCircleRadius: ball.numberCircleRadius ?? 0.66,
-                    borderWidth: ball.borderWidth ?? 1.0,
-                    numberScale: ball.numberScale ?? 1.0,
-                    stripeOrientation: ball.stripeOrientation || 'horizontal',
-                    numberCircleOpacity: ball.numberCircleOpacity ?? 1.0,
-                    texture: ball.texture || 'none',
-                    textureColorMode: ball.textureColorMode || 'auto',
-                    textureColor: ball.textureColor || '#FFFFFF',
-                    numberFont: ball.numberFont || 'Arial'
-                };
-
-                ballsToCache.push({
-                    number: ball.number,
-                    color: ball.color,
-                    isStripe: ball.isStripe,
-                    isUKBall: ball.isUKBall || false,
-                    isEightBall: ball.isEightBall || false,
-                    isSnookerBall: ball.isSnookerBall || false,
-                    options
-                });
-            }
-        }
-
-        // Pre-generate frames for custom balls, yielding control periodically
+        const ballsToCache = balls.filter(b => !b.pocketed);
         const totalBalls = ballsToCache.length;
+
         for (let i = 0; i < totalBalls; i++) {
             const ball = ballsToCache[i];
-            this.generateBallFrames(
-                ball.number,
-                ball.color,
-                ball.isStripe,
-                ball.isUKBall,
-                ball.isEightBall,
-                ball.isSnookerBall,
-                ball.options
+            const isUKBall = ball.isUKBall || false;
+            const isEightBall = ball.isEightBall || false;
+            const isSnookerBall = ball.isSnookerBall || false;
+            const hasTexture = ball.texture && ball.texture !== 'none';
+            const options = this._buildBallOptions(ball);
+
+            const frames = this.generateBallFrames(
+                ball.number, ball.color, ball.isStripe,
+                isUKBall, isEightBall, isSnookerBall, options
             );
+
+            // Cache on the ball object so getFrame() uses the fast path
+            ball._br3dFrames = frames;
+            ball._br3dFixedFrame = ((isUKBall && !isEightBall && !hasTexture) || isSnookerBall) || ball.isCueBall;
+            ball._br3dGen = this._cacheGeneration;
 
             // Update progress
             if (progressCallback) {
@@ -211,8 +206,9 @@ export class BallRenderer3D {
                 progressCallback(progress);
             }
 
-            // Yield control every ball to keep UI responsive and allow progress updates
-            await new Promise(resolve => setTimeout(resolve, 0));
+            // Yield through a full paint cycle: first rAF fires before paint,
+            // second rAF fires after paint completes, so progress bar actually updates
+            await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
         }
 
         // Save to localStorage
@@ -851,57 +847,36 @@ export class BallRenderer3D {
 
     // Get the appropriate frame for a ball's current rotation
     getFrame(ball) {
-        const isStripe = ball.isStripe;
-        const baseColor = ball.color;
+        // Fast path: if ball already has cached frame ref from this generation, skip all work
+        if (ball._br3dFrames && ball._br3dGen === this._cacheGeneration) {
+            if (ball._br3dFixedFrame) return ball._br3dFrames[0];
+            let frameIndex = Math.floor((ball.displayRoll / (Math.PI * 2)) * this.frameCount);
+            frameIndex = ((frameIndex % this.frameCount) + this.frameCount) % this.frameCount;
+            return ball._br3dFrames[frameIndex];
+        }
+
+        // Slow path: first call for this ball (or after cache clear)
         const isUKBall = ball.isUKBall || false;
         const isEightBall = ball.isEightBall || false;
         const isSnookerBall = ball.isSnookerBall || false;
         const hasTexture = ball.texture && ball.texture !== 'none';
+        const options = this._buildBallOptions(ball);
 
-        // Check for custom rendering options
-        const hasCustomOptions = ball.numberCircleColor || ball.numberTextColor ||
-                                 ball.numberBorder || ball.stripeBackgroundColor ||
-                                 ball.showNumber === false || ball.numberCircleRadialLines > 0 ||
-                                 ball.stripeThickness !== 0.55 || ball.numberCircleRadius !== 0.66 ||
-                                 ball.borderWidth !== 1.0 || ball.numberScale !== 1.0 ||
-                                 ball.stripeOrientation === 'vertical' || ball.radialLinesColor ||
-                                 (ball.numberCircleOpacity != null && ball.numberCircleOpacity !== 1.0) ||
-                                 (ball.texture && ball.texture !== 'none');
+        const frames = this.generateBallFrames(ball.number, ball.color, ball.isStripe, isUKBall, isEightBall, isSnookerBall, options);
 
-        // Build options object for custom balls
-        const options = hasCustomOptions ? {
-            showNumber: ball.showNumber !== false,
-            stripeBackgroundColor: ball.stripeBackgroundColor,
-            numberCircleColor: ball.numberCircleColor,
-            numberTextColor: ball.numberTextColor,
-            numberBorder: ball.numberBorder,
-            numberBorderColor: ball.numberBorderColor,
-            numberCircleRadialLines: ball.numberCircleRadialLines || 0,
-            radialLinesColor: ball.radialLinesColor,
-            stripeThickness: ball.stripeThickness ?? 0.55,
-            numberCircleRadius: ball.numberCircleRadius ?? 0.66,
-            borderWidth: ball.borderWidth ?? 1.0,
-            numberScale: ball.numberScale ?? 1.0,
-            stripeOrientation: ball.stripeOrientation || 'horizontal',
-            numberCircleOpacity: ball.numberCircleOpacity ?? 1.0,
-            texture: ball.texture || 'none',
-            textureColorMode: ball.textureColorMode || 'auto',
-            textureColor: ball.textureColor || '#FFFFFF',
-            numberFont: ball.numberFont || 'Arial'
-        } : null;
+        // Determine if this ball uses a fixed frame (no rotation)
+        const fixedFrame = ((isUKBall && !isEightBall && !hasTexture) || isSnookerBall) ||
+                           ball.isCueBall;
 
-        // Use cached frames (works for both standard and custom balls now)
-        const frames = this.generateBallFrames(ball.number, baseColor, isStripe, isUKBall, isEightBall, isSnookerBall, options);
+        // Cache on the ball object
+        ball._br3dFrames = frames;
+        ball._br3dFixedFrame = fixedFrame;
+        ball._br3dGen = this._cacheGeneration;
 
-        // UK balls (except 8-ball) and snooker balls are solid color - use fixed frame so lighting stays consistent
-        if ((isUKBall && !isEightBall && !hasTexture) || isSnookerBall) {
-            return frames[0];
-        }
+        if (fixedFrame) return frames[0];
 
-        // Map displayRoll to frame index
         let frameIndex = Math.floor((ball.displayRoll / (Math.PI * 2)) * this.frameCount);
         frameIndex = ((frameIndex % this.frameCount) + this.frameCount) % this.frameCount;
-
         return frames[frameIndex];
     }
 
@@ -923,22 +898,15 @@ export class BallRenderer3D {
         ctx.imageSmoothingEnabled = true;
         ctx.imageSmoothingQuality = 'high';
 
-        const hasTexture = ball.texture && ball.texture !== 'none';
+        const frame = this.getFrame(ball);
 
-        if (ball.isCueBall) {
-            const frames = this.generateBallFrames(0, '#FFFFFF', false);
-            ctx.drawImage(frames[0], -drawSize / 2, -drawSize / 2, drawSize, drawSize);
-        } else if ((ball.isUKBall && !ball.isEightBall && !hasTexture) || ball.isSnookerBall) {
-            // UK solid balls and snooker balls - no rotation so they all look identical
-            const frame = this.getFrame(ball);
-            ctx.drawImage(frame, -drawSize / 2, -drawSize / 2, drawSize, drawSize);
-        } else {
-            // Pre-render rotates around X axis (stripe rolls in Y direction)
-            // Rotate image to align Y direction with travel direction
+        // Balls with visual rotation features need canvas rotation to align with travel direction
+        // Fixed-frame balls (cue ball, UK solids without texture, snooker) skip rotation
+        if (!ball._br3dFixedFrame) {
             ctx.rotate(ball.travelAngle - Math.PI / 2);
-            const frame = this.getFrame(ball);
-            ctx.drawImage(frame, -drawSize / 2, -drawSize / 2, drawSize, drawSize);
         }
+
+        ctx.drawImage(frame, -drawSize / 2, -drawSize / 2, drawSize, drawSize);
 
         ctx.restore();
 
@@ -971,5 +939,6 @@ export class BallRenderer3D {
     // Clear cache if needed (e.g., when ball radius changes)
     clearCache() {
         this.frameCache.clear();
+        this._cacheGeneration++; // Invalidate all ball-object cached refs
     }
 }

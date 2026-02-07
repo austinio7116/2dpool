@@ -6,7 +6,7 @@ import { GameMode, GameState } from './game.js';
 import { AI_PERSONAS, getPersonaById } from './ai-personas.js';
 
 // Debug logging - set to true to see AI decision making
-const AI_DEBUG = true;
+const AI_DEBUG = false;
 
 // Trained angle error prediction model (loaded dynamically if available)
 let angleModel = null;

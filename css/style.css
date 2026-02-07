@@ -2602,7 +2602,7 @@ body {
     height: 100%;
     background: linear-gradient(90deg, #4CAF50, #8BC34A);
     width: 0%;
-    transition: width 0.2s ease;
+    /* No transition - width is set directly between heavy synchronous render calls */
 }
 
 .progress-text {

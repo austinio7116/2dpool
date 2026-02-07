@@ -39,6 +39,9 @@ export class Input {
         this.powerTouchId = null;
         this.isTouchDevice = false;
 
+        // Touch spin-during-aim (second finger on spin indicator while aiming)
+        this.spinTouchId = null;
+
         // Power meter geometry (matches renderer positioning)
         this.powerMeter = { x: 0, y: 0, width: 18, height: 100 };  // set in setCanvasSize
 
@@ -100,9 +103,9 @@ export class Input {
         this.spinIndicator.x = this.spinIndicator.radius + 5;  // radius + background padding
         this.spinIndicator.y = height / 2;  // Center vertically, away from pockets
 
-        // Shoot button: centered on spin indicator X, below the "SPIN" label
+        // Shoot button: centered on spin indicator X, well below the "SPIN" label
         this.shootButton.x = this.spinIndicator.x;
-        this.shootButton.y = this.spinIndicator.y + this.spinIndicator.radius + 28 + 10;  // below SPIN label + gap
+        this.shootButton.y = this.spinIndicator.y + this.spinIndicator.radius + 28 + 30;  // below SPIN label + larger gap
 
         // Power meter: above spin indicator, centered on it (mirrors renderer)
         const spinTop = height / 2 - this.spinIndicator.radius - 5;  // top of spin bg circle
@@ -317,6 +320,16 @@ export class Input {
                 return;
             }
 
+            if (this.isOverSpinIndicator(touchPos)) {
+                // Start spin adjustment while aiming
+                this.isSettingSpin = true;
+                this.isTouchSpin = true;
+                this.spinTouchId = newTouch.identifier;
+                this.spinTouchStart = Vec2.clone(touchPos);
+                this.spinAtTouchStart = Vec2.create(this.spin.x, this.spin.y);
+                return;
+            }
+
             // Elsewhere: cancel shot
             this.resetAim();
             this.isMouseDown = false;
@@ -378,10 +391,22 @@ export class Input {
             }
         }
 
-        // Find the primary aiming touch (first touch, not power touch)
+        // Handle spin touch during aiming (second finger on spin indicator)
+        if (this.spinTouchId !== null) {
+            for (let i = 0; i < event.touches.length; i++) {
+                if (event.touches[i].identifier === this.spinTouchId) {
+                    const spinPos = this.getTouchPosition(event.touches[i]);
+                    this.updateSpin(spinPos);
+                    break;
+                }
+            }
+        }
+
+        // Find the primary aiming touch (not power or spin touch)
         let aimTouch = null;
         for (let i = 0; i < event.touches.length; i++) {
-            if (event.touches[i].identifier !== this.powerTouchId) {
+            const id = event.touches[i].identifier;
+            if (id !== this.powerTouchId && id !== this.spinTouchId) {
                 aimTouch = event.touches[i];
                 break;
             }
@@ -390,8 +415,8 @@ export class Input {
 
         this.mousePos = this.getTouchPosition(aimTouch);
 
-        // Handle spin adjustment
-        if (this.isSettingSpin) {
+        // Handle spin adjustment (first-touch spin, not during aiming)
+        if (this.isSettingSpin && this.spinTouchId === null) {
             this.updateSpin();
             return;
         }
@@ -426,16 +451,24 @@ export class Input {
             if (event.changedTouches[i].identifier === this.powerTouchId) {
                 // Power touch lifted — keep powerOverrideActive, clear touch tracking
                 this.powerTouchId = null;
-                // Don't return — there may be other touches ending too
+            }
+            if (event.changedTouches[i].identifier === this.spinTouchId) {
+                // Spin touch lifted — keep spin values, clear spin-during-aim state
+                this.spinTouchId = null;
+                this.isSettingSpin = false;
+                this.isTouchSpin = false;
+                this.spinTouchStart = null;
+                this.spinAtTouchStart = null;
             }
         }
 
         // If there are still touches active (e.g. aiming finger still down), don't end
         if (event.touches.length > 0 && this.isDragging) {
-            // Check if the aiming touch is still present
+            // Check if the aiming touch is still present (not power or spin touch)
             let aimTouchStillDown = false;
             for (let i = 0; i < event.touches.length; i++) {
-                if (event.touches[i].identifier !== this.powerTouchId) {
+                const id = event.touches[i].identifier;
+                if (id !== this.powerTouchId && id !== this.spinTouchId) {
                     aimTouchStillDown = true;
                     break;
                 }
@@ -443,7 +476,8 @@ export class Input {
             if (aimTouchStillDown) return;
         }
 
-        if (this.isSettingSpin) {
+        // First-touch spin (not during aiming) ended
+        if (this.isSettingSpin && this.spinTouchId === null) {
             this.isSettingSpin = false;
             this.isTouchSpin = false;
             this.spinTouchStart = null;
@@ -481,19 +515,20 @@ export class Input {
         this.isDragging = false;
     }
 
-    updateSpin() {
+    updateSpin(pos) {
+        const p = pos || this.mousePos;
         if (this.isTouchSpin && this.spinTouchStart && this.spinAtTouchStart) {
             // Touch: delta-based movement for precision (thumb doesn't obscure)
-            const dx = this.mousePos.x - this.spinTouchStart.x;
-            const dy = this.mousePos.y - this.spinTouchStart.y;
+            const dx = p.x - this.spinTouchStart.x;
+            const dy = p.y - this.spinTouchStart.y;
             const sensitivity = this.spinIndicator.radius * 0.7;
 
             this.spin.x = clamp(this.spinAtTouchStart.x + dx / sensitivity, -1, 1);
             this.spin.y = clamp(this.spinAtTouchStart.y + dy / sensitivity, -1, 1);
         } else {
             // Mouse: absolute positioning within the indicator
-            const dx = this.mousePos.x - this.spinIndicator.x;
-            const dy = this.mousePos.y - this.spinIndicator.y;
+            const dx = p.x - this.spinIndicator.x;
+            const dy = p.y - this.spinIndicator.y;
             const maxOffset = this.spinIndicator.radius * 0.7;
 
             this.spin.x = clamp(dx / maxOffset, -1, 1);
@@ -532,6 +567,11 @@ export class Input {
         this.pullBack = 0;
         this.powerOverrideActive = false;
         this.powerTouchId = null;
+        this.spinTouchId = null;
+        this.isSettingSpin = false;
+        this.isTouchSpin = false;
+        this.spinTouchStart = null;
+        this.spinAtTouchStart = null;
 
         if (this.onAimUpdate) {
             this.onAimUpdate(null, 0);

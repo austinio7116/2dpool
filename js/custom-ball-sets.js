@@ -390,6 +390,7 @@ export class CustomBallSetManager {
                 texture: setData.options?.texture || 'none',
                 textureColorMode: setData.options?.textureColorMode || 'auto',
                 textureColor: setData.options?.textureColor || '#FFFFFF',
+                textureSeed: setData.options?.textureSeed || 0,
                 numberFont: setData.options?.numberFont || 'Arial'
             },
             isPredefined: false,
@@ -445,6 +446,7 @@ export class CustomBallSetManager {
                 texture: setData.options?.texture || 'none',
                 textureColorMode: setData.options?.textureColorMode || 'auto',
                 textureColor: setData.options?.textureColor || '#FFFFFF',
+                textureSeed: setData.options?.textureSeed || 0,
                 numberFont: setData.options?.numberFont || 'Arial'
             },
             isPredefined: false,
@@ -671,6 +673,7 @@ export class CustomBallSetManager {
             texture: ballSet.options?.texture || 'none',
             textureColorMode: ballSet.options?.textureColorMode || 'auto',
             textureColor: ballSet.options?.textureColor || '#FFFFFF',
+            textureSeed: ballSet.options?.textureSeed || 0,
             numberFont: ballSet.options?.numberFont || 'Arial'
         };
     }

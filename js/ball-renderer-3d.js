@@ -87,7 +87,8 @@ export class BallRenderer3D {
                                  ball.stripeOrientation === 'vertical' || ball.radialLinesColor ||
                                  (ball.numberCircleOpacity != null && ball.numberCircleOpacity !== 1.0) ||
                                  (ball.texture && ball.texture !== 'none') ||
-                                 (ball.numberFont && ball.numberFont !== 'Arial');
+                                 (ball.numberFont && ball.numberFont !== 'Arial') ||
+                                 (ball.textureSeed && ball.textureSeed !== 0);
 
         if (!hasCustomOptions) return null;
 
@@ -109,6 +110,7 @@ export class BallRenderer3D {
             texture: ball.texture || 'none',
             textureColorMode: ball.textureColorMode || 'auto',
             textureColor: ball.textureColor || '#FFFFFF',
+            textureSeed: ball.textureSeed || 0,
             numberFont: ball.numberFont || 'Arial'
         };
     }
@@ -135,6 +137,7 @@ export class BallRenderer3D {
             key += `-${options.texture || 'none'}`;
             key += `-${options.textureColorMode || 'auto'}`;
             key += `-${options.textureColor || ''}`;
+            key += `-${options.textureSeed || 0}`;
             key += `-${options.numberFont || 'Arial'}`;
         }
         return key;
@@ -302,6 +305,7 @@ export class BallRenderer3D {
         const hasTexture = texture !== 'none';
         const textureColorMode = numberOptions.textureColorMode || 'auto';
         const textureColorRgb = hasTexture ? this.hexToRgb(numberOptions.textureColor || '#FFFFFF') : null;
+        const textureSeed = numberOptions.textureSeed || 0;
 
         // Stripe is a band around the equator - latitude based
         // stripeHalfWidth is in terms of latitude (0 = equator, 1 = pole)
@@ -360,7 +364,7 @@ export class BallRenderer3D {
                     g = rgb.g;
                     b = rgb.b;
                     if (hasTexture) {
-                        const tex = this.applyTexture(r, g, b, texture, textureColorMode, textureColorRgb, localX, localY, localZ);
+                        const tex = this.applyTexture(r, g, b, texture, textureColorMode, textureColorRgb, localX, localY, localZ, textureSeed);
                         r = tex.r; g = tex.g; b = tex.b;
                     }
                 } else {
@@ -403,7 +407,7 @@ export class BallRenderer3D {
                             g = rgb.g;
                             b = rgb.b;
                             if (hasTexture) {
-                                const tex = this.applyTexture(r, g, b, texture, textureColorMode, textureColorRgb, localX, localY, localZ);
+                                const tex = this.applyTexture(r, g, b, texture, textureColorMode, textureColorRgb, localX, localY, localZ, textureSeed);
                                 r = tex.r; g = tex.g; b = tex.b;
                             }
                             if (textColor && textColor.a != null) {
@@ -436,7 +440,7 @@ export class BallRenderer3D {
                             g = rgb.g;
                             b = rgb.b;
                             if (hasTexture) {
-                                const tex = this.applyTexture(r, g, b, texture, textureColorMode, textureColorRgb, localX, localY, localZ);
+                                const tex = this.applyTexture(r, g, b, texture, textureColorMode, textureColorRgb, localX, localY, localZ, textureSeed);
                                 r = tex.r; g = tex.g; b = tex.b;
                             }
                             if (textColor && textColor.a != null) {
@@ -661,31 +665,36 @@ export class BallRenderer3D {
     }
 
     // Get texture modifier for a given texture type at a local sphere position
-    getTextureModifier(texture, localX, localY, localZ) {
+    getTextureModifier(texture, localX, localY, localZ, seed = 0) {
+        // Seed offset for spatial-offset-friendly textures
+        const sx = seed ? seed * 17.31 : 0;
+        const sy = seed ? seed * 31.17 : 0;
+        const sz = seed ? seed * 43.73 : 0;
         switch (texture) {
             case 'camouflage': {
                 // FBM noise posterized to 2 hard-edge tones
                 const scale = 4.0;
-                const noise = this.fbm3(localX * scale, localY * scale, localZ * scale, 4);
+                const noise = this.fbm3((localX + sx) * scale, (localY + sy) * scale, (localZ + sz) * scale, 4);
                 const dark = noise < 0.48;
                 return { intensity: dark ? 0.85 : 0, factor: dark ? 0.55 : 1.0 };
             }
             case 'striped': {
-                // Diagonal thin parallel lines
-                const wave = Math.sin((localY) * 40);
+                // Diagonal thin parallel lines — seed as phase shift
+                const wave = Math.sin((localY + sx) * 40);
                 const inLine = wave > 0;
                 return { intensity: inLine ? 0.8 : 0, factor: inLine ? 0.7 : 1.0 };
             }
             case 'marbled': {
                 // Turbulent sine veins
-                const t = localX * 10 + Math.sin(localY * 8 + localZ * 6) * 2 + Math.cos(localZ * 12 + localX * 4) * 1.5;
+                const mx = localX + sx, my = localY + sy, mz = localZ + sz;
+                const t = mx * 10 + Math.sin(my * 8 + mz * 6) * 2 + Math.cos(mz * 12 + mx * 4) * 1.5;
                 const vein = Math.abs(Math.sin(t));
                 const inVein = vein > 0.92;
                 return { intensity: inVein ? 0.9 : 0, factor: inVein ? 0.6 : 1.0 };
             }
             case 'sparkly': {
                 // Position hash for sparse sparkle pixels (~8%)
-                const hash = Math.sin(localX * 127.1 + localY * 311.7 + localZ * 74.7) * 43758.5453;
+                const hash = Math.sin((localX + sx) * 127.1 + (localY + sy) * 311.7 + (localZ + sz) * 74.7) * 43758.5453;
                 const fract = hash - Math.floor(hash);
                 const isSparkle = fract > 0.92;
                 return { intensity: isSparkle ? 1.0 : 0, factor: isSparkle ? 1.4 : 1.0 };
@@ -693,6 +702,7 @@ export class BallRenderer3D {
             case 'hexagonal': {
                 // Honeycomb hex pattern using triplanar projection for even sphere coverage
                 const hScale = 5;
+                const hx = localX + sx, hy = localY + sy, hz = localZ + sz;
                 // Hex edge distance for 2D coordinates using axial hex coords
                 const hexEdge2D = (px, py) => {
                     const q = (2 / 3) * px;
@@ -706,9 +716,9 @@ export class BallRenderer3D {
                     return Math.max(Math.abs(fq), Math.abs(fr), Math.abs(fq + fr));
                 };
                 // Compute hex on each axis-aligned plane
-                const eYZ = hexEdge2D(localY * hScale, localZ * hScale);
-                const eXZ = hexEdge2D(localX * hScale, localZ * hScale);
-                const eXY = hexEdge2D(localX * hScale, localY * hScale);
+                const eYZ = hexEdge2D(hy * hScale, hz * hScale);
+                const eXZ = hexEdge2D(hx * hScale, hz * hScale);
+                const eXY = hexEdge2D(hx * hScale, hy * hScale);
                 // Blend weights: dominant normal axis gets highest weight (pow 4 for sharp blend)
                 const ax = localX * localX, ay = localY * localY, az = localZ * localZ;
                 let wx = ax * ax, wy = ay * ay, wz = az * az;
@@ -721,7 +731,7 @@ export class BallRenderer3D {
             case 'crackle': {
                 // Voronoi-style cracks: find distance to nearest vs second nearest random point
                 const cScale = 6;
-                const cx = localX * cScale, cy = localY * cScale, cz = localZ * cScale;
+                const cx = (localX + sx) * cScale, cy = (localY + sy) * cScale, cz = (localZ + sz) * cScale;
                 const cix = Math.floor(cx), ciy = Math.floor(cy), ciz = Math.floor(cz);
                 let d1 = 99, d2 = 99;
                 const ch = (a, b, c) => {
@@ -748,23 +758,25 @@ export class BallRenderer3D {
             }
             case 'galaxy': {
                 // Swirling nebula: FBM with spiral distortion
+                // Seed offsets the noise sampling, not the spiral structure
                 const gScale = 3.0;
                 const gx = localX * gScale, gy = localY * gScale, gz = localZ * gScale;
                 // Spiral twist based on distance from axis
                 const dist = Math.sqrt(gx * gx + gy * gy);
                 const angle = Math.atan2(gy, gx) + dist * 2.5;
-                const sx = Math.cos(angle) * dist;
-                const sy = Math.sin(angle) * dist;
-                const noise = this.fbm3(sx * 2, sy * 2, gz * 2, 5);
+                const gsx = Math.cos(angle) * dist;
+                const gsy = Math.sin(angle) * dist;
+                const noise = this.fbm3(gsx * 2 + sx, gsy * 2 + sy, gz * 2 + sz, 5);
                 // Multi-tone: bright spots in swirl arms
                 const bright = noise > 0.55;
                 return { intensity: bright ? 0.8 : noise * 0.3, factor: bright ? 1.4 : 0.85 + noise * 0.3 };
             }
             case 'woodgrain': {
                 // Concentric rings with FBM distortion
+                // Seed offsets the noise distortion, not the ring center
                 const wScale = 3.0;
                 const wx = localX * wScale, wy = localY * wScale, wz = localZ * wScale;
-                const distortion = this.fbm3(wx * 2, wy * 2, wz * 2, 3) * 0.8;
+                const distortion = this.fbm3(wx * 2 + sx, wy * 2 + sy, wz * 2 + sz, 3) * 0.8;
                 const ring = Math.sin((Math.sqrt(wx * wx + wz * wz) + distortion) * 18);
                 const isGrain = ring > 0.5;
                 return { intensity: isGrain ? 0.6 : 0, factor: isGrain ? 0.7 : 1.0 };
@@ -775,8 +787,8 @@ export class BallRenderer3D {
     }
 
     // Apply texture effect to an RGB color
-    applyTexture(r, g, b, texture, textureColorMode, textureColorRgb, localX, localY, localZ) {
-        const mod = this.getTextureModifier(texture, localX, localY, localZ);
+    applyTexture(r, g, b, texture, textureColorMode, textureColorRgb, localX, localY, localZ, seed = 0) {
+        const mod = this.getTextureModifier(texture, localX, localY, localZ, seed);
         if (mod.intensity === 0 && mod.factor === 1.0) return { r, g, b };
 
         if (textureColorMode === 'single' && textureColorRgb) {

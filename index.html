@@ -505,7 +505,6 @@
                                         <!-- Solid mode texture -->
                                         <div class="solid-tab-content">
                                             <div class="texture-section">
-                                                <div class="section-label">Texture</div>
                                                 <div class="texture-toggle" id="solid-texture-toggle">
                                                     <button class="texture-btn active" data-texture="none">None</button>
                                                     <button class="texture-btn" data-texture="camouflage">Camo</button>
@@ -526,13 +525,17 @@
                                                         <label>Texture Color</label>
                                                         <button class="color-swatch" id="swatch-solid-texture-color" data-color-id="solid-texture-color" data-color="#FFFFFF" style="background-color: #FFFFFF;"></button>
                                                     </div>
+                                                    <div class="texture-seed-field">
+                                                        <label>Seed</label>
+                                                        <input type="number" class="texture-seed-input" id="solid-texture-seed" value="0" min="0" max="9999">
+                                                        <button class="texture-seed-btn" id="solid-texture-seed-randomize" title="Randomize seed">&#x1f3b2;</button>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
                                         <!-- Stripe mode texture -->
                                         <div class="stripe-tab-content hidden">
                                             <div class="texture-section">
-                                                <div class="section-label">Texture</div>
                                                 <div class="texture-toggle" id="stripe-texture-toggle">
                                                     <button class="texture-btn active" data-texture="none">None</button>
                                                     <button class="texture-btn" data-texture="camouflage">Camo</button>
@@ -552,6 +555,11 @@
                                                     <div class="color-field-hsb hidden" id="stripe-texture-color-field">
                                                         <label>Texture Color</label>
                                                         <button class="color-swatch" id="swatch-stripe-texture-color" data-color-id="stripe-texture-color" data-color="#FFFFFF" style="background-color: #FFFFFF;"></button>
+                                                    </div>
+                                                    <div class="texture-seed-field">
+                                                        <label>Seed</label>
+                                                        <input type="number" class="texture-seed-input" id="stripe-texture-seed" value="0" min="0" max="9999">
+                                                        <button class="texture-seed-btn" id="stripe-texture-seed-randomize" title="Randomize seed">&#x1f3b2;</button>
                                                     </div>
                                                 </div>
                                             </div>

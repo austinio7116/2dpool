@@ -39,6 +39,7 @@ export class Ball {
         this.texture = 'none';  // Procedural texture: 'none', 'camouflage', 'striped', 'marbled', 'sparkly'
         this.textureColorMode = 'auto';  // 'auto' or 'single'
         this.textureColor = '#FFFFFF';  // Custom texture color
+        this.textureSeed = 0;  // Seed offset for procedural texture variation
         this.numberFont = 'Arial';  // Font for number text
 
         // VISUALS

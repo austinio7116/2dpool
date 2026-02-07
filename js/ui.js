@@ -177,6 +177,9 @@ export class UI {
         this.solidTextureColorField = document.getElementById('solid-texture-color-field');
         this.solidCreatorTexture = 'none';
         this.solidCreatorTextureColorMode = 'auto';
+        this.solidCreatorTextureSeed = 0;
+        this.solidTextureSeedInput = document.getElementById('solid-texture-seed');
+        this.solidTextureSeedRandomize = document.getElementById('solid-texture-seed-randomize');
         this.solidNumberFontSelect = document.getElementById('solid-number-font');
 
         // Stripe mode elements
@@ -221,6 +224,9 @@ export class UI {
         this.stripeTextureColorField = document.getElementById('stripe-texture-color-field');
         this.creatorTexture = 'none';
         this.creatorTextureColorMode = 'auto';
+        this.creatorTextureSeed = 0;
+        this.stripeTextureSeedInput = document.getElementById('stripe-texture-seed');
+        this.stripeTextureSeedRandomize = document.getElementById('stripe-texture-seed-randomize');
         this.stripeNumberFontSelect = document.getElementById('stripe-number-font');
 
         // Table creator elements
@@ -632,6 +638,15 @@ export class UI {
                 this.updateCreatorPreview();
             });
         });
+        this.solidTextureSeedInput?.addEventListener('input', (e) => {
+            this.solidCreatorTextureSeed = parseInt(e.target.value) || 0;
+            this.updateCreatorPreview();
+        });
+        this.solidTextureSeedRandomize?.addEventListener('click', () => {
+            this.solidCreatorTextureSeed = Math.floor(Math.random() * 1000) + 1;
+            if (this.solidTextureSeedInput) this.solidTextureSeedInput.value = this.solidCreatorTextureSeed;
+            this.updateCreatorPreview();
+        });
         this.solidTextureModeToggle?.querySelectorAll('.texture-mode-btn').forEach(btn => {
             btn.addEventListener('click', () => {
                 this.solidTextureModeToggle.querySelectorAll('.texture-mode-btn').forEach(b => b.classList.remove('active'));
@@ -725,6 +740,15 @@ export class UI {
                 this.stripeTextureColorRow?.classList.toggle('hidden', this.creatorTexture === 'none');
                 this.updateCreatorPreview();
             });
+        });
+        this.stripeTextureSeedInput?.addEventListener('input', (e) => {
+            this.creatorTextureSeed = parseInt(e.target.value) || 0;
+            this.updateCreatorPreview();
+        });
+        this.stripeTextureSeedRandomize?.addEventListener('click', () => {
+            this.creatorTextureSeed = Math.floor(Math.random() * 1000) + 1;
+            if (this.stripeTextureSeedInput) this.stripeTextureSeedInput.value = this.creatorTextureSeed;
+            this.updateCreatorPreview();
         });
         this.stripeTextureModeToggle?.querySelectorAll('.texture-mode-btn').forEach(btn => {
             btn.addEventListener('click', () => {
@@ -1038,6 +1062,7 @@ export class UI {
             texture: config.texture,
             textureColorMode: config.textureColorMode,
             textureColor: config.textureColor,
+            textureSeed: config.textureSeed,
             numberFont: config.numberFont
         };
 
@@ -1371,6 +1396,8 @@ export class UI {
             });
             this.solidTextureColorField?.classList.toggle('hidden', this.solidCreatorTextureColorMode !== 'single');
             this.setSwatchColor('solid-texture-color', set.options?.textureColor || '#FFFFFF');
+            this.solidCreatorTextureSeed = set.options?.textureSeed || 0;
+            if (this.solidTextureSeedInput) this.solidTextureSeedInput.value = this.solidCreatorTextureSeed;
         } else {
             // Load stripe mode values
             this.setSwatchColor('solids', set.colors?.group1 || '#FFD700');
@@ -1444,6 +1471,8 @@ export class UI {
             });
             this.stripeTextureColorField?.classList.toggle('hidden', this.creatorTextureColorMode !== 'single');
             this.setSwatchColor('stripe-texture-color', set.options?.textureColor || '#FFFFFF');
+            this.creatorTextureSeed = set.options?.textureSeed || 0;
+            if (this.stripeTextureSeedInput) this.stripeTextureSeedInput.value = this.creatorTextureSeed;
 
             // Load advanced mode
             if (set.advancedMode && set.ballColors) {
@@ -1545,6 +1574,7 @@ export class UI {
         // Reset solid texture
         this.solidCreatorTexture = 'none';
         this.solidCreatorTextureColorMode = 'auto';
+        this.solidCreatorTextureSeed = 0;
         this.solidTextureToggle?.querySelectorAll('.texture-btn').forEach(btn => {
             btn.classList.toggle('active', btn.dataset.texture === 'none');
         });
@@ -1554,6 +1584,7 @@ export class UI {
         });
         this.solidTextureColorField?.classList.add('hidden');
         this.setSwatchColor('solid-texture-color', '#FFFFFF');
+        if (this.solidTextureSeedInput) this.solidTextureSeedInput.value = 0;
 
         // Reset stripe mode fields
         this.setSwatchColor('solids', '#FFD700');
@@ -1628,6 +1659,7 @@ export class UI {
         // Reset stripe texture
         this.creatorTexture = 'none';
         this.creatorTextureColorMode = 'auto';
+        this.creatorTextureSeed = 0;
         this.stripeTextureToggle?.querySelectorAll('.texture-btn').forEach(btn => {
             btn.classList.toggle('active', btn.dataset.texture === 'none');
         });
@@ -1637,6 +1669,7 @@ export class UI {
         });
         this.stripeTextureColorField?.classList.add('hidden');
         this.setSwatchColor('stripe-texture-color', '#FFFFFF');
+        if (this.stripeTextureSeedInput) this.stripeTextureSeedInput.value = 0;
 
         // Reset modal title and button text for create mode
         const modalTitle = this.creatorModal.querySelector('.modal-header h2');
@@ -1845,6 +1878,7 @@ export class UI {
                     texture: this.solidCreatorTexture || 'none',
                     textureColorMode: this.solidCreatorTextureColorMode || 'auto',
                     textureColor: this.getSwatchColor('solid-texture-color'),
+                    textureSeed: this.solidCreatorTextureSeed || 0,
                     numberFont: this.solidNumberFontSelect?.value || 'Arial'
                 }
             };
@@ -1879,6 +1913,7 @@ export class UI {
                     texture: this.creatorTexture || 'none',
                     textureColorMode: this.creatorTextureColorMode || 'auto',
                     textureColor: this.getSwatchColor('stripe-texture-color'),
+                    textureSeed: this.creatorTextureSeed || 0,
                     numberFont: this.stripeNumberFontSelect?.value || 'Arial'
                 }
             };
@@ -1952,6 +1987,7 @@ export class UI {
                     texture: this.solidCreatorTexture || 'none',
                     textureColorMode: this.solidCreatorTextureColorMode || 'auto',
                     textureColor: this.getSwatchColor('solid-texture-color'),
+                    textureSeed: this.solidCreatorTextureSeed || 0,
                     numberFont: this.solidNumberFontSelect?.value || 'Arial'
                 }
             };
@@ -1984,6 +2020,7 @@ export class UI {
                     texture: this.creatorTexture || 'none',
                     textureColorMode: this.creatorTextureColorMode || 'auto',
                     textureColor: this.getSwatchColor('stripe-texture-color'),
+                    textureSeed: this.creatorTextureSeed || 0,
                     numberFont: this.stripeNumberFontSelect?.value || 'Arial'
                 }
             };

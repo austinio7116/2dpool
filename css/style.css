@@ -1382,6 +1382,58 @@ body {
     color: #fff;
 }
 
+.texture-seed-field {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-left: auto;
+}
+
+.texture-seed-field label {
+    font-size: 0.7rem;
+    color: #aaa;
+}
+
+.texture-seed-input {
+    width: 48px;
+    padding: 3px 4px;
+    border: 2px solid #4a4a6a;
+    background: rgba(40, 40, 60, 0.8);
+    color: #ccc;
+    font-size: 0.7rem;
+    border-radius: 4px;
+    text-align: center;
+    -moz-appearance: textfield;
+}
+
+.texture-seed-input::-webkit-inner-spin-button,
+.texture-seed-input::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+.texture-seed-input:focus {
+    border-color: #ffd700;
+    outline: none;
+    color: #fff;
+}
+
+.texture-seed-btn {
+    padding: 3px 6px;
+    border: 2px solid #4a4a6a;
+    background: rgba(40, 40, 60, 0.8);
+    color: #ccc;
+    font-size: 0.75rem;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.texture-seed-btn:hover {
+    border-color: #ffd700;
+    color: #fff;
+}
+
 /* Mobile: collapse grid to 1 column and stack layout */
 @media (max-width: 700px) {
     .creator-content {

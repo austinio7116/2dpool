@@ -315,6 +315,7 @@ class PoolGame {
             ball.texture = config.texture || 'none';
             ball.textureColorMode = config.textureColorMode || 'auto';
             ball.textureColor = config.textureColor || '#FFFFFF';
+            ball.textureSeed = config.textureSeed || 0;
             ball.numberFont = config.numberFont || 'Arial';
         }
     }

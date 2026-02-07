@@ -1132,6 +1132,16 @@ export class AI {
         const bestOption = this.selectShot(pool);
 
         const ballName = bestOption.target.colorName || bestOption.target.number;
+        const pocketName = bestOption.pocket.type;
+        // Format the "Next Ball" string
+        let positionInfo = "None";
+        if (bestOption.nextBall) {
+            const nbName = bestOption.nextBall.colorName || bestOption.nextBall.number;
+            positionInfo = `Ball ${nbName}`;
+        }
+
+        aiLog(`🎯 TARGET SELECTED: ${ballName} (into ${pocketName})`);
+        aiLog(`🎱 PLAYING FOR POSITION ON: ${positionInfo} (Score: ${bestOption.positionScore.toFixed(0)})`);
         aiLog(`--- Selected: ${ballName}->${pocketNames(bestOption.pocket)} | pot:${bestOption.potScore.toFixed(0)} pos:${bestOption.positionScore.toFixed(0)} | power:${bestOption.power.toFixed(0)} spin:${bestOption.spin?.y?.toFixed(1) || '0'} | via ${persona.shotSelection} from ${pool.length} viable ---`);
 
         // 6. Confidence check (safetyBias determines risk tolerance)
@@ -1225,7 +1235,7 @@ export class AI {
                 }, spinY, prediction.direction);
                 
                 // Evaluate Next Shot
-                const positionScore = this.evaluatePositionQuality(predictedEndPos, target);
+                const { score: positionScore, nextBall } = this.evaluatePositionQuality(predictedEndPos, target);
 
                 // --- SCORING LOGIC ---
                 
@@ -1260,6 +1270,7 @@ export class AI {
                     powerLevel: `${typeName} (${power})`, // e.g., "Draw (18)"
                     potScore: Math.max(0, potScore),
                     positionScore,
+                    nextBall,
                     compositeScore,
                     cueBallEndPos: predictedEndPos
                 });
@@ -1337,7 +1348,7 @@ export class AI {
         if (pocket.type === 'side') {
             const angleFromRail = Math.asin(Math.abs(pocketLine.y)) * 180 / Math.PI;
 
-            if (angleFromRail < 45) {
+            if (angleFromRail < 40) {
                 // Severe penalty for shallow angles into side pockets
                 const sidePenalty = Math.pow((45 - angleFromRail), 1.7) * 0.8;
                 score -= sidePenalty;
@@ -1405,34 +1416,82 @@ export class AI {
     evaluatePositionQuality(predictedCuePos, ballJustHit) {
         // 1. Determine valid targets for the NEXT shot
         let nextTargets = [];
-        const allBalls = this.game.balls.filter(b => !b.pocketed && !b.isCueBall);
+        const remainingBalls = this.game.balls.filter(b => 
+            !b.pocketed && !b.isCueBall && b !== ballJustHit
+        );
 
         if (this.game.mode === GameMode.SNOOKER) {
             if (ballJustHit.isRed) {
-                // If we just potted a Red, we MUST target a Color next
-                nextTargets = allBalls.filter(b => b.isColor);
+                nextTargets = remainingBalls.filter(b => b.isColor);
             } else if (ballJustHit.isColor) {
-                // If we potted a Color, we generally go back to Reds
-                const reds = allBalls.filter(b => b.isRed);
-                if (reds.length > 0) {
-                    nextTargets = reds;
-                } else {
-                    // No reds left: strict color order (simplified: just target any color for now)
-                    nextTargets = allBalls.filter(b => b !== ballJustHit);
+                const reds = remainingBalls.filter(b => b.isRed);
+                nextTargets = reds.length > 0 ? reds : remainingBalls;
+            }
+        } else if (this.game.mode === GameMode.NINE_BALL) {
+            // --- 9-BALL LOGIC ---
+            // If we just potted the lowest ball, we need position on the NEXT lowest
+            if (remainingBalls.length > 0) {
+                // Find the ball with the absolute lowest number among those remaining
+                const nextLowest = remainingBalls.reduce((min, b) => 
+                    b.number < min.number ? b : min
+                , remainingBalls[0]);
+                
+                nextTargets = [nextLowest];
+            }
+        } 
+        else {
+            // --- 8-BALL & UK 8-BALL LOGIC ---
+            // 1. Get targets from our group that would remain after this shot
+            // (We assume getValidTargets returns our full group currently)
+            const currentValid = this.getValidTargets();
+            const groupRemains = currentValid.filter(b => b !== ballJustHit && !b.isEightBall);
+
+            if (groupRemains.length > 0) {
+                // If we still have group balls left, position on any of them is fine
+                nextTargets = groupRemains;
+            } else {
+                // If no group balls remain, we are clearing the table -> We MUST get on the Black (8-ball)
+                // Note: In 8-ball, the 8 might be in 'remainingBalls' but not 'currentValid' if we haven't cleared yet
+                const eightBall = remainingBalls.find(b => b.isEightBall);
+                if (eightBall) {
+                    nextTargets = [eightBall];
                 }
             }
-        } else {
-            // Pool: Valid targets are usually the same group, minus the one we just hit
-            // (This is a simplification, but sufficient for position scoring)
-            nextTargets = this.getValidTargets().filter(b => b !== ballJustHit);
         }
 
-        if (nextTargets.length === 0) return 0;
+        if (nextTargets.length === 0) return 100;
+
+        // --- NEW: RESPOTTING LOGIC ---
+        // Calculate where the ball we just hit will be respotted so we don't plan a shot through it
+        const extraObstacles = [];
+        if (this.game.mode === GameMode.SNOOKER && ballJustHit && ballJustHit.isColor) {
+            const spots = this.table.spots;
+            // Ensure we have spot data and the ball has a color name
+            if (spots && ballJustHit.colorName && spots[ballJustHit.colorName]) {
+                const spotRel = spots[ballJustHit.colorName];
+                
+                // Convert relative spot coordinates (from table center) to absolute table coordinates
+                const spotAbs = {
+                    x: this.table.center.x + spotRel.x,
+                    y: this.table.center.y + spotRel.y
+                };
+
+                // Add as a virtual obstacle
+                extraObstacles.push({
+                    position: spotAbs,
+                    radius: ballJustHit.radius || 12,
+                    isVirtual: true // Flag for debugging if needed
+                });
+            }
+        }
+        // -----------------------------
 
         let bestNextShotScore = 0;
+        let bestNextBall = null; // New: Track the specific ball
 
         for (const nextBall of nextTargets) {
-             if (!this.isPathClear(predictedCuePos, nextBall.position, [nextBall])) continue;
+             // Pass extraObstacles (the respotted ball) to isPathClear
+             if (!this.isPathClear(predictedCuePos, nextBall.position, [nextBall], extraObstacles)) continue;
 
              for (const pocket of this.table.pockets) {
                  // 1. Get the Unified Difficulty Score
@@ -1453,10 +1512,11 @@ export class AI {
 
                  if (finalScore > bestNextShotScore) {
                      bestNextShotScore = finalScore;
+                     bestNextBall = nextBall; // Capture the winning ball
                  }
              }
         }
-        return bestNextShotScore;
+        return { score: bestNextShotScore, nextBall: bestNextBall };
     }
 
     // Get valid target balls based on game mode
@@ -1765,12 +1825,16 @@ export class AI {
     }
 
     // Check if path between two points is clear of other balls
-    isPathClear(start, end, excludeBalls) {
+    // Added: extraObstacles parameter to support virtual balls (like respotted colors)
+    isPathClear(start, end, excludeBalls, extraObstacles = []) {
         const balls = this.game.balls.filter(b =>
             !b.pocketed &&
             !b.isCueBall &&
             !excludeBalls.includes(b)
         );
+
+        // Combine actual balls with any virtual obstacles (like predicted respots)
+        const allObstacles = balls.concat(extraObstacles);
 
         const direction = Vec2.subtract(end, start);
         const distance = Vec2.length(direction);
@@ -1782,7 +1846,7 @@ export class AI {
         const cueBallRadius = this.game.cueBall?.radius || 12;
 
         // Check for obstacles along the path
-        for (const ball of balls) {
+        for (const ball of allObstacles) {
             const toball = Vec2.subtract(ball.position, start);
             const projection = Vec2.dot(toball, normalized);
 
@@ -1793,9 +1857,9 @@ export class AI {
             const closestPoint = Vec2.add(start, Vec2.multiply(normalized, Math.max(0, Math.min(distance, projection))));
             const perpDist = Vec2.distance(ball.position, closestPoint);
 
-            // Check if ball blocks the path (use slightly smaller margin for better shot finding)
+            // Check if ball blocks the path
             const ballRadius = ball.radius || 12;
-            const clearance = ballRadius + cueBallRadius ; // Allow slight overlap for edge cases
+            const clearance = ballRadius + cueBallRadius; // Allow slight overlap for edge cases
             if (perpDist < clearance) {
                 return false;
             }

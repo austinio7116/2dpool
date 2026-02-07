@@ -1284,20 +1284,21 @@ body {
 }
 
 .texture-toggle {
-    display: flex;
-    gap: 4px;
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
 }
 
 .texture-btn {
-    padding: 4px 10px;
+    padding: 10px 8px;
     border: 2px solid #4a4a6a;
     background: rgba(40, 40, 60, 0.8);
     color: #aaa;
-    font-size: 0.7rem;
-    border-radius: 4px;
+    font-size: 0.8rem;
+    border-radius: 6px;
     cursor: pointer;
     transition: all 0.2s;
+    text-align: center;
 }
 
 .texture-btn:hover {
@@ -1456,20 +1457,21 @@ body {
 .hsb-slider-group input[type="range"],
 .ball-slider-group input[type="range"] {
     width: 100%;
-    height: 6px;
-    border-radius: 3px;
+    height: 12px;
+    border-radius: 6px;
     background: #2a2a4a;
     outline: none;
     -webkit-appearance: none;
     appearance: none;
+    margin: 8px 0;
 }
 
 .hsb-slider-group input[type="range"]::-webkit-slider-thumb,
 .ball-slider-group input[type="range"]::-webkit-slider-thumb {
     -webkit-appearance: none;
     appearance: none;
-    width: 18px;
-    height: 18px;
+    width: 28px;
+    height: 28px;
     border-radius: 50%;
     background: #ffd700;
     cursor: pointer;
@@ -1478,8 +1480,8 @@ body {
 
 .hsb-slider-group input[type="range"]::-moz-range-thumb,
 .ball-slider-group input[type="range"]::-moz-range-thumb {
-    width: 18px;
-    height: 18px;
+    width: 28px;
+    height: 28px;
     border-radius: 50%;
     background: #ffd700;
     cursor: pointer;

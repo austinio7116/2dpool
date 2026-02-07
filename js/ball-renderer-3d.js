@@ -397,8 +397,8 @@ export class BallRenderer3D {
                     }
 
                     if (isStripe) {
-                        if (textColor) {
-                            // Use color from text texture (text, border, or circle background)
+                        if (textColor && textColor.a == null) {
+                            // Fully opaque text texture pixel
                             r = textColor.r;
                             g = textColor.g;
                             b = textColor.b;
@@ -410,16 +410,28 @@ export class BallRenderer3D {
                                 const tex = this.applyTexture(r, g, b, texture, textureColorMode, textureColorRgb, localX, localY, localZ);
                                 r = tex.r; g = tex.g; b = tex.b;
                             }
+                            if (textColor && textColor.a != null) {
+                                // Semi-transparent text texture - blend over ball/stripe color
+                                const a = textColor.a;
+                                r = Math.round(textColor.r * a + r * (1 - a));
+                                g = Math.round(textColor.g * a + g * (1 - a));
+                                b = Math.round(textColor.b * a + b * (1 - a));
+                            }
                         } else {
                             // Stripe background color (poles)
                             r = stripeBackgroundRgb.r;
                             g = stripeBackgroundRgb.g;
                             b = stripeBackgroundRgb.b;
+                            if (textColor && textColor.a != null) {
+                                const a = textColor.a;
+                                r = Math.round(textColor.r * a + r * (1 - a));
+                                g = Math.round(textColor.g * a + g * (1 - a));
+                                b = Math.round(textColor.b * a + b * (1 - a));
+                            }
                         }
                     } else {
                         // Solid ball
-                        if (textColor) {
-                            // Use color from text texture (text, border, or circle background)
+                        if (textColor && textColor.a == null) {
                             r = textColor.r;
                             g = textColor.g;
                             b = textColor.b;
@@ -430,6 +442,12 @@ export class BallRenderer3D {
                             if (hasTexture) {
                                 const tex = this.applyTexture(r, g, b, texture, textureColorMode, textureColorRgb, localX, localY, localZ);
                                 r = tex.r; g = tex.g; b = tex.b;
+                            }
+                            if (textColor && textColor.a != null) {
+                                const a = textColor.a;
+                                r = Math.round(textColor.r * a + r * (1 - a));
+                                g = Math.round(textColor.g * a + g * (1 - a));
+                                b = Math.round(textColor.b * a + b * (1 - a));
                             }
                         }
                     }
@@ -580,8 +598,18 @@ export class BallRenderer3D {
         const idx = (pixelY * textureSize + pixelX) * 4;
         const alpha = textureData[idx + 3];
 
-        // If transparent, return null (use ball color)
-        if (alpha < 128) return null;
+        // If fully transparent, return null (use ball color)
+        if (alpha < 2) return null;
+
+        // If semi-transparent, blend with null to indicate partial coverage
+        if (alpha < 255) {
+            return {
+                r: textureData[idx],
+                g: textureData[idx + 1],
+                b: textureData[idx + 2],
+                a: alpha / 255
+            };
+        }
 
         return {
             r: textureData[idx],

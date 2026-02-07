@@ -246,6 +246,8 @@ class PoolGame {
             options.startingPlayer = AI.randomizeBreak();
         }
 
+        this._precaching = true;
+
         this.game.startGame(mode, options);
         this.lastGameOptions = options;  // Store for play again
         this.lastGameMode = mode; // Store mode for play again

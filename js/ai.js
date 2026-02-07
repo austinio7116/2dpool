@@ -2407,11 +2407,24 @@ export class AI {
         // Apply aim error based on difficulty (still as angle, but this is intentional variance)
         let aimError = (Math.random() - 0.5) * 2 * settings.lineAccuracy * (Math.PI / 180);
 
-        // If this shot is the same as the last foul shot, add extra angle variation to try something different
+        // UPDATED FOUL HANDLING
+        // Instead of random large shifts, use a deterministic shift if we are repeating
         if (this.isSameShotAsFoul(shot)) {
-            const foulAvoidanceAngle = (Math.random() > 0.5 ? 1 : -1) * (2 + Math.random() * 3) * (Math.PI / 180);
-            aimError += foulAvoidanceAngle;
-            aiLog('Foul avoidance: adding', (foulAvoidanceAngle * 180 / Math.PI).toFixed(2) + '° to avoid repeating foul');
+            // If we are here, it means the Planner chose the same shot again despite the filter 
+            // (or it's the only option). We must force a shift.
+            
+            // Check if we shifted positive or negative last time (heuristic) or just toggle
+            // For now, simply add a deterministic offset that is larger than the previous error
+            const avoidanceShift = 1.5 * (Math.PI / 180); 
+            
+            // Use a consistent offset based on turn number to toggle direction if needed, 
+            // or just alternate based on a property we add to 'this'
+            this._foulRetryToggle = !this._foulRetryToggle;
+            const sign = this._foulRetryToggle ? 1 : -1;
+            
+            aimError += (avoidanceShift * sign);
+            
+            aiLog(`Repeating foul shot detected. Forcing deterministic shift: ${(sign * 1.5).toFixed(1)}°`);
         }
 
         direction = Vec2.rotate(direction, aimError);
@@ -3106,64 +3119,137 @@ export class AI {
     }
 
     // Find an escape shot when snookered - try all angles and trace through rail bounces
+    // Find an escape shot when snookered - using Coarse-to-Fine search
     findSnookerEscape(validTargets, desperate = false) {
         const cueBall = this.game.cueBall;
         if (!cueBall) return null;
 
-        const escapeOptions = [];
-
-        // Try angles all around (every 5 degrees = 72 angles)
-        const angleStep = 5;
-        for (let angleDeg = 0; angleDeg < 360; angleDeg += angleStep) {
+        // 1. PHASE ONE: Coarse Scan
+        // Scan every 4 degrees to find potential sectors
+        const sectors = []; // Store promising angles
+        const coarseStep = 4;
+        
+        for (let angleDeg = 0; angleDeg < 360; angleDeg += coarseStep) {
             const angleRad = angleDeg * Math.PI / 180;
             const aimDir = { x: Math.cos(angleRad), y: Math.sin(angleRad) };
-
-            // Trace this shot path through rail bounces to see what ball we hit first
-            const traceResult = this.traceShotPath(cueBall.position, aimDir, validTargets);
-
-            if (traceResult && traceResult.hitsValidTarget) {
-                // Calculate power based on total distance
-                const power = Math.min(30, 12 + traceResult.totalDistance / 25);
-
-                // Score: prefer shorter paths and fewer bounces
-                let score = 100 - traceResult.totalDistance / 15 - traceResult.bounces * 15;
-
-                // Bonus if we hit target without bouncing (direct shot we missed earlier)
-                if (traceResult.bounces === 0) {
-                    score += 20;
-                }
-
-                if (score > 0 || desperate) {
-                    escapeOptions.push({
-                        target: traceResult.targetHit,
-                        rail: traceResult.bounces > 0 ? `${traceResult.bounces} cushion(s)` : 'direct',
-                        direction: aimDir,
-                        power,
-                        score,
-                        bounces: traceResult.bounces,
-                        angle: angleDeg
+            
+            const result = this.traceShotPath(cueBall.position, aimDir, validTargets);
+            
+            if (result) {
+                // Keep if we hit a target, OR if we got reasonably close (within 4 ball widths)
+                if (result.hitsValidTarget || result.closestApproach < 50) {
+                    sectors.push({
+                        angle: angleDeg,
+                        result: result,
+                        score: this.scoreEscapeResult(result)
                     });
                 }
             }
         }
 
-        if (escapeOptions.length === 0) {
-            return null;
+        // Sort sectors by potential
+        sectors.sort((a, b) => b.score - a.score);
+        
+        // Take top 5 distinct sectors to refine
+        // (Filter to ensure we don't just refine 5 angles right next to each other)
+        const uniqueSectors = [];
+        for (const s of sectors) {
+            if (!uniqueSectors.some(u => Math.abs(u.angle - s.angle) < 6)) {
+                uniqueSectors.push(s);
+            }
+            if (uniqueSectors.length >= 5) break;
         }
 
-        // Sort by score and return best
-        escapeOptions.sort((a, b) => b.score - a.score);
+        // 2. PHASE TWO: Fine Refinement (Homing In)
+        const candidates = [];
+        const fineStep = 0.5; // High precision
+        const searchRange = 5; // Search +/- 5 degrees around coarse hit
 
-        aiLog('Found', escapeOptions.length, 'escape options');
-        const topEscape = escapeOptions[0];
-        const targetName = topEscape.target.colorName || topEscape.target.number || 'ball';
-        aiLog('Best escape: angle', topEscape.angle + '°', '→', targetName,
-              '| bounces:', topEscape.bounces, '| score:', topEscape.score.toFixed(1));
+        for (const sector of uniqueSectors) {
+            const startAng = sector.angle - searchRange;
+            const endAng = sector.angle + searchRange;
 
-        return topEscape;
+            for (let a = startAng; a <= endAng; a += fineStep) {
+                const rad = a * Math.PI / 180;
+                const dir = { x: Math.cos(rad), y: Math.sin(rad) };
+                
+                const trace = this.traceShotPath(cueBall.position, dir, validTargets);
+                
+                if (trace && trace.hitsValidTarget) {
+                    // Calculate precise power based on distance
+                    const power = Math.min(35, 12 + trace.totalDistance / 25);
+                    
+                    candidates.push({
+                        target: trace.targetHit,
+                        rail: trace.bounces > 0 ? `${trace.bounces} cushion(s)` : 'direct',
+                        direction: dir,
+                        power: power,
+                        score: this.scoreEscapeResult(trace) + 10, // Bonus for confirmed hit
+                        bounces: trace.bounces,
+                        angle: a
+                    });
+                }
+            }
+        }
+
+        // 3. PHASE THREE: Foul Memory Filtering
+        // Filter out shots that look exactly like the last foul
+        if (this.lastFoulShot && candidates.length > 0) {
+            const foulDir = this.lastFoulShot.direction;
+            
+            // Remove candidates that are within 1.5 degrees of the mistake
+            const filtered = candidates.filter(c => {
+                const dot = Vec2.dot(c.direction, foulDir);
+                const diffAngle = Math.acos(Math.max(-1, Math.min(1, dot))) * 180 / Math.PI;
+                
+                // If it's practically the same shot that failed, skip it
+                if (diffAngle < 1.5 && this.isSameShotAsFoul({ target: c.target, pocket: {position: {x:0, y:0}} })) {
+                    aiLog(`Skipping candidate at ${c.angle.toFixed(1)}° - too close to previous foul`);
+                    return false;
+                }
+                return true;
+            });
+            
+            // If we have filtered options, use them. If we filtered everything, keep the original list (better to try than freeze)
+            if (filtered.length > 0) {
+                candidates.length = 0;
+                candidates.push(...filtered);
+            }
+        }
+
+        if (candidates.length === 0) return null;
+
+        // Sort by score
+        candidates.sort((a, b) => b.score - a.score);
+        
+        const best = candidates[0];
+        aiLog(`Best Escape Found: ${best.angle.toFixed(1)}° (${best.rail}) -> Score: ${best.score.toFixed(0)}`);
+        
+        return best;
+    }
+
+    // Helper to score escape attempts
+    scoreEscapeResult(trace) {
+        if (!trace) return -100;
+        
+        let score = 0;
+        
+        if (trace.hitsValidTarget) {
+            score = 100;
+        } else {
+            // Partial score for getting close (helps sorting in Phase 1)
+            score = 50 - Math.min(50, trace.closestApproach);
+        }
+
+        // Penalize distance and bounces (prefer simple shots)
+        score -= (trace.totalDistance / 20); 
+        score -= (trace.bounces * 10);
+
+        return score;
     }
 
     // Trace a shot path through rail bounces and find what ball is hit first
+    // UPDATED: Now returns closest approach info for homing in on targets
     traceShotPath(startPos, aimDir, validTargets) {
         const cueBallRadius = this.game.cueBall?.radius || 12;
         const bounds = this.table.bounds;
@@ -3176,11 +3262,15 @@ export class AI {
         let currentDir = { x: aimDir.x, y: aimDir.y };
         let totalDistance = 0;
         let bounces = 0;
-        const maxBounces = 3; // Allow up to 3 cushion bounces
-        const maxDistance = 2000; // Safety limit
+        const maxBounces = 3; 
+        const maxDistance = 2500; 
+
+        // Track the closest we ever get to a valid target (for refining aim)
+        let closestApproach = Infinity;
+        let closestTarget = null;
 
         while (bounces <= maxBounces && totalDistance < maxDistance) {
-            // Find the first ball we'd hit along current path
+            // 1. Check for ball collisions
             let firstBallHit = null;
             let firstBallDist = Infinity;
 
@@ -3189,18 +3279,28 @@ export class AI {
                 const toBall = Vec2.subtract(ball.position, currentPos);
                 const projection = Vec2.dot(toBall, currentDir);
 
+                // Check "Near Miss" for valid targets
+                if (validTargets.includes(ball) && projection > 0) {
+                    const closestPoint = Vec2.add(currentPos, Vec2.multiply(currentDir, projection));
+                    const perpDist = Vec2.distance(ball.position, closestPoint);
+                    if (perpDist < closestApproach) {
+                        closestApproach = perpDist;
+                        closestTarget = ball;
+                    }
+                }
+
                 if (projection < 0) continue; // Ball is behind us
 
                 // Calculate perpendicular distance to aim line
                 const closestPoint = Vec2.add(currentPos, Vec2.multiply(currentDir, projection));
                 const perpDist = Vec2.distance(ball.position, closestPoint);
 
-                // Check if we'd hit this ball
+                // Check collision
                 const hitRadius = ballRadius + cueBallRadius;
                 if (perpDist < hitRadius) {
-                    // Calculate actual contact distance
                     const offset = Math.sqrt(Math.max(0, hitRadius * hitRadius - perpDist * perpDist));
                     const contactDist = projection - offset;
+                    
                     if (contactDist > 1 && contactDist < firstBallDist) {
                         firstBallDist = contactDist;
                         firstBallHit = ball;
@@ -3208,99 +3308,75 @@ export class AI {
                 }
             }
 
-            // Find distance to each rail
+            // 2. Find nearest rail
             let nearestRailDist = Infinity;
             let hitRail = null;
 
-            // Top rail
+            // ... (Your existing Rail Detection Logic here - unchanged) ...
+            // [Copy the Left/Right/Top/Bottom detection from your original code]
             if (currentDir.y < -0.01) {
                 const t = (bounds.top + margin - currentPos.y) / currentDir.y;
-                if (t > 0 && t < nearestRailDist) {
-                    nearestRailDist = t;
-                    hitRail = 'top';
-                }
+                if (t > 0 && t < nearestRailDist) { nearestRailDist = t; hitRail = 'top'; }
             }
-            // Bottom rail
             if (currentDir.y > 0.01) {
                 const t = (bounds.bottom - margin - currentPos.y) / currentDir.y;
-                if (t > 0 && t < nearestRailDist) {
-                    nearestRailDist = t;
-                    hitRail = 'bottom';
-                }
+                if (t > 0 && t < nearestRailDist) { nearestRailDist = t; hitRail = 'bottom'; }
             }
-            // Left rail
             if (currentDir.x < -0.01) {
                 const t = (bounds.left + margin - currentPos.x) / currentDir.x;
-                if (t > 0 && t < nearestRailDist) {
-                    nearestRailDist = t;
-                    hitRail = 'left';
-                }
+                if (t > 0 && t < nearestRailDist) { nearestRailDist = t; hitRail = 'left'; }
             }
-            // Right rail
             if (currentDir.x > 0.01) {
                 const t = (bounds.right - margin - currentPos.x) / currentDir.x;
-                if (t > 0 && t < nearestRailDist) {
-                    nearestRailDist = t;
-                    hitRail = 'right';
-                }
+                if (t > 0 && t < nearestRailDist) { nearestRailDist = t; hitRail = 'right'; }
             }
+            // ... (End Rail Detection) ...
 
-            // Do we hit a ball before the rail?
+            // 3. Resolve Collision
             if (firstBallHit && firstBallDist < nearestRailDist) {
                 totalDistance += firstBallDist;
-
-                // Check if it's a valid target
                 const isValidTarget = validTargets.includes(firstBallHit);
-
+                
                 return {
                     hitsValidTarget: isValidTarget,
                     targetHit: firstBallHit,
                     totalDistance,
-                    bounces
+                    bounces,
+                    closestApproach: 0 // Direct hit
                 };
             }
 
-            // Hit the rail - bounce
-            if (!hitRail) {
-                break; // Something went wrong
-            }
+            if (!hitRail) break;
 
-            // Move to rail contact point
+            // Move to rail
             const railHitPoint = Vec2.add(currentPos, Vec2.multiply(currentDir, nearestRailDist));
+            
+            // Pocket Scratch Check
+            if (this.isNearPocket(railHitPoint)) return null; 
+
             totalDistance += nearestRailDist;
-
-            // Check rail hit point isn't near a pocket (would go in)
-            if (this.isNearPocket(railHitPoint)) {
-                return null; // Would scratch
-            }
-
-            // Reflect direction off rail WITH cushion throw compensation
-            // Cushion friction causes ball to come off straighter than pure reflection
-            // The throw factor reduces the angle (0.75 = comes off 25% straighter)
+            
+            // Reflect with cushion throw (Your existing logic)
             const cushionThrowFactor = 0.75;
-
             if (hitRail === 'top' || hitRail === 'bottom') {
-                // For horizontal rails, the x component is the "along rail" part
-                // Reduce it to simulate coming off straighter
-                currentDir = {
-                    x: currentDir.x * cushionThrowFactor,
-                    y: -currentDir.y
-                };
+                currentDir = { x: currentDir.x * cushionThrowFactor, y: -currentDir.y };
             } else {
-                // For vertical rails, the y component is the "along rail" part
-                currentDir = {
-                    x: -currentDir.x,
-                    y: currentDir.y * cushionThrowFactor
-                };
+                currentDir = { x: -currentDir.x, y: currentDir.y * cushionThrowFactor };
             }
-            // Re-normalize after throw adjustment
             currentDir = Vec2.normalize(currentDir);
-
+            
             currentPos = railHitPoint;
             bounces++;
         }
 
-        return null; // Didn't hit anything valid
+        // Return the closest we got (for the refinement phase)
+        return {
+            hitsValidTarget: false,
+            targetHit: closestTarget,
+            totalDistance,
+            bounces,
+            closestApproach // Tells us how close we got
+        };
     }
 
     // Check if a position is near a pocket

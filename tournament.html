@@ -606,14 +606,16 @@
                 for (const m of MODES) {
                     this.ratings[m.key] = {};
                     for (const p of this.personas) {
-                        this.ratings[m.key][p.id] = { elo: 1500, wins: 0, losses: 0, draws: 0 };
+                        // ADDED: highestBreak initialized to 0
+                        this.ratings[m.key][p.id] = { elo: 1500, wins: 0, losses: 0, draws: 0, highestBreak: 0 };
                     }
                 }
 
                 // Combined ratings
                 this.combined = {};
                 for (const p of this.personas) {
-                    this.combined[p.id] = { elo: 1500, wins: 0, losses: 0, draws: 0 };
+                    // ADDED: highestBreak initialized to 0
+                    this.combined[p.id] = { elo: 1500, wins: 0, losses: 0, draws: 0, highestBreak: 0 };
                 }
 
                 this.totalGames = 0;
@@ -701,6 +703,28 @@
                         scoreA = 0.5; scoreB = 0.5;
                         winnerName = null;
                     }
+
+                    // --- NEW CODE START: Track Highest Break ---
+                    if (modeInfo.mode === GameMode.SNOOKER) {
+                        const stats = headless.game.snookerStats;
+
+                        // Update Player 1 High Break (Mode & Combined)
+                        if (stats.player1.highBreak > this.ratings[modeInfo.key][p1.id].highestBreak) {
+                            this.ratings[modeInfo.key][p1.id].highestBreak = stats.player1.highBreak;
+                        }
+                        if (stats.player1.highBreak > this.combined[p1.id].highestBreak) {
+                            this.combined[p1.id].highestBreak = stats.player1.highBreak;
+                        }
+
+                        // Update Player 2 High Break (Mode & Combined)
+                        if (stats.player2.highBreak > this.ratings[modeInfo.key][p2.id].highestBreak) {
+                            this.ratings[modeInfo.key][p2.id].highestBreak = stats.player2.highBreak;
+                        }
+                        if (stats.player2.highBreak > this.combined[p2.id].highestBreak) {
+                            this.combined[p2.id].highestBreak = stats.player2.highBreak;
+                        }
+                    }
+                    // --- NEW CODE END ---
 
                     // Update per-mode ratings
                     const modeRatings = this.ratings[modeInfo.key];
@@ -846,6 +870,9 @@
             const section = document.createElement('div');
             section.className = 'result-table';
 
+            // Only show High Break column for Snooker modes or Combined stats
+            const showHighBreak = label.toLowerCase().includes('snooker') || label === 'Combined';
+
             const sorted = tournament.personas
                 .map(p => ({
                     persona: p,
@@ -855,8 +882,13 @@
 
             let html = `<h3>${label}</h3>`;
             html += `<table><thead><tr>
-                <th>#</th><th>Persona</th><th>ELO</th><th>W</th><th>L</th><th>D</th><th>Win%</th>
-            </tr></thead><tbody>`;
+                <th>#</th><th>Persona</th><th>ELO</th><th>W</th><th>L</th><th>D</th><th>Win%</th>`;
+            
+            if (showHighBreak) {
+                html += `<th>High Break</th>`;
+            }
+
+            html += `</tr></thead><tbody>`;
 
             sorted.forEach((row, i) => {
                 const total = row.wins + row.losses + row.draws;
@@ -872,8 +904,13 @@
                     <td>${row.wins}</td>
                     <td>${row.losses}</td>
                     <td>${row.draws}</td>
-                    <td>${winPct}%</td>
-                </tr>`;
+                    <td>${winPct}%</td>`;
+
+                if (showHighBreak) {
+                    html += `<td>${row.highestBreak || 0}</td>`;
+                }
+                
+                html += `</tr>`;
             });
 
             html += '</tbody></table>';

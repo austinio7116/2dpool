@@ -156,7 +156,11 @@ export class Renderer {
         if (state.aiming && state.cueBall && !state.cueBall.pocketed) {
             this.drawAimLine(state.cueBall, state.aimDirection, state.power, state.trajectory);
             this.drawCueStick(state.cueBall, state.aimDirection, state.power, state.pullBack);
-            this.drawPowerMeter(state.power);
+            this.drawPowerMeter(state.power, state.isTouchDevice, state.powerOverrideActive);
+
+            if (state.isTouchDevice && state.shootButton) {
+                this.drawShootButton(state.shootButton, state.power);
+            }
         }
     }
 
@@ -1211,7 +1215,7 @@ export class Renderer {
         ctx.restore();
     }
 
-    drawPowerMeter(power) {
+    drawPowerMeter(power, isTouchDevice = false, powerOverrideActive = false) {
         const ctx = this.ctx;
 
         // Position power meter above the spin indicator, centered on it
@@ -1221,6 +1225,23 @@ export class Renderer {
         const meterHeight = 100;
         const meterX = spinCenterX - meterWidth / 2;
         const meterY = spinTop - meterHeight - 20; // 20px gap above spin indicator
+
+        // Draw wider touch target area on touch devices
+        if (isTouchDevice) {
+            const touchWidth = 40;
+            const touchX = spinCenterX - touchWidth / 2;
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
+            ctx.beginPath();
+            ctx.roundRect(touchX, meterY - 2, touchWidth, meterHeight + 4, 6);
+            ctx.fill();
+
+            // Small drag arrows on each side
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
+            ctx.font = '8px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('\u25B2', spinCenterX, meterY + 8);   // up arrow at top
+            ctx.fillText('\u25BC', spinCenterX, meterY + meterHeight - 2); // down arrow at bottom
+        }
 
         ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
         ctx.strokeStyle = '#444';
@@ -1243,10 +1264,70 @@ export class Renderer {
         ctx.roundRect(meterX + 2, meterY + meterHeight - fillHeight + 2, meterWidth - 4, Math.max(0, fillHeight - 4), 2);
         ctx.fill();
 
+        // Draw marker line when power override is active
+        if (powerOverrideActive) {
+            const markerY = meterY + meterHeight - fillHeight;
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(meterX - 4, markerY);
+            ctx.lineTo(meterX + meterWidth + 4, markerY);
+            ctx.stroke();
+        }
+
         ctx.fillStyle = '#fff';
         ctx.font = '9px Arial';
         ctx.textAlign = 'center';
         ctx.fillText('POWER', meterX + meterWidth / 2, meterY - 6);
+    }
+
+    drawShootButton(button, power) {
+        const ctx = this.ctx;
+        const x = button.x;
+        const y = button.y;
+        const w = button.width;
+        const h = button.height;
+        const ready = power > Constants.MIN_POWER;
+
+        // Button background with 3D effect
+        const bgColor = ready ? 'rgba(0, 180, 80, 0.85)' : 'rgba(80, 80, 80, 0.6)';
+        const borderColor = ready ? '#00cc55' : '#555';
+
+        ctx.save();
+
+        // Shadow for depth
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+        ctx.beginPath();
+        ctx.roundRect(x - w / 2 + 2, y - h / 2 + 2, w, h, 8);
+        ctx.fill();
+
+        // Main button
+        ctx.fillStyle = bgColor;
+        ctx.beginPath();
+        ctx.roundRect(x - w / 2, y - h / 2, w, h, 8);
+        ctx.fill();
+
+        // Border
+        ctx.strokeStyle = borderColor;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // Top highlight for 3D effect
+        if (ready) {
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+            ctx.beginPath();
+            ctx.roundRect(x - w / 2 + 2, y - h / 2 + 1, w - 4, h / 2 - 1, { tl: 6, tr: 6, bl: 0, br: 0 });
+            ctx.fill();
+        }
+
+        // Label
+        ctx.fillStyle = ready ? '#fff' : '#999';
+        ctx.font = 'bold 12px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('SHOOT', x, y);
+
+        ctx.restore();
     }
 
     lightenColor(color, percent) {

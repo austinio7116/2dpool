@@ -129,6 +129,28 @@ export class Input {
         return (dx * dx + dy * dy) < (hitRadius * hitRadius);
     }
 
+    isOverShootButton(pos) {
+        const b = this.shootButton;
+        const pad = 10; // extra touch padding
+        return pos.x >= (b.x - b.width / 2 - pad) && pos.x <= (b.x + b.width / 2 + pad) &&
+               pos.y >= (b.y - b.height / 2 - pad) && pos.y <= (b.y + b.height / 2 + pad);
+    }
+
+    isOverPowerMeter(pos) {
+        const m = this.powerMeter;
+        const touchWidth = 40; // wider hit area for touch
+        const cx = m.x + m.width / 2;
+        return pos.x >= (cx - touchWidth / 2) && pos.x <= (cx + touchWidth / 2) &&
+               pos.y >= m.y && pos.y <= (m.y + m.height);
+    }
+
+    getPowerFromTouchY(pos) {
+        const m = this.powerMeter;
+        // Bottom of meter = 0 power, top = max power
+        const ratio = 1 - clamp((pos.y - m.y) / m.height, 0, 1);
+        return ratio * Constants.MAX_POWER;
+    }
+
     handleMouseMove(event) {
         this.mousePos = this.getMousePosition(event);
 
@@ -258,6 +280,7 @@ export class Input {
 
     handleTouchStart(event) {
         event.preventDefault();
+        this.isTouchDevice = true;
 
         // Hide touch hint on first interaction
         const touchHint = document.getElementById('touch-hint');
@@ -266,15 +289,43 @@ export class Input {
             setTimeout(() => touchHint.style.display = 'none', 500);
         }
 
-        // Second touch cancels current shot
-        if (event.touches.length > 1) {
-            if (this.isDragging) {
+        // Second touch: shoot button, power bar, or cancel
+        if (event.touches.length > 1 && this.isDragging) {
+            const newTouch = event.changedTouches[0];
+            const touchPos = this.getTouchPosition(newTouch);
+
+            if (this.isOverShootButton(touchPos) && this.power > Constants.MIN_POWER) {
+                // Fire shot immediately
+                if (this.onShot) {
+                    this.onShot(this.aimDirection, this.power, this.spin);
+                }
                 this.resetAim();
                 this.isMouseDown = false;
                 this.isDragging = false;
+                return;
             }
+
+            if (this.isOverPowerMeter(touchPos)) {
+                // Start power override
+                this.powerOverrideActive = true;
+                this.powerTouchId = newTouch.identifier;
+                this.power = this.getPowerFromTouchY(touchPos);
+                this.pullBack = Math.min((this.power / Constants.MAX_POWER) * 100, 100);
+                if (this.onAimUpdate) {
+                    this.onAimUpdate(this.aimDirection, this.power);
+                }
+                return;
+            }
+
+            // Elsewhere: cancel shot
+            this.resetAim();
+            this.isMouseDown = false;
+            this.isDragging = false;
             return;
         }
+
+        if (event.touches.length > 1) return;
+
         const touch = event.touches[0];
 
         this.isMouseDown = true;
@@ -312,10 +363,32 @@ export class Input {
     handleTouchMove(event) {
         event.preventDefault();
 
-        if (event.touches.length !== 1) return;
-        const touch = event.touches[0];
+        // Handle power override touch
+        if (this.powerTouchId !== null) {
+            for (let i = 0; i < event.touches.length; i++) {
+                if (event.touches[i].identifier === this.powerTouchId) {
+                    const powerPos = this.getTouchPosition(event.touches[i]);
+                    this.power = this.getPowerFromTouchY(powerPos);
+                    this.pullBack = Math.min((this.power / Constants.MAX_POWER) * 100, 100);
+                    if (this.onAimUpdate) {
+                        this.onAimUpdate(this.aimDirection, this.power);
+                    }
+                    break;
+                }
+            }
+        }
 
-        this.mousePos = this.getTouchPosition(touch);
+        // Find the primary aiming touch (first touch, not power touch)
+        let aimTouch = null;
+        for (let i = 0; i < event.touches.length; i++) {
+            if (event.touches[i].identifier !== this.powerTouchId) {
+                aimTouch = event.touches[i];
+                break;
+            }
+        }
+        if (!aimTouch) return;
+
+        this.mousePos = this.getTouchPosition(aimTouch);
 
         // Handle spin adjustment
         if (this.isSettingSpin) {
@@ -347,6 +420,28 @@ export class Input {
 
     handleTouchEnd(event) {
         event.preventDefault();
+
+        // Check if the ended touch is the power override touch
+        for (let i = 0; i < event.changedTouches.length; i++) {
+            if (event.changedTouches[i].identifier === this.powerTouchId) {
+                // Power touch lifted — keep powerOverrideActive, clear touch tracking
+                this.powerTouchId = null;
+                // Don't return — there may be other touches ending too
+            }
+        }
+
+        // If there are still touches active (e.g. aiming finger still down), don't end
+        if (event.touches.length > 0 && this.isDragging) {
+            // Check if the aiming touch is still present
+            let aimTouchStillDown = false;
+            for (let i = 0; i < event.touches.length; i++) {
+                if (event.touches[i].identifier !== this.powerTouchId) {
+                    aimTouchStillDown = true;
+                    break;
+                }
+            }
+            if (aimTouchStillDown) return;
+        }
 
         if (this.isSettingSpin) {
             this.isSettingSpin = false;
@@ -414,10 +509,14 @@ export class Input {
 
         if (distFromCueBall > 5) {
             this.aimDirection = Vec2.normalize(Vec2.multiply(toCueBall, -1));
-            const dragDist = Vec2.distance(this.mousePos, this.cueBall.position);
-            this.power = clamp(dragDist * Constants.POWER_SCALE, 0, Constants.MAX_POWER);
-            this.pullBack = Math.min(dragDist * 0.5, 100);
-        } else {
+
+            // Skip power/pullBack calculation when power override is active
+            if (!this.powerOverrideActive) {
+                const dragDist = Vec2.distance(this.mousePos, this.cueBall.position);
+                this.power = clamp(dragDist * Constants.POWER_SCALE, 0, Constants.MAX_POWER);
+                this.pullBack = Math.min(dragDist * 0.5, 100);
+            }
+        } else if (!this.powerOverrideActive) {
             this.power = 0;
             this.pullBack = 0;
         }
@@ -431,6 +530,8 @@ export class Input {
         this.aimDirection = null;
         this.power = 0;
         this.pullBack = 0;
+        this.powerOverrideActive = false;
+        this.powerTouchId = null;
 
         if (this.onAimUpdate) {
             this.onAimUpdate(null, 0);
@@ -476,7 +577,10 @@ export class Input {
             spin: this.spin,
             spinIndicator: this.spinIndicator,
             isSettingSpin: this.isSettingSpin,
-            isTouchSpin: this.isTouchSpin
+            isTouchSpin: this.isTouchSpin,
+            shootButton: this.shootButton,
+            powerOverrideActive: this.powerOverrideActive,
+            isTouchDevice: this.isTouchDevice
         };
     }
 

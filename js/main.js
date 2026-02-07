@@ -964,7 +964,10 @@ class PoolGame {
             isSettingSpin: aimState.isSettingSpin,
             isTouchSpin: aimState.isTouchSpin,
             aiVisualization: this.ai.getVisualization(),
-            showDZone: showDZone
+            showDZone: showDZone,
+            shootButton: aimState.shootButton,
+            powerOverrideActive: aimState.powerOverrideActive,
+            isTouchDevice: aimState.isTouchDevice
         };
 
         this.renderer.render(renderState);

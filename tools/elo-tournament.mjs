@@ -147,6 +147,13 @@ function runSingleGame(modeKey, personaA, personaB, startingPlayer) {
         ai.nominateFreeBall();
     };
 
+    const pocketedByPlayer = { 1: 0, 2: 0 };
+    game.onBallPocketed = (ball) => {
+        if (!ball.isCueBall) {
+            pocketedByPlayer[game.currentPlayer] += 1;
+        }
+    };
+
     game.startGame(MODE_MAP[modeKey], { startingPlayer });
 
     let shotCount = 0;
@@ -168,7 +175,11 @@ function runSingleGame(modeKey, personaA, personaB, startingPlayer) {
     }
 
     if (game.state !== GameState.GAME_OVER) {
-        return { winner: null, reason: shotCount >= maxShots ? 'shot_limit' : 'safety_limit' };
+        const fallbackWinner = determineWinnerFallback(modeKey, game, pocketedByPlayer);
+        return {
+            winner: fallbackWinner,
+            reason: shotCount >= maxShots ? 'shot_limit' : 'safety_limit'
+        };
     }
 
     return { winner: game.winner, reason: game.gameOverReason };
@@ -241,6 +252,18 @@ function placeCueBall(game, table, position) {
     }
 
     game.placeCueBall(position, placementMode);
+}
+
+function determineWinnerFallback(modeKey, game, pocketedByPlayer) {
+    if (modeKey === 'snooker') {
+        if (game.player1Score > game.player2Score) return 1;
+        if (game.player2Score > game.player1Score) return 2;
+    }
+
+    if (pocketedByPlayer[1] > pocketedByPlayer[2]) return 1;
+    if (pocketedByPlayer[2] > pocketedByPlayer[1]) return 2;
+
+    return null;
 }
 
 function toRankingTable(ratings, stats) {

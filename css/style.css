@@ -937,9 +937,9 @@ body {
 }
 
 .creator-right-panel {
-    flex: 1;
+    flex: 2;
     min-width: 140px;
-    max-width: 220px;
+    max-width: 280px;
 }
 
 .creator-right-panel .creator-preview-row {

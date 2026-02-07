@@ -13,7 +13,7 @@ export const AI_PERSONAS = [
         powerBias: 1.15,
         spinAbility: 0.3,
         shotSelection: 'random',
-        positionPlay: 0.02,
+        position: 0.0,
         thinkingDelay: 400
     },
     {
@@ -27,7 +27,7 @@ export const AI_PERSONAS = [
         powerBias: 0.95,
         spinAbility: 0.5,
         shotSelection: 'top3',
-        positionPlay: 0.15,
+        position: 0.4,
         thinkingDelay: 350
     },
     {
@@ -41,7 +41,7 @@ export const AI_PERSONAS = [
         powerBias: 1.25,
         spinAbility: 0.6,
         shotSelection: 'top3',
-        positionPlay: 0.08,
+        position: 0.2,
         thinkingDelay: 300
     },
     {
@@ -55,7 +55,7 @@ export const AI_PERSONAS = [
         powerBias: 1.0,
         spinAbility: 0.7,
         shotSelection: 'optimal',
-        positionPlay: 0.20,
+        position: 0.7,
         thinkingDelay: 350
     },
     {
@@ -69,7 +69,7 @@ export const AI_PERSONAS = [
         powerBias: 1.0,
         spinAbility: 0.8,
         shotSelection: 'optimal',
-        positionPlay: 0.18,
+        position: 0.6,
         thinkingDelay: 300
     },
     {
@@ -83,7 +83,7 @@ export const AI_PERSONAS = [
         powerBias: 1.1,
         spinAbility: 0.9,
         shotSelection: 'optimal',
-        positionPlay: 0.12,
+        position: 0.3,
         thinkingDelay: 250
     },
     {
@@ -97,7 +97,7 @@ export const AI_PERSONAS = [
         powerBias: 1.0,
         spinAbility: 0.9,
         shotSelection: 'optimal',
-        positionPlay: 0.25,
+        position: 0.85,
         thinkingDelay: 300
     },
     {
@@ -111,7 +111,7 @@ export const AI_PERSONAS = [
         powerBias: 1.0,
         spinAbility: 0.9,
         shotSelection: 'optimal',
-        positionPlay: 0.30,
+        position: 1.0,
         thinkingDelay: 200
     }
 ];

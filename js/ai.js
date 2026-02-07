@@ -6,7 +6,7 @@ import { GameMode, GameState } from './game.js';
 import { AI_PERSONAS, getPersonaById } from './ai-personas.js';
 
 // Debug logging - set to true to see AI decision making
-const AI_DEBUG = false;
+const AI_DEBUG = true;
 
 // Trained angle error prediction model (loaded dynamically if available)
 let angleModel = null;
@@ -1090,17 +1090,24 @@ export class AI {
         }
 
         // 4. Pick the easiest pot, unless a similar-difficulty pot has much better position
+        //    Controlled by persona.position: 0 = never switch for position, 1 = full switching
         let chosenGroup = groups[0];
-        const POS_ADVANTAGE_THRESHOLD = 25;
-        const POT_SIMILARITY_THRESHOLD = 10;
+        const persona = this.getCurrentPersona();
+        const posAwareness = persona.position;
 
-        for (let i = 1; i < groups.length; i++) {
-            const potDiff = chosenGroup.bestPot - groups[i].bestPot;
-            const posDiff = groups[i].bestPos - chosenGroup.bestPos;
-            if (potDiff <= POT_SIMILARITY_THRESHOLD && posDiff >= POS_ADVANTAGE_THRESHOLD) {
-                aiLog(`Switching: ${groups[i].key} similar pot (-${potDiff.toFixed(0)}) but much better pos (+${posDiff.toFixed(0)})`);
-                chosenGroup = groups[i];
-                break;
+        if (posAwareness > 0.05) {
+            // Scale thresholds: higher position = more willing to sacrifice pot for position
+            const POT_SIMILARITY_THRESHOLD = 10 * posAwareness;    // 0→0, 1→10
+            const POS_ADVANTAGE_THRESHOLD = 25 / posAwareness;     // 0.2→125, 0.5→50, 1→25
+
+            for (let i = 1; i < groups.length; i++) {
+                const potDiff = chosenGroup.bestPot - groups[i].bestPot;
+                const posDiff = groups[i].bestPos - chosenGroup.bestPos;
+                if (potDiff <= POT_SIMILARITY_THRESHOLD && posDiff >= POS_ADVANTAGE_THRESHOLD) {
+                    aiLog(`Switching: ${groups[i].key} similar pot (-${potDiff.toFixed(0)}) but much better pos (+${posDiff.toFixed(0)})`);
+                    chosenGroup = groups[i];
+                    break;
+                }
             }
         }
 
@@ -1108,10 +1115,20 @@ export class AI {
         const POT_DROP_LIMIT = 15;
         const viable = chosenGroup.variants.filter(v => v.potScore >= chosenGroup.bestPot - POT_DROP_LIMIT);
         const pool = viable.length > 0 ? viable : chosenGroup.variants;
-        pool.sort((a, b) => b.positionScore - a.positionScore);
 
-        // Apply shotSelection personality to pick from position-sorted variants
-        const persona = this.getCurrentPersona();
+        // Sort variants: position=0 sorts purely by potScore (easiest pot),
+        // position=1 sorts purely by positionScore (best leave)
+        // Lower power = more reliable position prediction, so boost position
+        // score for softer shots (up to +10 at minimum power, scaled by awareness)
+        pool.sort((a, b) => {
+            const aPowerBonus = (1 - a.power / 50) * 10 * posAwareness;
+            const bPowerBonus = (1 - b.power / 50) * 10 * posAwareness;
+            const aScore = a.potScore * (1 - posAwareness) + (a.positionScore + aPowerBonus) * posAwareness;
+            const bScore = b.potScore * (1 - posAwareness) + (b.positionScore + bPowerBonus) * posAwareness;
+            return bScore - aScore;
+        });
+
+        // Apply shotSelection personality to pick from sorted variants
         const bestOption = this.selectShot(pool);
 
         const ballName = bestOption.target.colorName || bestOption.target.number;
@@ -1225,8 +1242,9 @@ export class AI {
                     potScore -= 15; 
                 }
 
-                // Calculate Composite Score using persona's positionPlay weight
-                const posWeight = persona.positionPlay;
+                // Calculate Composite Score using persona's position awareness
+                // position 0 = pure potting, position 1 = max 30% weight on position
+                const posWeight = persona.position * 0.3;
                 const compositeScore = (potScore * (1 - posWeight)) + (positionScore * posWeight);
 
                 // Name generation for debugging

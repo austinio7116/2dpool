@@ -3470,6 +3470,7 @@ export class UI {
             const power = Math.round(((persona.powerBias - 0.85) / 0.4) * 100);
             const spin = Math.round((persona.spinAbility / 0.9) * 100);
             const safety = Math.round(((persona.safetyBias + 30) / 50) * 100);
+            const position = Math.round((persona.position || 0) * 100);
 
             card.innerHTML = `
                 <div class="persona-card-header">
@@ -3481,6 +3482,7 @@ export class UI {
                     ${statBar('Power', power, 100, '#F44336')}
                     ${statBar('Spin', spin, 100, '#2196F3')}
                     ${statBar('Safety', safety, 100, '#FF9800')}
+                    ${statBar('Position', position, 100, '#9C27B0')}
                 </div>
             `;
 

@@ -1,7 +1,7 @@
 // Physics engine using Planck.js (Box2D port)
 // Refactored to use native Z-spin and custom Slip Friction for X/Y spin
 
-import planck from 'planck';
+import planck from 'planck-js';
 import { Vec2, Constants } from './utils.js';
 
 if (planck.Settings) {

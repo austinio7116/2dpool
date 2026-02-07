@@ -527,11 +527,20 @@ export class UI {
             this.setCreatorStyle('stripe');
         });
 
+        // Tab navigation
+        document.querySelectorAll('.creator-tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                this.switchCreatorTab(tab.dataset.tab);
+            });
+        });
+
         // Solid mode color picker changes
         this.colorGroup1?.addEventListener('input', () => this.updateCreatorPreview());
         this.colorGroup2?.addEventListener('input', () => this.updateCreatorPreview());
         this.color8Ball?.addEventListener('input', () => this.updateCreatorPreview());
+        this.solidStripeBgField = document.getElementById('solid-stripe-bg-field');
         this.striped8BallCheckbox?.addEventListener('change', () => {
+            this.solidStripeBgField?.classList.toggle('hidden', !this.striped8BallCheckbox.checked);
             this.updateCreatorPreview();
         });
         this.striped8BallStripeCheckbox?.addEventListener('change', () => this.updateCreatorPreview());
@@ -1272,6 +1281,7 @@ export class UI {
             this.setSwatchColor('8ball', set.colors?.eightBall || '#000000');
             if (this.striped8BallCheckbox) {
                 this.striped8BallCheckbox.checked = set.options?.striped8Ball || false;
+                this.solidStripeBgField?.classList.toggle('hidden', !this.striped8BallCheckbox.checked);
             }
 
             // Load number styling for striped 8-ball
@@ -1436,6 +1446,7 @@ export class UI {
         }
 
         this.setCreatorStyle(set.style || 'solid');
+        this.switchCreatorTab('style');
         this.updateCreatorPreview();
 
         // Update modal title and button text
@@ -1463,6 +1474,7 @@ export class UI {
         this.setSwatchColor('group2', '#FFD700');
         this.setSwatchColor('8ball', '#000000');
         if (this.striped8BallCheckbox) this.striped8BallCheckbox.checked = false;
+        this.solidStripeBgField?.classList.add('hidden');
 
         // Reset solid number styling
         this.setSwatchColor('solid-stripe-bg', '#FFFFFF');
@@ -1611,6 +1623,7 @@ export class UI {
         if (saveBtn) saveBtn.textContent = 'Save Ball Set';
 
         this.setCreatorStyle('solid');
+        this.switchCreatorTab('style');
         this.updateCreatorPreview();
     }
 
@@ -1736,11 +1749,28 @@ export class UI {
         this.styleSolidBtn?.classList.toggle('active', style === 'solid');
         this.styleStripeBtn?.classList.toggle('active', style === 'stripe');
 
-        // Toggle solid/stripe options visibility
+        // Toggle solid/stripe options visibility (legacy containers)
         this.solidOptions?.classList.toggle('hidden', style !== 'solid');
         this.stripeModeOptions?.classList.toggle('hidden', style !== 'stripe');
 
+        // Toggle all solid/stripe tab content blocks
+        document.querySelectorAll('.solid-tab-content').forEach(el => {
+            el.classList.toggle('hidden', style !== 'solid');
+        });
+        document.querySelectorAll('.stripe-tab-content').forEach(el => {
+            el.classList.toggle('hidden', style !== 'stripe');
+        });
+
         this.updateCreatorPreview();
+    }
+
+    switchCreatorTab(tabName) {
+        document.querySelectorAll('.creator-tab').forEach(tab => {
+            tab.classList.toggle('active', tab.dataset.tab === tabName);
+        });
+        document.querySelectorAll('.creator-tab-panel').forEach(panel => {
+            panel.classList.toggle('active', panel.dataset.tabPanel === tabName);
+        });
     }
 
     // Toggle advanced mode
@@ -1858,7 +1888,7 @@ export class UI {
         const previewBalls = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
 
         for (const ballNum of previewBalls) {
-            const canvas = this.renderBallPreviewCanvas(ballNum, tempSet, 32);
+            const canvas = this.renderBallPreviewCanvas(ballNum, tempSet, 48);
             if (canvas) {
                 this.creatorPreviewBalls.appendChild(canvas);
             }

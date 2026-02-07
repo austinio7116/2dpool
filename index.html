@@ -174,325 +174,381 @@
                         <button class="modal-close" id="close-creator-modal">&times;</button>
                     </div>
                     <div class="creator-layout-v2">
-                        <div class="creator-row">
-                            <div class="creator-field name-field">
-                                <label for="custom-set-name">Set Name</label>
-                                <input type="text" id="custom-set-name" placeholder="My Custom Set" maxlength="20">
-                            </div>
-                            <div class="creator-field">
-                                <label>Style</label>
-                                <div class="style-toggle">
-                                    <button class="style-btn active" data-style="solid" id="style-solid">Solid</button>
-                                    <button class="style-btn" data-style="stripe" id="style-stripe">Spots & Stripes</button>
+                        <div class="creator-split">
+                            <!-- Left panel: tabbed wizard -->
+                            <div class="creator-left-panel">
+                                <div class="creator-tabs">
+                                    <button class="creator-tab active" data-tab="style">Name & Style</button>
+                                    <button class="creator-tab" data-tab="colours">Colours</button>
+                                    <button class="creator-tab" data-tab="numbers">Numbers</button>
+                                    <button class="creator-tab" data-tab="sliders">Sliders</button>
+                                    <button class="creator-tab" data-tab="texture">Texture</button>
                                 </div>
-                            </div>
-                        </div>
-
-                        <div class="creator-preview-row">
-                            <div class="preview-balls" id="creator-preview-balls"></div>
-                        </div>
-
-                        <!-- Solid mode options -->
-                        <div class="solid-options" id="solid-options">
-                            <div class="color-row">
-                                <div class="color-field-hsb">
-                                    <label>Group 1 (1-7)</label>
-                                    <button class="color-swatch" id="swatch-group1" data-color-id="group1" data-color="#CC0000" style="background-color: #CC0000;"></button>
-                                </div>
-                                <div class="color-field-hsb">
-                                    <label>Group 2 (9-15)</label>
-                                    <button class="color-swatch" id="swatch-group2" data-color-id="group2" data-color="#FFD700" style="background-color: #FFD700;"></button>
-                                </div>
-                                <div class="color-field-hsb">
-                                    <label>8-Ball</label>
-                                    <button class="color-swatch" id="swatch-8ball" data-color-id="8ball" data-color="#000000" style="background-color: #000000;"></button>
-                                </div>
-                            </div>
-                            <label class="checkbox-label">
-                                <input type="checkbox" id="striped-8ball">
-                                Striped 8-Ball
-                            </label>
-
-                            <!-- Number styling for 8-ball (always visible in solid mode) -->
-                            <div class="solid-number-styling" id="solid-number-styling">
-                                <div class="section-label">8-Ball Number Styling</div>
-                                <div class="font-row">
-                                    <label>Font</label>
-                                    <select id="solid-number-font" class="font-select">
-                                        <option value="Arial" selected>Arial</option>
-                                        <option value="Georgia">Georgia</option>
-                                        <option value="Times New Roman">Times</option>
-                                        <option value="Courier New">Courier</option>
-                                        <option value="Impact">Impact</option>
-                                        <option value="Verdana">Verdana</option>
-                                        <option value="Comic Sans MS">Comic Sans</option>
-                                        <option value="Trebuchet MS">Trebuchet</option>
-                                    </select>
-                                </div>
-                                <div class="color-row">
-                                    <div class="color-field-hsb">
-                                        <label>Number Circle</label>
-                                        <button class="color-swatch" id="swatch-solid-number-circle" data-color-id="solid-number-circle" data-color="#FFFFFF" style="background-color: #FFFFFF;"></button>
-                                    </div>
-                                    <div class="color-field-hsb">
-                                        <label>Number Text</label>
-                                        <button class="color-swatch" id="swatch-solid-number-text" data-color-id="solid-number-text" data-color="#000000" style="background-color: #000000;"></button>
-                                    </div>
-                                    <label class="checkbox-label border-checkbox">
-                                        <input type="checkbox" id="solid-number-border">
-                                        Border
-                                    </label>
-                                    <div class="color-field-hsb border-color-field hidden" id="solid-border-color-field">
-                                        <button class="color-swatch" id="swatch-solid-number-border" data-color-id="solid-number-border" data-color="#000000" style="background-color: #000000;"></button>
-                                    </div>
-                                    <div class="color-field-hsb">
-                                        <label>Stripe Background</label>
-                                        <button class="color-swatch" id="swatch-solid-stripe-bg" data-color-id="solid-stripe-bg" data-color="#FFFFFF" style="background-color: #FFFFFF;"></button>
-                                    </div>
-                                </div>
-                                <div class="creator-controls-grid">
-                                    <div>
-                                        <div class="ball-slider-group">
-                                            <label for="solid-circle-opacity">
-                                                Circle Opacity
-                                                <span class="slider-value" id="solid-circle-opacity-value">1.00</span>
-                                            </label>
-                                            <input type="range" id="solid-circle-opacity" min="0" max="1" value="1" step="0.05">
+                                <div class="creator-tab-panels">
+                                    <!-- Tab: Name & Style -->
+                                    <div class="creator-tab-panel active" data-tab-panel="style">
+                                        <div class="creator-row">
+                                            <div class="creator-field name-field">
+                                                <label for="custom-set-name">Set Name</label>
+                                                <input type="text" id="custom-set-name" placeholder="My Custom Set" maxlength="20">
+                                            </div>
+                                            <div class="creator-field">
+                                                <label>Style</label>
+                                                <div class="style-toggle">
+                                                    <button class="style-btn active" data-style="solid" id="style-solid">Solid</button>
+                                                    <button class="style-btn" data-style="stripe" id="style-stripe">Spots & Stripes</button>
+                                                </div>
+                                            </div>
                                         </div>
-                                        <div class="radial-lines-row">
-                                            <div class="ball-slider-group">
-                                                <label for="solid-radial-lines">
-                                                    Radial Lines
-                                                    <span class="slider-value" id="solid-radial-lines-value">0</span>
+                                        <!-- Solid mode style options -->
+                                        <div class="solid-tab-content" id="solid-options">
+                                            <label class="checkbox-label">
+                                                <input type="checkbox" id="striped-8ball">
+                                                Striped 8-Ball
+                                            </label>
+                                        </div>
+                                        <!-- Stripe mode style options -->
+                                        <div class="stripe-tab-content hidden" id="stripe-mode-options">
+                                            <label class="checkbox-label">
+                                                <input type="checkbox" id="striped-8ball-stripe">
+                                                Striped 8-Ball
+                                            </label>
+                                            <div class="stripe-orientation-row">
+                                                <label>Stripe Orientation</label>
+                                                <div class="orientation-toggle">
+                                                    <button class="orientation-btn active" data-orientation="horizontal" id="orientation-horizontal">Horizontal</button>
+                                                    <button class="orientation-btn" data-orientation="vertical" id="orientation-vertical">Vertical</button>
+                                                </div>
+                                            </div>
+                                            <label class="checkbox-label">
+                                                <input type="checkbox" id="advanced-mode">
+                                                Individual Ball Colors
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                    <!-- Tab: Colours -->
+                                    <div class="creator-tab-panel" data-tab-panel="colours">
+                                        <!-- Solid mode colours -->
+                                        <div class="solid-tab-content">
+                                            <div class="color-row">
+                                                <div class="color-field-hsb">
+                                                    <label>Group 1 (1-7)</label>
+                                                    <button class="color-swatch" id="swatch-group1" data-color-id="group1" data-color="#CC0000" style="background-color: #CC0000;"></button>
+                                                </div>
+                                                <div class="color-field-hsb">
+                                                    <label>Group 2 (9-15)</label>
+                                                    <button class="color-swatch" id="swatch-group2" data-color-id="group2" data-color="#FFD700" style="background-color: #FFD700;"></button>
+                                                </div>
+                                                <div class="color-field-hsb">
+                                                    <label>8-Ball</label>
+                                                    <button class="color-swatch" id="swatch-8ball" data-color-id="8ball" data-color="#000000" style="background-color: #000000;"></button>
+                                                </div>
+                                                <div class="color-field-hsb hidden" id="solid-stripe-bg-field">
+                                                    <label>Stripe Background</label>
+                                                    <button class="color-swatch" id="swatch-solid-stripe-bg" data-color-id="solid-stripe-bg" data-color="#FFFFFF" style="background-color: #FFFFFF;"></button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <!-- Stripe mode colours -->
+                                        <div class="stripe-tab-content hidden">
+                                            <div class="color-row" id="simple-color-pickers">
+                                                <div class="color-field-hsb">
+                                                    <label>Solids (1-7)</label>
+                                                    <button class="color-swatch" id="swatch-solids" data-color-id="solids" data-color="#FFD700" style="background-color: #FFD700;"></button>
+                                                </div>
+                                                <div class="color-field-hsb">
+                                                    <label>Stripes (9-15)</label>
+                                                    <button class="color-swatch" id="swatch-stripes" data-color-id="stripes" data-color="#0000CD" style="background-color: #0000CD;"></button>
+                                                </div>
+                                                <div class="color-field-hsb">
+                                                    <label>8-Ball</label>
+                                                    <button class="color-swatch" id="swatch-8ball-stripe" data-color-id="8ball-stripe" data-color="#000000" style="background-color: #000000;"></button>
+                                                </div>
+                                            </div>
+                                            <div class="color-row">
+                                                <div class="color-field-hsb">
+                                                    <label>Stripe Background</label>
+                                                    <button class="color-swatch" id="swatch-stripe-bg" data-color-id="stripe-bg" data-color="#FFFFFF" style="background-color: #FFFFFF;"></button>
+                                                </div>
+                                            </div>
+                                            <div class="advanced-color-pickers hidden" id="advanced-color-pickers">
+                                                <div class="ball-color-grid">
+                                                    <div class="color-field-hsb ball-color"><label>1 & 9</label><button class="color-swatch" data-pair="1" data-color-id="pair-1" data-color="#FFD700" style="background-color: #FFD700;"></button></div>
+                                                    <div class="color-field-hsb ball-color"><label>2 & 10</label><button class="color-swatch" data-pair="2" data-color-id="pair-2" data-color="#0000CD" style="background-color: #0000CD;"></button></div>
+                                                    <div class="color-field-hsb ball-color"><label>3 & 11</label><button class="color-swatch" data-pair="3" data-color-id="pair-3" data-color="#FF0000" style="background-color: #FF0000;"></button></div>
+                                                    <div class="color-field-hsb ball-color"><label>4 & 12</label><button class="color-swatch" data-pair="4" data-color-id="pair-4" data-color="#4B0082" style="background-color: #4B0082;"></button></div>
+                                                    <div class="color-field-hsb ball-color"><label>5 & 13</label><button class="color-swatch" data-pair="5" data-color-id="pair-5" data-color="#FF8C00" style="background-color: #FF8C00;"></button></div>
+                                                    <div class="color-field-hsb ball-color"><label>6 & 14</label><button class="color-swatch" data-pair="6" data-color-id="pair-6" data-color="#006400" style="background-color: #006400;"></button></div>
+                                                    <div class="color-field-hsb ball-color"><label>7 & 15</label><button class="color-swatch" data-pair="7" data-color-id="pair-7" data-color="#800000" style="background-color: #800000;"></button></div>
+                                                    <div class="color-field-hsb ball-color"><label>8</label><button class="color-swatch" data-pair="8" data-color-id="pair-8" data-color="#000000" style="background-color: #000000;"></button></div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Tab: Numbers -->
+                                    <div class="creator-tab-panel" data-tab-panel="numbers">
+                                        <!-- Solid mode numbers -->
+                                        <div class="solid-tab-content">
+                                            <div class="solid-number-styling" id="solid-number-styling">
+                                                <div class="font-row">
+                                                    <label>Font</label>
+                                                    <select id="solid-number-font" class="font-select">
+                                                        <option value="Arial" selected>Arial</option>
+                                                        <option value="Georgia">Georgia</option>
+                                                        <option value="Times New Roman">Times</option>
+                                                        <option value="Courier New">Courier</option>
+                                                        <option value="Impact">Impact</option>
+                                                        <option value="Verdana">Verdana</option>
+                                                        <option value="Comic Sans MS">Comic Sans</option>
+                                                        <option value="Trebuchet MS">Trebuchet</option>
+                                                    </select>
+                                                </div>
+                                                <div class="color-row">
+                                                    <div class="color-field-hsb">
+                                                        <label>Number Circle</label>
+                                                        <button class="color-swatch" id="swatch-solid-number-circle" data-color-id="solid-number-circle" data-color="#FFFFFF" style="background-color: #FFFFFF;"></button>
+                                                    </div>
+                                                    <div class="color-field-hsb">
+                                                        <label>Number Text</label>
+                                                        <button class="color-swatch" id="swatch-solid-number-text" data-color-id="solid-number-text" data-color="#000000" style="background-color: #000000;"></button>
+                                                    </div>
+                                                    <label class="checkbox-label border-checkbox">
+                                                        <input type="checkbox" id="solid-number-border">
+                                                        Border
+                                                    </label>
+                                                    <div class="color-field-hsb border-color-field hidden" id="solid-border-color-field">
+                                                        <button class="color-swatch" id="swatch-solid-number-border" data-color-id="solid-number-border" data-color="#000000" style="background-color: #000000;"></button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <!-- Stripe mode numbers -->
+                                        <div class="stripe-tab-content hidden">
+                                            <div class="font-row">
+                                                <label>Font</label>
+                                                <select id="stripe-number-font" class="font-select">
+                                                    <option value="Arial" selected>Arial</option>
+                                                    <option value="Georgia">Georgia</option>
+                                                    <option value="Times New Roman">Times</option>
+                                                    <option value="Courier New">Courier</option>
+                                                    <option value="Impact">Impact</option>
+                                                    <option value="Verdana">Verdana</option>
+                                                    <option value="Comic Sans MS">Comic Sans</option>
+                                                    <option value="Trebuchet MS">Trebuchet</option>
+                                                </select>
+                                            </div>
+                                            <div class="number-style-row">
+                                                <div class="color-field-hsb">
+                                                    <label>Number Circle</label>
+                                                    <button class="color-swatch" id="swatch-number-circle" data-color-id="number-circle" data-color="#FFFFFF" style="background-color: #FFFFFF;"></button>
+                                                </div>
+                                                <div class="color-field-hsb">
+                                                    <label>Number Text</label>
+                                                    <button class="color-swatch" id="swatch-number-text" data-color-id="number-text" data-color="#000000" style="background-color: #000000;"></button>
+                                                </div>
+                                                <label class="checkbox-label border-checkbox">
+                                                    <input type="checkbox" id="number-border">
+                                                    Border
                                                 </label>
-                                                <input type="range" id="solid-radial-lines" min="0" max="24" value="0" step="1">
-                                            </div>
-                                            <div class="color-field-hsb radial-lines-color-field hidden" id="solid-radial-lines-color-field">
-                                                <label>Lines Color</label>
-                                                <button class="color-swatch" id="swatch-solid-radial-lines-color" data-color-id="solid-radial-lines-color" data-color="#000000" style="background-color: #000000;"></button>
+                                                <div class="color-field-hsb border-color-field hidden" id="border-color-field">
+                                                    <button class="color-swatch" id="swatch-number-border" data-color-id="number-border" data-color="#000000" style="background-color: #000000;"></button>
+                                                </div>
                                             </div>
                                         </div>
-                                        <div class="ball-slider-group">
-                                            <label for="solid-circle-radius">
-                                                Circle Radius
-                                                <span class="slider-value" id="solid-circle-radius-value">0.66</span>
-                                            </label>
-                                            <input type="range" id="solid-circle-radius" min="0.5" max="1.0" value="0.66" step="0.01">
-                                        </div>
-                                        <div class="ball-slider-group">
-                                            <label for="solid-border-width">
-                                                Border Width
-                                                <span class="slider-value" id="solid-border-width-value">1.0</span>
-                                            </label>
-                                            <input type="range" id="solid-border-width" min="0.3" max="2.0" value="1.0" step="0.1">
-                                        </div>
                                     </div>
-                                    <div>
-                                        <div class="stripe-orientation-row">
-                                            <label>Stripe Orientation</label>
-                                            <div class="orientation-toggle">
-                                                <button class="orientation-btn active" data-orientation="horizontal" id="solid-orientation-horizontal">Horizontal</button>
-                                                <button class="orientation-btn" data-orientation="vertical" id="solid-orientation-vertical">Vertical</button>
-                                            </div>
-                                        </div>
-                                        <div class="ball-slider-group">
-                                            <label for="solid-stripe-thickness">
-                                                Stripe Thickness
-                                                <span class="slider-value" id="solid-stripe-thickness-value">0.55</span>
-                                            </label>
-                                            <input type="range" id="solid-stripe-thickness" min="0.2" max="0.8" value="0.55" step="0.01">
-                                        </div>
-                                        <div class="ball-slider-group">
-                                            <label for="solid-number-scale">
-                                                Number Scale
-                                                <span class="slider-value" id="solid-number-scale-value">1.0</span>
-                                            </label>
-                                            <input type="range" id="solid-number-scale" min="0.5" max="1.5" value="1.0" step="0.05">
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            <!-- Texture section (solid mode) -->
-                            <div class="texture-section">
-                                <div class="section-label">Texture</div>
-                                <div class="texture-toggle" id="solid-texture-toggle">
-                                    <button class="texture-btn active" data-texture="none">None</button>
-                                    <button class="texture-btn" data-texture="camouflage">Camo</button>
-                                    <button class="texture-btn" data-texture="striped">Striped</button>
-                                    <button class="texture-btn" data-texture="marbled">Marbled</button>
-                                    <button class="texture-btn" data-texture="sparkly">Sparkly</button>
-                                    <button class="texture-btn" data-texture="hexagonal">Hex</button>
-                                    <button class="texture-btn" data-texture="crackle">Crackle</button>
-                                    <button class="texture-btn" data-texture="galaxy">Galaxy</button>
-                                    <button class="texture-btn" data-texture="woodgrain">Wood</button>
-                                </div>
-                                <div class="texture-color-row hidden" id="solid-texture-color-row">
-                                    <div class="texture-mode-toggle" id="solid-texture-mode-toggle">
-                                        <button class="texture-mode-btn active" data-mode="auto">Auto</button>
-                                        <button class="texture-mode-btn" data-mode="single">Custom</button>
-                                    </div>
-                                    <div class="color-field-hsb hidden" id="solid-texture-color-field">
-                                        <label>Texture Color</label>
-                                        <button class="color-swatch" id="swatch-solid-texture-color" data-color-id="solid-texture-color" data-color="#FFFFFF" style="background-color: #FFFFFF;"></button>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
 
-                        <!-- Stripe mode options -->
-                        <div class="stripe-options hidden" id="stripe-mode-options">
-                            <div class="color-row" id="simple-color-pickers">
-                                <div class="color-field-hsb">
-                                    <label>Solids (1-7)</label>
-                                    <button class="color-swatch" id="swatch-solids" data-color-id="solids" data-color="#FFD700" style="background-color: #FFD700;"></button>
-                                </div>
-                                <div class="color-field-hsb">
-                                    <label>Stripes (9-15)</label>
-                                    <button class="color-swatch" id="swatch-stripes" data-color-id="stripes" data-color="#0000CD" style="background-color: #0000CD;"></button>
-                                </div>
-                                <div class="color-field-hsb">
-                                    <label>8-Ball</label>
-                                    <button class="color-swatch" id="swatch-8ball-stripe" data-color-id="8ball-stripe" data-color="#000000" style="background-color: #000000;"></button>
-                                </div>
-                                <div class="color-field-hsb">
-                                    <label>Stripe Background</label>
-                                    <button class="color-swatch" id="swatch-stripe-bg" data-color-id="stripe-bg" data-color="#FFFFFF" style="background-color: #FFFFFF;"></button>
-                                </div>
-                            </div>
-                            <label class="checkbox-label">
-                                <input type="checkbox" id="striped-8ball-stripe">
-                                Striped 8-Ball
-                            </label>
-                            <div class="stripe-orientation-row">
-                                <label>Stripe Orientation</label>
-                                <div class="orientation-toggle">
-                                    <button class="orientation-btn active" data-orientation="horizontal" id="orientation-horizontal">Horizontal</button>
-                                    <button class="orientation-btn" data-orientation="vertical" id="orientation-vertical">Vertical</button>
-                                </div>
-                            </div>
-                            <label class="checkbox-label">
-                                <input type="checkbox" id="advanced-mode">
-                                Individual Ball Colors
-                            </label>
-                            <div class="advanced-color-pickers hidden" id="advanced-color-pickers">
-                                <div class="ball-color-grid">
-                                    <div class="color-field-hsb ball-color"><label>1 & 9</label><button class="color-swatch" data-pair="1" data-color-id="pair-1" data-color="#FFD700" style="background-color: #FFD700;"></button></div>
-                                    <div class="color-field-hsb ball-color"><label>2 & 10</label><button class="color-swatch" data-pair="2" data-color-id="pair-2" data-color="#0000CD" style="background-color: #0000CD;"></button></div>
-                                    <div class="color-field-hsb ball-color"><label>3 & 11</label><button class="color-swatch" data-pair="3" data-color-id="pair-3" data-color="#FF0000" style="background-color: #FF0000;"></button></div>
-                                    <div class="color-field-hsb ball-color"><label>4 & 12</label><button class="color-swatch" data-pair="4" data-color-id="pair-4" data-color="#4B0082" style="background-color: #4B0082;"></button></div>
-                                    <div class="color-field-hsb ball-color"><label>5 & 13</label><button class="color-swatch" data-pair="5" data-color-id="pair-5" data-color="#FF8C00" style="background-color: #FF8C00;"></button></div>
-                                    <div class="color-field-hsb ball-color"><label>6 & 14</label><button class="color-swatch" data-pair="6" data-color-id="pair-6" data-color="#006400" style="background-color: #006400;"></button></div>
-                                    <div class="color-field-hsb ball-color"><label>7 & 15</label><button class="color-swatch" data-pair="7" data-color-id="pair-7" data-color="#800000" style="background-color: #800000;"></button></div>
-                                    <div class="color-field-hsb ball-color"><label>8</label><button class="color-swatch" data-pair="8" data-color-id="pair-8" data-color="#000000" style="background-color: #000000;"></button></div>
-                                </div>
-                            </div>
-                            <div class="font-row">
-                                <label>Font</label>
-                                <select id="stripe-number-font" class="font-select">
-                                    <option value="Arial" selected>Arial</option>
-                                    <option value="Georgia">Georgia</option>
-                                    <option value="Times New Roman">Times</option>
-                                    <option value="Courier New">Courier</option>
-                                    <option value="Impact">Impact</option>
-                                    <option value="Verdana">Verdana</option>
-                                    <option value="Comic Sans MS">Comic Sans</option>
-                                    <option value="Trebuchet MS">Trebuchet</option>
-                                </select>
-                            </div>
-                            <div class="number-style-row">
-                                <div class="color-field-hsb">
-                                    <label>Number Circle</label>
-                                    <button class="color-swatch" id="swatch-number-circle" data-color-id="number-circle" data-color="#FFFFFF" style="background-color: #FFFFFF;"></button>
-                                </div>
-                                <div class="color-field-hsb">
-                                    <label>Number Text</label>
-                                    <button class="color-swatch" id="swatch-number-text" data-color-id="number-text" data-color="#000000" style="background-color: #000000;"></button>
-                                </div>
-                                <label class="checkbox-label border-checkbox">
-                                    <input type="checkbox" id="number-border">
-                                    Border
-                                </label>
-                                <div class="color-field-hsb border-color-field hidden" id="border-color-field">
-                                    <button class="color-swatch" id="swatch-number-border" data-color-id="number-border" data-color="#000000" style="background-color: #000000;"></button>
-                                </div>
-                            </div>
-                            <div class="creator-controls-grid">
-                                <div>
-                                    <div class="ball-slider-group">
-                                        <label for="circle-opacity">
-                                            Circle Opacity
-                                            <span class="slider-value" id="circle-opacity-value">1.00</span>
-                                        </label>
-                                        <input type="range" id="circle-opacity" min="0" max="1" value="1" step="0.05">
-                                    </div>
-                                    <div class="radial-lines-row">
-                                        <div class="ball-slider-group">
-                                            <label for="radial-lines">
-                                                Radial Lines
-                                                <span class="slider-value" id="radial-lines-value">0</span>
-                                            </label>
-                                            <input type="range" id="radial-lines" min="0" max="24" value="0" step="1" disabled>
+                                    <!-- Tab: Sliders -->
+                                    <div class="creator-tab-panel" data-tab-panel="sliders">
+                                        <!-- Solid mode sliders -->
+                                        <div class="solid-tab-content">
+                                            <div class="creator-controls-grid">
+                                                <div>
+                                                    <div class="ball-slider-group">
+                                                        <label for="solid-circle-opacity">
+                                                            Circle Opacity
+                                                            <span class="slider-value" id="solid-circle-opacity-value">1.00</span>
+                                                        </label>
+                                                        <input type="range" id="solid-circle-opacity" min="0" max="1" value="1" step="0.05">
+                                                    </div>
+                                                    <div class="radial-lines-row">
+                                                        <div class="ball-slider-group">
+                                                            <label for="solid-radial-lines">
+                                                                Radial Lines
+                                                                <span class="slider-value" id="solid-radial-lines-value">0</span>
+                                                            </label>
+                                                            <input type="range" id="solid-radial-lines" min="0" max="24" value="0" step="1">
+                                                        </div>
+                                                        <div class="color-field-hsb radial-lines-color-field hidden" id="solid-radial-lines-color-field">
+                                                            <label>Lines Color</label>
+                                                            <button class="color-swatch" id="swatch-solid-radial-lines-color" data-color-id="solid-radial-lines-color" data-color="#000000" style="background-color: #000000;"></button>
+                                                        </div>
+                                                    </div>
+                                                    <div class="ball-slider-group">
+                                                        <label for="solid-circle-radius">
+                                                            Circle Radius
+                                                            <span class="slider-value" id="solid-circle-radius-value">0.66</span>
+                                                        </label>
+                                                        <input type="range" id="solid-circle-radius" min="0.5" max="1.0" value="0.66" step="0.01">
+                                                    </div>
+                                                    <div class="ball-slider-group">
+                                                        <label for="solid-border-width">
+                                                            Border Width
+                                                            <span class="slider-value" id="solid-border-width-value">1.0</span>
+                                                        </label>
+                                                        <input type="range" id="solid-border-width" min="0.3" max="2.0" value="1.0" step="0.1">
+                                                    </div>
+                                                </div>
+                                                <div>
+                                                    <div class="stripe-orientation-row">
+                                                        <label>Stripe Orientation</label>
+                                                        <div class="orientation-toggle">
+                                                            <button class="orientation-btn active" data-orientation="horizontal" id="solid-orientation-horizontal">Horizontal</button>
+                                                            <button class="orientation-btn" data-orientation="vertical" id="solid-orientation-vertical">Vertical</button>
+                                                        </div>
+                                                    </div>
+                                                    <div class="ball-slider-group">
+                                                        <label for="solid-stripe-thickness">
+                                                            Stripe Thickness
+                                                            <span class="slider-value" id="solid-stripe-thickness-value">0.55</span>
+                                                        </label>
+                                                        <input type="range" id="solid-stripe-thickness" min="0.2" max="0.8" value="0.55" step="0.01">
+                                                    </div>
+                                                    <div class="ball-slider-group">
+                                                        <label for="solid-number-scale">
+                                                            Number Scale
+                                                            <span class="slider-value" id="solid-number-scale-value">1.0</span>
+                                                        </label>
+                                                        <input type="range" id="solid-number-scale" min="0.5" max="1.5" value="1.0" step="0.05">
+                                                    </div>
+                                                </div>
+                                            </div>
                                         </div>
-                                        <div class="color-field-hsb radial-lines-color-field hidden" id="radial-lines-color-field">
-                                            <label>Lines Color</label>
-                                            <button class="color-swatch" id="swatch-radial-lines-color" data-color-id="radial-lines-color" data-color="#000000" style="background-color: #000000;"></button>
+                                        <!-- Stripe mode sliders -->
+                                        <div class="stripe-tab-content hidden">
+                                            <div class="creator-controls-grid">
+                                                <div>
+                                                    <div class="ball-slider-group">
+                                                        <label for="circle-opacity">
+                                                            Circle Opacity
+                                                            <span class="slider-value" id="circle-opacity-value">1.00</span>
+                                                        </label>
+                                                        <input type="range" id="circle-opacity" min="0" max="1" value="1" step="0.05">
+                                                    </div>
+                                                    <div class="radial-lines-row">
+                                                        <div class="ball-slider-group">
+                                                            <label for="radial-lines">
+                                                                Radial Lines
+                                                                <span class="slider-value" id="radial-lines-value">0</span>
+                                                            </label>
+                                                            <input type="range" id="radial-lines" min="0" max="24" value="0" step="1" disabled>
+                                                        </div>
+                                                        <div class="color-field-hsb radial-lines-color-field hidden" id="radial-lines-color-field">
+                                                            <label>Lines Color</label>
+                                                            <button class="color-swatch" id="swatch-radial-lines-color" data-color-id="radial-lines-color" data-color="#000000" style="background-color: #000000;"></button>
+                                                        </div>
+                                                    </div>
+                                                    <div class="ball-slider-group">
+                                                        <label for="circle-radius">
+                                                            Circle Radius
+                                                            <span class="slider-value" id="circle-radius-value">0.66</span>
+                                                        </label>
+                                                        <input type="range" id="circle-radius" min="0.5" max="1.0" value="0.66" step="0.01">
+                                                    </div>
+                                                    <div class="ball-slider-group">
+                                                        <label for="border-width">
+                                                            Border Width
+                                                            <span class="slider-value" id="border-width-value">1.0</span>
+                                                        </label>
+                                                        <input type="range" id="border-width" min="0.3" max="2.0" value="1.0" step="0.1">
+                                                    </div>
+                                                </div>
+                                                <div>
+                                                    <div class="ball-slider-group">
+                                                        <label for="stripe-thickness">
+                                                            Stripe Thickness
+                                                            <span class="slider-value" id="stripe-thickness-value">0.55</span>
+                                                        </label>
+                                                        <input type="range" id="stripe-thickness" min="0.2" max="0.8" value="0.55" step="0.01">
+                                                    </div>
+                                                    <div class="ball-slider-group">
+                                                        <label for="number-scale">
+                                                            Number Scale
+                                                            <span class="slider-value" id="number-scale-value">1.0</span>
+                                                        </label>
+                                                        <input type="range" id="number-scale" min="0.5" max="1.5" value="1.0" step="0.05">
+                                                    </div>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
-                                    <div class="ball-slider-group">
-                                        <label for="circle-radius">
-                                            Circle Radius
-                                            <span class="slider-value" id="circle-radius-value">0.66</span>
-                                        </label>
-                                        <input type="range" id="circle-radius" min="0.5" max="1.0" value="0.66" step="0.01">
-                                    </div>
-                                    <div class="ball-slider-group">
-                                        <label for="border-width">
-                                            Border Width
-                                            <span class="slider-value" id="border-width-value">1.0</span>
-                                        </label>
-                                        <input type="range" id="border-width" min="0.3" max="2.0" value="1.0" step="0.1">
-                                    </div>
-                                </div>
-                                <div>
-                                    <div class="ball-slider-group">
-                                        <label for="stripe-thickness">
-                                            Stripe Thickness
-                                            <span class="slider-value" id="stripe-thickness-value">0.55</span>
-                                        </label>
-                                        <input type="range" id="stripe-thickness" min="0.2" max="0.8" value="0.55" step="0.01">
-                                    </div>
-                                    <div class="ball-slider-group">
-                                        <label for="number-scale">
-                                            Number Scale
-                                            <span class="slider-value" id="number-scale-value">1.0</span>
-                                        </label>
-                                        <input type="range" id="number-scale" min="0.5" max="1.5" value="1.0" step="0.05">
+
+                                    <!-- Tab: Texture -->
+                                    <div class="creator-tab-panel" data-tab-panel="texture">
+                                        <!-- Solid mode texture -->
+                                        <div class="solid-tab-content">
+                                            <div class="texture-section">
+                                                <div class="section-label">Texture</div>
+                                                <div class="texture-toggle" id="solid-texture-toggle">
+                                                    <button class="texture-btn active" data-texture="none">None</button>
+                                                    <button class="texture-btn" data-texture="camouflage">Camo</button>
+                                                    <button class="texture-btn" data-texture="striped">Striped</button>
+                                                    <button class="texture-btn" data-texture="marbled">Marbled</button>
+                                                    <button class="texture-btn" data-texture="sparkly">Sparkly</button>
+                                                    <button class="texture-btn" data-texture="hexagonal">Hex</button>
+                                                    <button class="texture-btn" data-texture="crackle">Crackle</button>
+                                                    <button class="texture-btn" data-texture="galaxy">Galaxy</button>
+                                                    <button class="texture-btn" data-texture="woodgrain">Wood</button>
+                                                </div>
+                                                <div class="texture-color-row hidden" id="solid-texture-color-row">
+                                                    <div class="texture-mode-toggle" id="solid-texture-mode-toggle">
+                                                        <button class="texture-mode-btn active" data-mode="auto">Auto</button>
+                                                        <button class="texture-mode-btn" data-mode="single">Custom</button>
+                                                    </div>
+                                                    <div class="color-field-hsb hidden" id="solid-texture-color-field">
+                                                        <label>Texture Color</label>
+                                                        <button class="color-swatch" id="swatch-solid-texture-color" data-color-id="solid-texture-color" data-color="#FFFFFF" style="background-color: #FFFFFF;"></button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <!-- Stripe mode texture -->
+                                        <div class="stripe-tab-content hidden">
+                                            <div class="texture-section">
+                                                <div class="section-label">Texture</div>
+                                                <div class="texture-toggle" id="stripe-texture-toggle">
+                                                    <button class="texture-btn active" data-texture="none">None</button>
+                                                    <button class="texture-btn" data-texture="camouflage">Camo</button>
+                                                    <button class="texture-btn" data-texture="striped">Striped</button>
+                                                    <button class="texture-btn" data-texture="marbled">Marbled</button>
+                                                    <button class="texture-btn" data-texture="sparkly">Sparkly</button>
+                                                    <button class="texture-btn" data-texture="hexagonal">Hex</button>
+                                                    <button class="texture-btn" data-texture="crackle">Crackle</button>
+                                                    <button class="texture-btn" data-texture="galaxy">Galaxy</button>
+                                                    <button class="texture-btn" data-texture="woodgrain">Wood</button>
+                                                </div>
+                                                <div class="texture-color-row hidden" id="stripe-texture-color-row">
+                                                    <div class="texture-mode-toggle" id="stripe-texture-mode-toggle">
+                                                        <button class="texture-mode-btn active" data-mode="auto">Auto</button>
+                                                        <button class="texture-mode-btn" data-mode="single">Custom</button>
+                                                    </div>
+                                                    <div class="color-field-hsb hidden" id="stripe-texture-color-field">
+                                                        <label>Texture Color</label>
+                                                        <button class="color-swatch" id="swatch-stripe-texture-color" data-color-id="stripe-texture-color" data-color="#FFFFFF" style="background-color: #FFFFFF;"></button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
-                            <!-- Texture section (stripe mode) -->
-                            <div class="texture-section">
-                                <div class="section-label">Texture</div>
-                                <div class="texture-toggle" id="stripe-texture-toggle">
-                                    <button class="texture-btn active" data-texture="none">None</button>
-                                    <button class="texture-btn" data-texture="camouflage">Camo</button>
-                                    <button class="texture-btn" data-texture="striped">Striped</button>
-                                    <button class="texture-btn" data-texture="marbled">Marbled</button>
-                                    <button class="texture-btn" data-texture="sparkly">Sparkly</button>
-                                    <button class="texture-btn" data-texture="hexagonal">Hex</button>
-                                    <button class="texture-btn" data-texture="crackle">Crackle</button>
-                                    <button class="texture-btn" data-texture="galaxy">Galaxy</button>
-                                    <button class="texture-btn" data-texture="woodgrain">Wood</button>
-                                </div>
-                                <div class="texture-color-row hidden" id="stripe-texture-color-row">
-                                    <div class="texture-mode-toggle" id="stripe-texture-mode-toggle">
-                                        <button class="texture-mode-btn active" data-mode="auto">Auto</button>
-                                        <button class="texture-mode-btn" data-mode="single">Custom</button>
-                                    </div>
-                                    <div class="color-field-hsb hidden" id="stripe-texture-color-field">
-                                        <label>Texture Color</label>
-                                        <button class="color-swatch" id="swatch-stripe-texture-color" data-color-id="stripe-texture-color" data-color="#FFFFFF" style="background-color: #FFFFFF;"></button>
-                                    </div>
+
+                            <!-- Right panel: ball preview -->
+                            <div class="creator-right-panel">
+                                <div class="creator-preview-row">
+                                    <label class="preview-label">Preview</label>
+                                    <div class="preview-balls" id="creator-preview-balls"></div>
                                 </div>
                             </div>
                         </div>

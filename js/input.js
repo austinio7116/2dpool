@@ -31,6 +31,17 @@ export class Input {
             radius: 30
         };
 
+        // Shoot button (positioned below spin indicator)
+        this.shootButton = { x: 35, y: 0, width: 50, height: 36 };  // y set in setCanvasSize
+
+        // Touch power override
+        this.powerOverrideActive = false;
+        this.powerTouchId = null;
+        this.isTouchDevice = false;
+
+        // Power meter geometry (matches renderer positioning)
+        this.powerMeter = { x: 0, y: 0, width: 18, height: 100 };  // set in setCanvasSize
+
         // Callbacks
         this.onShot = null;
         this.onAimUpdate = null;
@@ -88,6 +99,15 @@ export class Input {
         // Position spin indicator flush with left edge
         this.spinIndicator.x = this.spinIndicator.radius + 5;  // radius + background padding
         this.spinIndicator.y = height / 2;  // Center vertically, away from pockets
+
+        // Shoot button: centered on spin indicator X, below the "SPIN" label
+        this.shootButton.x = this.spinIndicator.x;
+        this.shootButton.y = this.spinIndicator.y + this.spinIndicator.radius + 28 + 10;  // below SPIN label + gap
+
+        // Power meter: above spin indicator, centered on it (mirrors renderer)
+        const spinTop = height / 2 - this.spinIndicator.radius - 5;  // top of spin bg circle
+        this.powerMeter.x = this.spinIndicator.x - this.powerMeter.width / 2;
+        this.powerMeter.y = spinTop - this.powerMeter.height - 20;  // 20px gap above spin
     }
 
     getMousePosition(event) {

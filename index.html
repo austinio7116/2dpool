@@ -90,21 +90,21 @@
                                 <input type="checkbox" id="ai-enabled">
                                 <span>vs AI</span>
                             </label>
-                            <div class="ai-persona-preview hidden" id="ai-persona-preview-1">
+                            <div class="ai-persona-preview ai-persona-chip inactive" id="ai-persona-preview-1">
                                 <div class="persona-avatar-mini" id="persona-avatar-1"></div>
                                 <span class="persona-name-mini" id="persona-name-1">Steady Sue</span>
-                                <button class="card-btn persona-change-btn" id="btn-change-persona-1">Change</button>
+                                <span class="persona-chevron">&#9656;</span>
                             </div>
                         </div>
-                        <div class="ai-training-row hidden" id="ai-training-row">
+                        <div class="ai-training-row" id="ai-training-row">
                             <label class="ai-toggle">
                                 <input type="checkbox" id="ai-training-enabled">
                                 <span>AI vs AI</span>
                             </label>
-                            <div class="ai-persona-preview hidden" id="ai-persona-preview-2">
+                            <div class="ai-persona-preview ai-persona-chip inactive" id="ai-persona-preview-2">
                                 <div class="persona-avatar-mini" id="persona-avatar-2"></div>
                                 <span class="persona-name-mini" id="persona-name-2">The Machine</span>
-                                <button class="card-btn persona-change-btn" id="btn-change-persona-2">Change</button>
+                                <span class="persona-chevron">&#9656;</span>
                             </div>
                         </div>
                         <!-- Hidden legacy dropdown for backward compat -->
@@ -120,10 +120,10 @@
                             <button id="btn-9ball" class="mode-btn">9-Ball</button>
                             <button id="btn-snooker" class="mode-btn">Snooker</button>
                             <button id="btn-freeplay" class="mode-btn">Free Play</button>
+                            <button id="btn-resume-match" class="mode-btn resume-btn hidden">
+                                Resume <span class="resume-info"></span>
+                            </button>
                         </div>
-                        <button id="btn-resume-match" class="mode-btn resume-btn hidden">
-                            Resume Match <span class="resume-info"></span>
-                        </button>
                     </div>
                 </div>
                 <!-- Hidden elements for compatibility -->

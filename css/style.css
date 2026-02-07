@@ -160,7 +160,7 @@ body {
 
 .menu-grid {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr 2fr;
     grid-template-rows: auto auto;
     gap: 12px;
     margin-bottom: 10px;
@@ -263,8 +263,8 @@ body {
 }
 
 .game-mode-buttons {
-    display: flex;
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
     gap: 5px;
     width: 100%;
 }
@@ -273,8 +273,8 @@ body {
     background: linear-gradient(135deg, #2d5a27 0%, #1e3d1a 100%);
     color: #fff;
     border: 2px solid #3d7a37;
-    padding: 8px 12px;
-    font-size: 0.8rem;
+    padding: 7px 8px;
+    font-size: 0.75rem;
     border-radius: 6px;
     cursor: pointer;
     transition: all 0.2s;
@@ -2219,7 +2219,6 @@ body {
 .resume-btn {
     background: linear-gradient(135deg, #5a3d1a 0%, #3d2812 100%) !important;
     border-color: #7a5a27 !important;
-    margin-top: 6px;
 }
 
 .resume-btn:hover {
@@ -2253,6 +2252,9 @@ body {
     cursor: pointer;
     font-size: 0.8rem;
     color: #ccc;
+    flex-shrink: 0;
+    white-space: nowrap;
+    width: 75px;
 }
 
 .ai-toggle input[type="checkbox"] {
@@ -2338,19 +2340,42 @@ body {
    FRAME SCORE DISPLAY (Game Over Screen)
    ============================================ */
 
+/* Game Over dialog — compact layout */
+#game-over {
+    padding: 15px 25px;
+}
+
+#game-over h2 {
+    font-size: 1.2rem;
+    margin-bottom: 8px;
+}
+
+#game-over .menu-buttons {
+    flex-direction: row;
+    gap: 8px;
+    justify-content: center;
+}
+
+#game-over .menu-btn {
+    padding: 8px 16px;
+    font-size: 0.8rem;
+    flex: 1;
+    min-width: 0;
+}
+
 .frame-score-display {
     display: flex;
     justify-content: center;
     align-items: center;
-    gap: 15px;
-    font-size: 2rem;
+    gap: 10px;
+    font-size: 1.5rem;
     font-weight: bold;
     color: #ffd700;
-    margin: 15px 0;
+    margin: 8px 0;
 }
 
 .frame-score-display span {
-    padding: 5px 15px;
+    padding: 3px 10px;
 }
 
 .frame-score-sep {
@@ -2509,6 +2534,7 @@ body {
     .ai-toggle {
         font-size: 0.7rem;
         gap: 4px;
+        width: 65px;
     }
 
     .ai-toggle input[type="checkbox"] {
@@ -2536,9 +2562,18 @@ body {
     }
 
     .frame-score-display {
-        font-size: 1.5rem;
-        gap: 10px;
-        margin: 10px 0;
+        font-size: 1.2rem;
+        gap: 8px;
+        margin: 6px 0;
+    }
+
+    #game-over {
+        padding: 12px 15px;
+    }
+
+    #game-over .menu-btn {
+        padding: 7px 10px;
+        font-size: 0.7rem;
     }
 
     .ball-groups-9ball canvas{
@@ -2870,8 +2905,14 @@ body {
     flex: 1;
 }
 
-.ai-persona-preview.hidden {
-    display: none;
+.ai-persona-chip.inactive {
+    opacity: 0.35;
+    pointer-events: none;
+}
+
+.ai-persona-chip.inactive:hover {
+    border-color: #4a4a6a;
+    background: rgba(40, 40, 60, 0.8);
 }
 
 .persona-avatar-mini {
@@ -2898,10 +2939,27 @@ body {
     min-width: 0;
 }
 
-.persona-change-btn {
-    font-size: 0.65rem !important;
-    padding: 2px 8px !important;
+.ai-persona-chip {
+    cursor: pointer;
+    background: rgba(40, 40, 60, 0.8);
+    border: 1px solid #4a4a6a;
+    border-radius: 16px;
+    padding: 3px 10px 3px 3px;
+    transition: border-color 0.2s, background 0.2s;
+    width: 150px;
     flex-shrink: 0;
+}
+
+.ai-persona-chip:hover {
+    border-color: #7a7aaa;
+    background: rgba(50, 50, 70, 0.9);
+}
+
+.persona-chevron {
+    color: #888;
+    font-size: 0.7rem;
+    flex-shrink: 0;
+    margin-left: 2px;
 }
 
 /* AI training row */
@@ -2915,9 +2973,6 @@ body {
     border-bottom: 1px solid #3a3a5a;
 }
 
-.ai-training-row.hidden {
-    display: none;
-}
 
 /* Opponent modal */
 .opponent-modal-content {
@@ -3065,6 +3120,15 @@ img.persona-avatar {
 
     .persona-name-mini {
         font-size: 0.65rem;
+    }
+
+    .ai-persona-chip {
+        padding: 2px 8px 2px 2px;
+        width: 130px;
+    }
+
+    .persona-chevron {
+        font-size: 0.6rem;
     }
 
     .ai-training-row {

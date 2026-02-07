@@ -92,11 +92,9 @@ export class UI {
         this.personaPreview1 = document.getElementById('ai-persona-preview-1');
         this.personaAvatar1 = document.getElementById('persona-avatar-1');
         this.personaName1 = document.getElementById('persona-name-1');
-        this.btnChangePersona1 = document.getElementById('btn-change-persona-1');
         this.personaPreview2 = document.getElementById('ai-persona-preview-2');
         this.personaAvatar2 = document.getElementById('persona-avatar-2');
         this.personaName2 = document.getElementById('persona-name-2');
-        this.btnChangePersona2 = document.getElementById('btn-change-persona-2');
         this.aiTrainingRow = document.getElementById('ai-training-row');
         this.aiTrainingCheckbox = document.getElementById('ai-training-enabled');
         this.opponentModal = document.getElementById('opponent-modal');
@@ -3403,12 +3401,12 @@ export class UI {
             this.updateAIVisibility();
         });
 
-        // Bind persona change buttons
-        this.btnChangePersona1?.addEventListener('click', (e) => {
+        // Bind persona chip click handlers
+        this.personaPreview1?.addEventListener('click', (e) => {
             e.stopPropagation();
             this.openOpponentModal(1);
         });
-        this.btnChangePersona2?.addEventListener('click', (e) => {
+        this.personaPreview2?.addEventListener('click', (e) => {
             e.stopPropagation();
             this.openOpponentModal(2);
         });
@@ -3427,12 +3425,9 @@ export class UI {
     updateAIVisibility() {
         const aiOn = this.aiEnabled;
 
-        // Show/hide persona 1 preview and training row
+        // Toggle inactive state on persona chips
         if (this.personaPreview1) {
-            this.personaPreview1.classList.toggle('hidden', !aiOn);
-        }
-        if (this.aiTrainingRow) {
-            this.aiTrainingRow.classList.toggle('hidden', !aiOn);
+            this.personaPreview1.classList.toggle('inactive', !aiOn);
         }
 
         // Training checkbox state
@@ -3440,9 +3435,9 @@ export class UI {
             this.aiTrainingCheckbox.checked = this.aiTrainingMode;
         }
 
-        // Show/hide persona 2 preview
+        // Persona 2 is active only when both AI and training are on
         if (this.personaPreview2) {
-            this.personaPreview2.classList.toggle('hidden', !(aiOn && this.aiTrainingMode));
+            this.personaPreview2.classList.toggle('inactive', !(aiOn && this.aiTrainingMode));
         }
     }
 

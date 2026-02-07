@@ -6,6 +6,7 @@ import { CustomTableManager } from './custom-tables.js';
 import { BallRenderer3D } from './ball-renderer-3d.js';
 import { Constants, hexToHsb, hsbToHex } from './utils.js';
 import { exportBallSet, importBallSet, exportTable, importTable } from './import-export.js';
+import { AI_PERSONAS, getPersonaById } from './ai-personas.js';
 
 export class UI {
     constructor() {
@@ -38,6 +39,8 @@ export class UI {
         this.hudSnookerTarget = document.getElementById('hud-snooker-target');
         this.hudPlayer1 = document.getElementById('hud-player-1');
         this.hudPlayer2 = document.getElementById('hud-player-2');
+        this.p1Name = document.getElementById('p1-name');
+        this.p2Name = document.getElementById('p2-name');
         this.p1BallGroup = document.getElementById('p1-ball-group');
         this.p2BallGroup = document.getElementById('p2-ball-group');
         this.p1PointScore = document.getElementById('p1-point-score');
@@ -84,6 +87,21 @@ export class UI {
         this.aiEnabledCheckbox = document.getElementById('ai-enabled');
         this.aiDifficultySelect = document.getElementById('ai-difficulty');
         this.aiThinkingOverlay = document.getElementById('ai-thinking');
+
+        // Persona elements
+        this.personaPreview1 = document.getElementById('ai-persona-preview-1');
+        this.personaAvatar1 = document.getElementById('persona-avatar-1');
+        this.personaName1 = document.getElementById('persona-name-1');
+        this.btnChangePersona1 = document.getElementById('btn-change-persona-1');
+        this.personaPreview2 = document.getElementById('ai-persona-preview-2');
+        this.personaAvatar2 = document.getElementById('persona-avatar-2');
+        this.personaName2 = document.getElementById('persona-name-2');
+        this.btnChangePersona2 = document.getElementById('btn-change-persona-2');
+        this.aiTrainingRow = document.getElementById('ai-training-row');
+        this.aiTrainingCheckbox = document.getElementById('ai-training-enabled');
+        this.opponentModal = document.getElementById('opponent-modal');
+        this.opponentGrid = document.getElementById('opponent-grid');
+        this.closeOpponentModal = document.getElementById('close-opponent-modal');
 
         // Modal elements
         this.tableModal = document.getElementById('table-modal');
@@ -267,6 +285,12 @@ export class UI {
         // AI state - load from localStorage
         this.aiEnabled = this.loadAIEnabled();
         this.aiDifficulty = this.loadAIDifficulty();
+
+        // Persona state - load from localStorage
+        this.selectedPersonaId = this.loadPersonaId('poolGame_personaId1') || 'steady_sue';
+        this.selectedPersona2Id = this.loadPersonaId('poolGame_personaId2') || 'the_machine';
+        this.aiTrainingMode = this.loadAITrainingMode();
+        this.pendingPersonaSlot = 1; // Which slot the opponent modal is selecting for
 
         // Table names
         this.tableNames = [
@@ -2209,9 +2233,13 @@ export class UI {
                 this.hudModeName.textContent = modeNames[mode] || mode;
             }
 
+            // Set player names on scorecard
+            if (this.p1Name) this.p1Name.textContent = this.getPlayerName(1);
+            if (this.p2Name) this.p2Name.textContent = this.getPlayerName(2);
+
             // Reset turn indicator
             if (this.hudTurnIndicator) {
-                this.hudTurnIndicator.textContent = "Player 1's Turn";
+                this.hudTurnIndicator.textContent = `${this.getPlayerName(1)}'s Turn`;
             }
 
             // Reset two-shot badge
@@ -2805,7 +2833,7 @@ export class UI {
 
         // Update turn indicator
         if (this.hudTurnIndicator) {
-            const playerName = (gameInfo.currentPlayer === 2 && this.aiEnabled) ? 'AI' : `Player ${gameInfo.currentPlayer}`;
+            const playerName = this.getPlayerName(gameInfo.currentPlayer);
             this.hudTurnIndicator.textContent = `${playerName}'s Turn`;
         }
 
@@ -2968,10 +2996,8 @@ export class UI {
         this.freeplayControls.classList.add('hidden');
         if (this.snookerHud) this.snookerHud.classList.add('hidden');
 
-        // Helper function to get player name (AI for player 2 if AI enabled)
-        const getPlayerName = (player) => {
-            return (player === 2 && this.aiEnabled) ? 'AI' : `Player ${player}`;
-        };
+        // Helper function to get player name
+        const getPlayerName = (player) => this.getPlayerName(player);
 
         // Update winner text
         if (matchInfo && matchInfo.matchComplete) {
@@ -3027,8 +3053,8 @@ export class UI {
         const p1 = stats.player1;
         const p2 = stats.player2;
 
-        const p1Name = 'Player 1';
-        const p2Name = this.aiEnabled ? 'AI' : 'Player 2';
+        const p1Name = this.getPlayerName(1);
+        const p2Name = this.getPlayerName(2);
 
         const potPct1 = p1.totalShots > 0 ? Math.round((p1.potShots / p1.totalShots) * 100) : 0;
         const potPct2 = p2.totalShots > 0 ? Math.round((p2.potShots / p2.totalShots) * 100) : 0;
@@ -3355,29 +3381,170 @@ export class UI {
             this.aiEnabledCheckbox.checked = this.aiEnabled;
         }
 
-        // Set initial difficulty state
-        if (this.aiDifficultySelect) {
-            this.aiDifficultySelect.value = this.aiDifficulty;
-            // Show/hide difficulty based on AI enabled state
-            this.aiDifficultySelect.classList.toggle('hidden', !this.aiEnabled);
-        }
+        // Update persona previews
+        this.updatePersonaPreview(1);
+        this.updatePersonaPreview(2);
+        this.updateAIVisibility();
+
+        // Build opponent modal
+        this.initializeOpponentModal();
 
         // Bind AI toggle event
         this.aiEnabledCheckbox?.addEventListener('change', () => {
             this.aiEnabled = this.aiEnabledCheckbox.checked;
             this.saveAIEnabled(this.aiEnabled);
+            this.updateAIVisibility();
+        });
 
-            // Show/hide difficulty dropdown
-            if (this.aiDifficultySelect) {
-                this.aiDifficultySelect.classList.toggle('hidden', !this.aiEnabled);
+        // Bind training mode toggle
+        this.aiTrainingCheckbox?.addEventListener('change', () => {
+            this.aiTrainingMode = this.aiTrainingCheckbox.checked;
+            this.saveAITrainingMode(this.aiTrainingMode);
+            this.updateAIVisibility();
+        });
+
+        // Bind persona change buttons
+        this.btnChangePersona1?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.openOpponentModal(1);
+        });
+        this.btnChangePersona2?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.openOpponentModal(2);
+        });
+
+        // Close opponent modal
+        this.closeOpponentModal?.addEventListener('click', () => {
+            this.opponentModal?.classList.add('hidden');
+        });
+        this.opponentModal?.addEventListener('click', (e) => {
+            if (e.target === this.opponentModal) {
+                this.opponentModal.classList.add('hidden');
             }
         });
+    }
 
-        // Bind AI difficulty change event
-        this.aiDifficultySelect?.addEventListener('change', () => {
-            this.aiDifficulty = this.aiDifficultySelect.value;
-            this.saveAIDifficulty(this.aiDifficulty);
+    updateAIVisibility() {
+        const aiOn = this.aiEnabled;
+
+        // Show/hide persona 1 preview and training row
+        if (this.personaPreview1) {
+            this.personaPreview1.classList.toggle('hidden', !aiOn);
+        }
+        if (this.aiTrainingRow) {
+            this.aiTrainingRow.classList.toggle('hidden', !aiOn);
+        }
+
+        // Training checkbox state
+        if (this.aiTrainingCheckbox) {
+            this.aiTrainingCheckbox.checked = this.aiTrainingMode;
+        }
+
+        // Show/hide persona 2 preview
+        if (this.personaPreview2) {
+            this.personaPreview2.classList.toggle('hidden', !(aiOn && this.aiTrainingMode));
+        }
+    }
+
+    initializeOpponentModal() {
+        if (!this.opponentGrid) return;
+
+        this.opponentGrid.innerHTML = '';
+
+        for (const persona of AI_PERSONAS) {
+            const card = document.createElement('div');
+            card.className = 'persona-card';
+            card.dataset.personaId = persona.id;
+
+            // Stat bar helper
+            const statBar = (label, value, max, color) => {
+                const pct = Math.round((value / max) * 100);
+                return `<div class="stat-row">
+                    <span class="stat-label">${label}</span>
+                    <div class="stat-bar"><div class="stat-track"><div class="stat-fill" style="width:${pct}%;background:${color}"></div></div></div>
+                </div>`;
+            };
+
+            // Convert persona params to display values (higher = better for display)
+            const accuracy = Math.round((1 - persona.lineAccuracy / 1.2) * 100);
+            const power = Math.round(((persona.powerBias - 0.85) / 0.4) * 100);
+            const spin = Math.round((persona.spinAbility / 0.9) * 100);
+            const safety = Math.round(((persona.safetyBias + 30) / 50) * 100);
+
+            card.innerHTML = `
+                <div class="persona-card-header">
+                    <img class="persona-avatar" src="assets/avatars/${persona.initial}.png" alt="${persona.name}">
+                    <div class="persona-card-name">${persona.name}</div>
+                </div>
+                <div class="persona-stats">
+                    ${statBar('Accuracy', accuracy, 100, '#4CAF50')}
+                    ${statBar('Power', power, 100, '#F44336')}
+                    ${statBar('Spin', spin, 100, '#2196F3')}
+                    ${statBar('Safety', safety, 100, '#FF9800')}
+                </div>
+            `;
+
+            card.addEventListener('click', () => {
+                this.selectPersona(persona.id, this.pendingPersonaSlot);
+            });
+
+            this.opponentGrid.appendChild(card);
+        }
+    }
+
+    openOpponentModal(slot) {
+        this.pendingPersonaSlot = slot;
+
+        // Highlight currently selected persona
+        const currentId = slot === 1 ? this.selectedPersonaId : this.selectedPersona2Id;
+        const cards = this.opponentGrid?.querySelectorAll('.persona-card');
+        cards?.forEach(card => {
+            card.classList.toggle('selected', card.dataset.personaId === currentId);
         });
+
+        this.opponentModal?.classList.remove('hidden');
+    }
+
+    selectPersona(personaId, slot) {
+        if (slot === 1) {
+            this.selectedPersonaId = personaId;
+            this.savePersonaId('poolGame_personaId1', personaId);
+        } else {
+            this.selectedPersona2Id = personaId;
+            this.savePersonaId('poolGame_personaId2', personaId);
+        }
+        this.updatePersonaPreview(slot);
+        this.opponentModal?.classList.add('hidden');
+    }
+
+    updatePersonaPreview(slot) {
+        const personaId = slot === 1 ? this.selectedPersonaId : this.selectedPersona2Id;
+        const persona = getPersonaById(personaId);
+        const avatar = slot === 1 ? this.personaAvatar1 : this.personaAvatar2;
+        const name = slot === 1 ? this.personaName1 : this.personaName2;
+
+        if (avatar) {
+            avatar.style.background = 'none';
+            avatar.textContent = '';
+            avatar.style.backgroundImage = `url(assets/avatars/${persona.initial}.png)`;
+            avatar.style.backgroundSize = 'cover';
+            avatar.style.backgroundPosition = 'center';
+        }
+        if (name) {
+            name.textContent = persona.name;
+        }
+    }
+
+    getSelectedPersona() {
+        return getPersonaById(this.selectedPersonaId);
+    }
+
+    getSelectedPersona2() {
+        return getPersonaById(this.selectedPersona2Id);
+    }
+
+    isTrainingMode() {
+        return this.aiEnabled && this.aiTrainingMode;
     }
 
     // Get AI enabled state
@@ -3385,12 +3552,23 @@ export class UI {
         return this.aiEnabled;
     }
 
-    // Get AI difficulty
+    // Get AI difficulty (backward compat)
     getAIDifficulty() {
         return this.aiDifficulty;
     }
 
-    // Load AI enabled from localStorage
+    // Get player name for display (uses persona names when AI is on)
+    getPlayerName(player) {
+        if (player === 2 && this.aiEnabled) {
+            return getPersonaById(this.selectedPersonaId).name;
+        }
+        if (player === 1 && this.aiEnabled && this.aiTrainingMode) {
+            return getPersonaById(this.selectedPersona2Id).name;
+        }
+        return `Player ${player}`;
+    }
+
+    // Load/save AI enabled from localStorage
     loadAIEnabled() {
         try {
             const saved = localStorage.getItem('poolGame_aiEnabled');
@@ -3400,7 +3578,6 @@ export class UI {
         }
     }
 
-    // Save AI enabled to localStorage
     saveAIEnabled(enabled) {
         try {
             localStorage.setItem('poolGame_aiEnabled', enabled.toString());
@@ -3409,7 +3586,7 @@ export class UI {
         }
     }
 
-    // Load AI difficulty from localStorage
+    // Load/save AI difficulty (backward compat)
     loadAIDifficulty() {
         try {
             const saved = localStorage.getItem('poolGame_aiDifficulty');
@@ -3422,7 +3599,6 @@ export class UI {
         return 'medium';
     }
 
-    // Save AI difficulty to localStorage
     saveAIDifficulty(difficulty) {
         try {
             localStorage.setItem('poolGame_aiDifficulty', difficulty);
@@ -3431,10 +3607,49 @@ export class UI {
         }
     }
 
+    // Load/save persona IDs
+    loadPersonaId(key) {
+        try {
+            return localStorage.getItem(key);
+        } catch (e) {
+            return null;
+        }
+    }
+
+    savePersonaId(key, id) {
+        try {
+            localStorage.setItem(key, id);
+        } catch (e) {
+            console.warn('Failed to save persona:', e);
+        }
+    }
+
+    // Load/save AI training mode
+    loadAITrainingMode() {
+        try {
+            return localStorage.getItem('poolGame_aiTrainingMode') === 'true';
+        } catch (e) {
+            return false;
+        }
+    }
+
+    saveAITrainingMode(enabled) {
+        try {
+            localStorage.setItem('poolGame_aiTrainingMode', enabled.toString());
+        } catch (e) {
+            console.warn('Failed to save AI training mode:', e);
+        }
+    }
+
     // Show AI thinking indicator
-    showAIThinking() {
+    showAIThinking(personaName) {
         if (this.aiThinkingOverlay) {
             this.aiThinkingOverlay.classList.remove('hidden');
+            // Update thinking text with persona name
+            const span = this.aiThinkingOverlay.querySelector('span');
+            if (span && personaName) {
+                span.textContent = `${personaName} is thinking...`;
+            }
         }
     }
 

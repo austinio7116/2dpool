@@ -152,7 +152,7 @@ class PoolGame {
         // AI callbacks
         this.ai.onShot = (direction, power, spin) => this.executeShot(direction, power, spin);
         this.ai.onBallPlacement = (position) => this.placeCueBall(position);
-        this.ai.onThinkingStart = () => this.ui.showAIThinking();
+        this.ai.onThinkingStart = () => this.ui.showAIThinking(this.ai.getCurrentPersona().name);
         this.ai.onThinkingEnd = () => this.ui.hideAIThinking();
 
         // Snooker WPBSA rules callbacks
@@ -222,7 +222,13 @@ class PoolGame {
         // Setup AI if enabled (not for Free Play mode) - BEFORE starting game
         const aiEnabled = this.ui.getAIEnabled() && mode !== GameMode.FREE_PLAY;
         this.ai.setEnabled(aiEnabled);
-        this.ai.setDifficulty(this.ui.getAIDifficulty());
+        this.ai.setPersona(this.ui.getSelectedPersona());
+        if (this.ui.isTrainingMode()) {
+            this.ai.trainingMode = true;
+            this.ai.setPersona2(this.ui.getSelectedPersona2());
+        } else {
+            this.ai.trainingMode = false;
+        }
         this.ai.setGameReferences(this.game, this.table);  // Set references BEFORE startGame
 
         // Randomize who breaks when AI is enabled - BEFORE starting game
@@ -824,7 +830,13 @@ class PoolGame {
         // Setup AI if enabled (not for Free Play mode)
         const aiEnabled = this.ui.getAIEnabled() && savedData.gameMode !== GameMode.FREE_PLAY;
         this.ai.setEnabled(aiEnabled);
-        this.ai.setDifficulty(this.ui.getAIDifficulty());
+        this.ai.setPersona(this.ui.getSelectedPersona());
+        if (this.ui.isTrainingMode()) {
+            this.ai.trainingMode = true;
+            this.ai.setPersona2(this.ui.getSelectedPersona2());
+        } else {
+            this.ai.trainingMode = false;
+        }
         this.ai.setGameReferences(this.game, this.table);
 
         this.input.setCueBall(this.game.cueBall);

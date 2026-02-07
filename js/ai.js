@@ -3,6 +3,7 @@
 
 import { Vec2 } from './utils.js';
 import { GameMode, GameState } from './game.js';
+import { AI_PERSONAS, getPersonaById } from './ai-personas.js';
 
 // Debug logging - set to true to see AI decision making
 const AI_DEBUG = false;
@@ -50,27 +51,7 @@ function aiLogGroupEnd() {
     }
 }
 
-// Difficulty configurations
-const DIFFICULTY_SETTINGS = {
-    easy: {
-        aimError: 1,          // Degrees of aim error
-        thinkingDelay: 300,   // ms before shooting
-        powerError: 0.20,      // Power variation
-        shotSelection: 'top3' // Picks from top 50%
-    },
-    medium: {
-        aimError: 0.4,
-        thinkingDelay: 300,
-        powerError: 0.10,
-        shotSelection: 'optimal'  // Best of top 3
-    },
-    hard: {
-        aimError: 0.00,         // Small aim variation (1-2 degrees)
-        thinkingDelay: 300,
-        powerError: 0.02,      // Small power variation (2%)
-        shotSelection: 'optimal' // Always best shot
-    }
-};
+// Legacy difficulty settings removed - now using AI personas from ai-personas.js
 
 export class AI {
     constructor() {
@@ -78,6 +59,10 @@ export class AI {
         this.enabled = false;
         this.isThinking = false;
         this.trainingMode = false;  // AI plays both sides (demo mode)
+
+        // Persona system
+        this.persona = null;   // Primary AI persona (player 2)
+        this.persona2 = null;  // Second persona (player 1 in training mode)
 
         // Callbacks
         this.onShot = null;         // Called when AI wants to shoot
@@ -135,14 +120,42 @@ export class AI {
     }
 
     setDifficulty(difficulty) {
-        // Training mode: AI plays both sides using hard difficulty
+        // Backward compat: map old difficulty strings to default personas
+        const difficultyToPersona = {
+            easy: 'rookie_rick',
+            medium: 'steady_sue',
+            hard: 'the_machine'
+        };
         if (difficulty === 'training') {
             this.trainingMode = true;
+            this.persona = getPersonaById('the_machine');
+            this.persona2 = getPersonaById('the_machine');
             this.difficulty = 'hard';
-        } else if (DIFFICULTY_SETTINGS[difficulty]) {
+        } else if (difficultyToPersona[difficulty]) {
             this.trainingMode = false;
+            this.persona = getPersonaById(difficultyToPersona[difficulty]);
             this.difficulty = difficulty;
         }
+    }
+
+    setPersona(persona) {
+        if (persona) {
+            this.persona = persona;
+        }
+    }
+
+    setPersona2(persona) {
+        if (persona) {
+            this.persona2 = persona;
+        }
+    }
+
+    getCurrentPersona() {
+        // In training mode, switch persona based on current player
+        if (this.trainingMode && this.game) {
+            return this.game.currentPlayer === 1 ? (this.persona2 || this.persona) : this.persona;
+        }
+        return this.persona || getPersonaById('steady_sue');
     }
 
     setEnabled(enabled) {
@@ -393,7 +406,7 @@ export class AI {
 
     // Handle snooker foul decision (play, restore, or put opponent back in)
     handleSnookerDecision() {
-        const settings = DIFFICULTY_SETTINGS[this.difficulty];
+        const settings = this.getCurrentPersona();
 
         this.isThinking = true;
         if (this.onThinkingStart) this.onThinkingStart();
@@ -534,7 +547,7 @@ export class AI {
 
     // Handle ball-in-hand placement
     handleBallInHand() {
-        const settings = DIFFICULTY_SETTINGS[this.difficulty];
+        const settings = this.getCurrentPersona();
 
         this.isThinking = true;
         if (this.onThinkingStart) this.onThinkingStart();
@@ -842,13 +855,13 @@ export class AI {
     planAndExecuteShot() {
         if (!this.game || this.game.state !== GameState.PLAYING) return;
 
-        const settings = DIFFICULTY_SETTINGS[this.difficulty];
+        const settings = this.getCurrentPersona();
 
         this.isThinking = true;
         if (this.onThinkingStart) this.onThinkingStart();
 
         setTimeout(() => {
-            aiLog('AI TURN - Difficulty:', this.difficulty, '| Mode:', this.game.mode);
+            aiLog('AI TURN - Persona:', settings.name, '| Mode:', this.game.mode);
 
             // Special handling for break shot - just hit the rack hard
             if (this.game.isBreakShot) {
@@ -909,9 +922,9 @@ export class AI {
             return;
         }
 
-        const settings = DIFFICULTY_SETTINGS[this.difficulty];
+        const settings = this.getCurrentPersona();
         const isSnooker = this.game.mode === GameMode.SNOOKER;
-        aiLog('Mode:', isSnooker ? 'SNOOKER' : 'POOL', '| Difficulty:', this.difficulty);
+        aiLog('Mode:', isSnooker ? 'SNOOKER' : 'POOL', '| Persona:', settings.name);
 
         let targetBall;
         let basePower;
@@ -962,11 +975,11 @@ export class AI {
             const direction = Vec2.normalize(Vec2.subtract(thinAimPoint, cueBall.position));
 
             // Apply power variation based on difficulty
-            const powerVariation = settings.powerError * basePower * 0.1;
+            const powerVariation = settings.powerAccuracy * basePower * 0.1;
             const power = basePower - Math.random() * powerVariation;
 
             // Apply aim error based on difficulty
-            const aimError = (Math.random() - 0.5) * settings.aimError * (Math.PI / 180);
+            const aimError = (Math.random() - 0.5) * settings.lineAccuracy * (Math.PI / 180);
             const adjustedDir = Vec2.rotate(direction, aimError);
 
             // Add RIGHT-hand side spin for snooker break 
@@ -997,11 +1010,11 @@ export class AI {
         const direction = Vec2.normalize(Vec2.subtract(targetBall.position, cueBall.position));
 
         // Apply power variation based on difficulty
-        const powerVariation = settings.powerError * basePower * 0.1;
+        const powerVariation = settings.powerAccuracy * basePower * 0.1;
         const power = basePower - Math.random() * powerVariation;
 
         // Apply aim error based on difficulty (hard = perfect)
-        const aimError = (Math.random() - 0.5) * settings.aimError * (Math.PI / 180);
+        const aimError = (Math.random() - 0.5) * settings.lineAccuracy * (Math.PI / 180);
         const adjustedDir = Vec2.rotate(direction, aimError);
         aiLog('Pool break:', { power: power.toFixed(1), aimError: (aimError * 180 / Math.PI).toFixed(2) + '°' });
         aiLogGroupEnd();
@@ -1013,7 +1026,7 @@ export class AI {
 
     // Find all possible shots, simulating different powers/spins for position
     findBestShot() {
-        aiLogGroup('Finding Best Shot (Positional Awareness)');
+        aiLogGroup('Finding Best Shot');
         const cueBall = this.game.cueBall;
         if (!cueBall || cueBall.pocketed) return null;
 
@@ -1021,14 +1034,11 @@ export class AI {
         const pockets = this.table.pockets;
         let candidateShots = [];
 
-        // 1. Identify all geometrically possible pots first
+        // 1. Identify all geometrically possible pots and generate power/spin variants
         for (const target of validTargets) {
             for (const pocket of pockets) {
-                // Do a basic geometry check (can we even see the ball?)
                 const baseShot = this.evaluatePotentialShot(cueBall.position, target, pocket, { basicCheck: true });
-                
                 if (baseShot) {
-                    // 2. If pot is possible, simulate variations
                     const variants = this.analyzeShotVariants(cueBall.position, target, pocket, baseShot);
                     candidateShots.push(...variants);
                 }
@@ -1053,81 +1063,95 @@ export class AI {
             return null;
         }
 
-        // 3. Sort by Composite Score (Potting Chance + Position Quality)
-        candidateShots.sort((a, b) => b.compositeScore - a.compositeScore);
-
-        // 4. Pick the best potting option
-        const bestOption = this.selectShot(candidateShots); 
-
-        // 5. DEFINE CONFIDENCE THRESHOLD
-        // Default Thresholds (Snooker)
-        let thresholds = {
-            easy: 60,
-            medium: 50,
-            hard: 40 
-        };
-
-        // ADJUSTMENT: For Pool modes (8-ball, 9-ball), lower thresholds by 20
-        // Pool pockets are generally more forgiving, and the table is smaller
-        if (this.game.mode !== GameMode.SNOOKER) {
-            thresholds = {
-                easy: 40,
-                medium: 30,
-                hard: 20 
-            };
-            aiLog('Pool Mode detected: Lowering confidence thresholds by 20 points');
+        // 2. Group variants by target+pocket (each group = one pot opportunity)
+        const shotGroups = new Map();
+        const pocketNames = (p) => p.type + (p.position.x < this.table.center.x ? '-L' : '-R');
+        for (const shot of candidateShots) {
+            const key = `${shot.target.colorName || shot.target.number}->${pocketNames(shot.pocket)}`;
+            if (!shotGroups.has(key)) shotGroups.set(key, []);
+            shotGroups.get(key).push(shot);
         }
 
-        const minPotConfidence = thresholds[this.difficulty] || 65;
+        // 3. For each group, find best potScore and best positionScore
+        const groups = [];
+        for (const [key, variants] of shotGroups) {
+            const bestPot = Math.max(...variants.map(v => v.potScore));
+            const bestPos = Math.max(...variants.map(v => v.positionScore));
+            groups.push({ key, variants, bestPot, bestPos });
+        }
 
-        // 6. THE SAFETY CHECK
+        // Sort groups by potScore (pure potting simplicity)
+        groups.sort((a, b) => b.bestPot - a.bestPot);
+
+        // Log ranked pot opportunities
+        aiLog('--- Pot opportunities (ranked by potScore) ---');
+        for (const g of groups) {
+            aiLog(`  ${g.key}  pot:${g.bestPot.toFixed(0)}  pos:${g.bestPos.toFixed(0)}  (${g.variants.length} variants)`);
+        }
+
+        // 4. Pick the easiest pot, unless a similar-difficulty pot has much better position
+        let chosenGroup = groups[0];
+        const POS_ADVANTAGE_THRESHOLD = 25;
+        const POT_SIMILARITY_THRESHOLD = 10;
+
+        for (let i = 1; i < groups.length; i++) {
+            const potDiff = chosenGroup.bestPot - groups[i].bestPot;
+            const posDiff = groups[i].bestPos - chosenGroup.bestPos;
+            if (potDiff <= POT_SIMILARITY_THRESHOLD && posDiff >= POS_ADVANTAGE_THRESHOLD) {
+                aiLog(`Switching: ${groups[i].key} similar pot (-${potDiff.toFixed(0)}) but much better pos (+${posDiff.toFixed(0)})`);
+                chosenGroup = groups[i];
+                break;
+            }
+        }
+
+        // 5. Within chosen group, filter to variants that maintain potting confidence
+        const POT_DROP_LIMIT = 15;
+        const viable = chosenGroup.variants.filter(v => v.potScore >= chosenGroup.bestPot - POT_DROP_LIMIT);
+        const pool = viable.length > 0 ? viable : chosenGroup.variants;
+        pool.sort((a, b) => b.positionScore - a.positionScore);
+
+        // Apply shotSelection personality to pick from position-sorted variants
+        const persona = this.getCurrentPersona();
+        const bestOption = this.selectShot(pool);
+
+        const ballName = bestOption.target.colorName || bestOption.target.number;
+        aiLog(`--- Selected: ${ballName}->${pocketNames(bestOption.pocket)} | pot:${bestOption.potScore.toFixed(0)} pos:${bestOption.positionScore.toFixed(0)} | power:${bestOption.power.toFixed(0)} spin:${bestOption.spin?.y?.toFixed(1) || '0'} | via ${persona.shotSelection} from ${pool.length} viable ---`);
+
+        // 6. Confidence check (safetyBias determines risk tolerance)
+        const baseThreshold = this.game.mode !== GameMode.SNOOKER ? 0 : 20;
+        const minPotConfidence = baseThreshold + ((persona.safetyBias + 30) / 50) * 40;
+
         if (bestOption.potScore < minPotConfidence) {
-            aiLog(`⚠️ Shot Confidence Low: ${bestOption.potScore.toFixed(1)} < ${minPotConfidence}`);
+            aiLog(`Low confidence: ${bestOption.potScore.toFixed(0)} < ${minPotConfidence.toFixed(0)} (safetyBias: ${persona.safetyBias})`);
 
-            // --- NEW: RESCUE LOGIC START ---
-            // The "Smart" shot (good position) is too risky. 
-            // Check if there is a "Dumb" shot (high pot chance, bad position) that we ignored.
-            
-            // Look for any shot in our candidates with a very high pot score
-            // (e.g. 15 points higher than threshold)
+            // Rescue: is there any variant across ALL groups with potScore well above threshold?
             const rescueThreshold = minPotConfidence + 5;
-            
             const safePot = candidateShots.find(s => s.potScore > rescueThreshold);
-            
             if (safePot) {
-                aiLog(`✅ RECOVERY: Found a guaranteed pot (${safePot.target.colorName || 'ball'} -> ${safePot.potScore.toFixed(0)}) to save the turn.`);
-                aiLog(`   Sacrificing position to ensure the pot.`);
+                const safeName = safePot.target.colorName || safePot.target.number;
+                aiLog(`RESCUE: ${safeName} pot:${safePot.potScore.toFixed(0)} — taking safe pot over risky position`);
                 aiLogGroupEnd();
                 return safePot;
             }
-            // --- NEW: RESCUE LOGIC END ---
 
-            aiLog('   Comparing against best available safety...');
+            // Compare against safety play
             const opponentTargets = this.getOpponentTargets();
             const bestSafety = this.findBestSafetyShot(validTargets, opponentTargets);
-
-            // Safety Score logic: 100 = Perfect Snooker, 0 = Left a "hanger" for opponent
-            // Pot Score logic: 100 = Hanger for us, 0 = Impossible cut
-            
-            // If Safety Score is LOWER than our Pot Score, it means the safety is 
-            // riskier/worse than just going for the pot.
             const safetyQuality = bestSafety ? bestSafety.score : 0;
+            const aggressionBias = 25 - persona.safetyBias;
 
-            const aggressionBias = 25; 
-            
             if (safetyQuality < (bestOption.potScore + aggressionBias)) {
-                aiLog(`🛑 FORCED ATTACK: Safety (${safetyQuality.toFixed(1)}) is roughly equal to or worse than Pot (${bestOption.potScore.toFixed(1)}).`);
-                aiLog(`   Biasing +${aggressionBias} towards offense to retain table control.`);
+                aiLog(`ATTACK: safety(${safetyQuality.toFixed(0)}) < pot(${bestOption.potScore.toFixed(0)}) + aggression(${aggressionBias}) — going for it`);
                 aiLogGroupEnd();
                 return bestOption;
             }
 
-            aiLog(`⚠️ Shot Rejected: Safety (${safetyQuality.toFixed(1)}) is the smarter play.`);
+            aiLog(`SAFETY: safety(${safetyQuality.toFixed(0)}) beats pot(${bestOption.potScore.toFixed(0)}) + aggression(${aggressionBias})`);
             aiLogGroupEnd();
-            return null; // Triggers playSafety()
+            return null;
         }
 
-        aiLog(`✅ Shot Accepted: Score ${bestOption.potScore.toFixed(1)} >= ${minPotConfidence}`);
+        aiLog(`ACCEPTED (pot:${bestOption.potScore.toFixed(0)} >= threshold:${minPotConfidence.toFixed(0)})`);
         aiLogGroupEnd();
         return bestOption;
     }
@@ -1151,7 +1175,10 @@ export class AI {
         // 2. Define Your Sweep Arrays
         // (Using the values you provided)
         const powerLevels = [2.5, 3.5, 4.5, 5.5, 6.5, 8.5, 10.5, 13.5, 18.5, 21.5, 26.5, 39.5, 38.5, 45.5];
-        const spinLevels = [-0.9, -0.5, -0.2, 0, 0.2, 0.5, 0.9]; // 0=Stun, >0=Draw, <0=Follow
+        const persona = this.getCurrentPersona();
+        const maxSpin = persona.spinAbility;
+        const allSpinLevels = [-0.9, -0.5, -0.2, 0, 0.2, 0.5, 0.9];
+        const spinLevels = allSpinLevels.filter(s => Math.abs(s) <= maxSpin); // Filter by spinAbility
 
         // 3. Iterate All Permutations
         for (const power of powerLevels) {
@@ -1198,8 +1225,9 @@ export class AI {
                     potScore -= 15; 
                 }
 
-                // Calculate Composite Score
-                const compositeScore = (potScore * 0.9) + (positionScore * 0.1);
+                // Calculate Composite Score using persona's positionPlay weight
+                const posWeight = persona.positionPlay;
+                const compositeScore = (potScore * (1 - posWeight)) + (positionScore * posWeight);
 
                 // Name generation for debugging
                 let typeName = 'Stun';
@@ -2188,7 +2216,7 @@ export class AI {
 
     // Select a shot based on difficulty
     selectShot(shots) {
-        const settings = DIFFICULTY_SETTINGS[this.difficulty];
+        const settings = this.getCurrentPersona();
 
         if (shots.length === 0) return null;
 
@@ -2260,7 +2288,7 @@ export class AI {
         const ballName = shot.target.colorName || shot.target.number || 'ball';
         aiLog('Target:', ballName, '| Cut angle:', shot.cutAngle.toFixed(1) + '°', '| Base power:', shot.power.toFixed(1));
 
-        const settings = DIFFICULTY_SETTINGS[this.difficulty];
+        const settings = this.getCurrentPersona();
         const cueBallPos = this.game.cueBall.position;
         const ballRadius = shot.target.radius || 12;
 
@@ -2295,7 +2323,7 @@ export class AI {
         let direction = directionAfterThrow;
 
         // Apply aim error based on difficulty (still as angle, but this is intentional variance)
-        let aimError = (Math.random() - 0.5) * 2 * settings.aimError * (Math.PI / 180);
+        let aimError = (Math.random() - 0.5) * 2 * settings.lineAccuracy * (Math.PI / 180);
 
         // If this shot is the same as the last foul shot, add extra angle variation to try something different
         if (this.isSameShotAsFoul(shot)) {
@@ -2310,8 +2338,11 @@ export class AI {
 
         // Apply power error
         let power = shot.power;
-        const powerError = (Math.random() - 0.5) * 2 * settings.powerError;
+        const powerError = (Math.random() - 0.5) * 2 * settings.powerAccuracy;
         power = power * (1 + powerError);
+
+        // Apply persona power bias
+        power *= settings.powerBias;
 
         // Adjust power for spin (spin was calculated earlier for model prediction)
         if (spin.y > 0.05) {
@@ -2319,7 +2350,7 @@ export class AI {
             power *= (1 + 0.20 * drawStrength); // +0%..+20%
         }
         //power = Math.max(2, Math.min(20, power));
-        aiLog('Final power:', power.toFixed(1), '(error:', (powerError * 100).toFixed(1) + '%)');
+        aiLog('Final power:', power.toFixed(1), '(error:', (powerError * 100).toFixed(1) + '%, bias:', settings.powerBias + ')');
 
 
         // Store visualization data for rendering overlay
@@ -2741,8 +2772,8 @@ export class AI {
                 aiLog('Escape shot: bank off', escapeShot.rail, 'to hit', targetName,
                       '| Power:', escapeShot.power.toFixed(1));
 
-                const settings = DIFFICULTY_SETTINGS[this.difficulty];
-                let aimError = (Math.random() - 0.5) * 2 * settings.aimError * (Math.PI / 180);
+                const settings = this.getCurrentPersona();
+                let aimError = (Math.random() - 0.5) * 2 * settings.lineAccuracy * (Math.PI / 180);
 
                 // Check if we fouled on the same escape attempt before
                 const targetId = escapeShot.target.id || escapeShot.target.number;
@@ -2755,7 +2786,7 @@ export class AI {
                 const adjustedDir = Vec2.rotate(escapeShot.direction, aimError);
 
                 let power = escapeShot.power;
-                const powerError = (Math.random() - 0.5) * 2 * settings.powerError;
+                const powerError = (Math.random() - 0.5) * 2 * settings.powerAccuracy;
                 power = power * (1 + powerError);
                 power = Math.max(5, Math.min(40, power));
 
@@ -2795,10 +2826,10 @@ export class AI {
                 aiLog('  Snooker behind:', snookerName);
             }
 
-            const settings = DIFFICULTY_SETTINGS[this.difficulty];
+            const settings = this.getCurrentPersona();
 
             // Apply aim error based on difficulty
-            let aimError = (Math.random() - 0.5) * 2 * settings.aimError * (Math.PI / 180);
+            let aimError = (Math.random() - 0.5) * 2 * settings.lineAccuracy * (Math.PI / 180);
 
             // Check if we fouled on a similar safety before
             const targetId = safetyShot.target.id || safetyShot.target.number;
@@ -2813,7 +2844,7 @@ export class AI {
             // Apply power error
             let power = safetyShot.power;
             let spin = safetyShot.spin;
-            const powerError = (Math.random() - 0.5) * 2 * settings.powerError;
+            const powerError = (Math.random() - 0.5) * 2 * settings.powerAccuracy;
             power = power * (1 + powerError);
             if (spin.y > 0.05) {
                 const drawStrength = Math.min(1, Math.abs(spin.y)); // 0..1
@@ -2856,8 +2887,8 @@ export class AI {
             const desperateEscape = this.findSnookerEscape(validTargets, true);
             if (desperateEscape) {
                 aiLog('Desperate escape attempt');
-                const settings = DIFFICULTY_SETTINGS[this.difficulty];
-                let aimError = (Math.random() - 0.5) * 2 * settings.aimError * (Math.PI / 180);
+                const settings = this.getCurrentPersona();
+                let aimError = (Math.random() - 0.5) * 2 * settings.lineAccuracy * (Math.PI / 180);
 
                 // Check if we fouled on the same escape attempt before
                 const targetId = desperateEscape.target.id || desperateEscape.target.number;
@@ -2910,8 +2941,8 @@ export class AI {
         const direction = Vec2.normalize(Vec2.subtract(bestTarget.position, cueBall.position));
         const power = Math.max(8, Math.min(14, 6 + bestDist / 80));
 
-        const settings = DIFFICULTY_SETTINGS[this.difficulty];
-        let aimError = (Math.random() - 0.5) * 2 * settings.aimError * (Math.PI / 180);
+        const settings = this.getCurrentPersona();
+        let aimError = (Math.random() - 0.5) * 2 * settings.lineAccuracy * (Math.PI / 180);
 
         // Check if this is the same target we fouled on last time
         const targetId = bestTarget.id || bestTarget.number;

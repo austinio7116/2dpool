@@ -1,0 +1,8 @@
+{
+  "name": "2dpool",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "planck-js": "1.0.6"
+  }
+}

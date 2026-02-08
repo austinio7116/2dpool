@@ -375,8 +375,41 @@ class PoolGame {
             options.colorScheme = this.ui.ukColorScheme?.value || 'red-yellow';
         }
 
+        // Change menu button text for career context
+        const mainMenuBtn = document.getElementById('btn-main-menu');
+        if (mainMenuBtn) mainMenuBtn.textContent = 'Back to Career';
+
         // Start the game
         this.startGame(mode, options);
+    }
+
+    // Check if AI should concede in snooker (hopeless position)
+    shouldAIConcede() {
+        if (this.game.mode !== GameMode.SNOOKER) return false;
+        if (this.game.state === GameState.GAME_OVER) return false;
+
+        const aiPlayer = this.game.currentPlayer;
+        const aiScore = aiPlayer === 1 ? this.game.player1Score : this.game.player2Score;
+        const oppScore = aiPlayer === 1 ? this.game.player2Score : this.game.player1Score;
+        const deficit = oppScore - aiScore;
+
+        if (deficit <= 0) return false;
+
+        const remaining = this.game.getSnookerRemainingPoints();
+        const hasReds = this.game.getActualRedsRemaining() > 0;
+        const threshold = hasReds ? 15 : 12;
+
+        return (deficit - remaining) >= threshold;
+    }
+
+    aiConcedeFrame() {
+        if (this.game.mode !== GameMode.SNOOKER) return;
+        if (this.game.state === GameState.GAME_OVER) return;
+
+        this.game.finalizeCurrentBreak();
+        this.game.winner = this.game.currentPlayer === 1 ? 2 : 1;
+        this.game.gameOverReason = 'Frame conceded';
+        this.game.endGame();
     }
 
     returnToMenu() {
@@ -394,6 +427,12 @@ class PoolGame {
 
         // Clear career player name
         this.ui.setCareerPlayerName(null);
+
+        // Restore main menu button text and hide career ELO display
+        const mainMenuBtn = document.getElementById('btn-main-menu');
+        if (mainMenuBtn) mainMenuBtn.textContent = 'Main Menu';
+        const eloDisplay = document.getElementById('career-elo-display');
+        if (eloDisplay) eloDisplay.style.display = 'none';
 
         this.game.state = GameState.MENU;
         this.ui.showMainMenu();
@@ -614,8 +653,12 @@ class PoolGame {
             this.input.setCanShoot(false);
 
             if (isAITurn) {
-                // AI handles ball placement (deferred if precaching)
-                this._deferUntilReady(() => this.ai.takeTurn());
+                // Check if AI should concede in snooker
+                if (this.game.mode === GameMode.SNOOKER && this.shouldAIConcede()) {
+                    this._deferUntilReady(() => this.aiConcedeFrame());
+                } else {
+                    this._deferUntilReady(() => this.ai.takeTurn());
+                }
             } else {
                 // Human player places ball
                 this.input.enterBallInHandMode(this.game.cueBall, (pos) => {
@@ -631,9 +674,13 @@ class PoolGame {
             }
 
             if (isAITurn) {
-                // AI's turn to shoot (deferred if precaching)
                 this.input.setCanShoot(false);
-                this._deferUntilReady(() => this.ai.takeTurn());
+                // Check if AI should concede in snooker
+                if (this.game.mode === GameMode.SNOOKER && this.shouldAIConcede()) {
+                    this._deferUntilReady(() => this.aiConcedeFrame());
+                } else {
+                    this._deferUntilReady(() => this.ai.takeTurn());
+                }
             } else {
                 // Human player's turn - AI must have completed their shot without fouling
                 // Clear AI's foul tracking since they didn't foul
@@ -676,6 +723,7 @@ class PoolGame {
 
         // Career mode: record result when match is complete
         if (this.careerMatch && match?.matchComplete) {
+            const oldElo = this.career.getState().playerElo;
             const userWon = match.matchWinner === 1;
             const userFrames = match.player1Frames;
             const opponentFrames = match.player2Frames;
@@ -687,9 +735,29 @@ class PoolGame {
                 opponentFrames,
                 this.game.getGameInfo()
             );
+            const newElo = this.career.getState().playerElo;
+            const eloChange = newElo - oldElo;
+            this.showCareerMatchResult(eloChange, newElo);
             this.careerMatch = null;
-            this.wasCareerGame = true; // Flag to reopen career modal on menu return
+            this.wasCareerGame = true;
         }
+    }
+
+    showCareerMatchResult(eloChange, newElo) {
+        let eloDisplay = document.getElementById('career-elo-display');
+        if (!eloDisplay) {
+            eloDisplay = document.createElement('div');
+            eloDisplay.id = 'career-elo-display';
+            eloDisplay.className = 'career-elo-display';
+            const winnerText = document.getElementById('winner-text');
+            if (winnerText && winnerText.parentNode) {
+                winnerText.parentNode.insertBefore(eloDisplay, winnerText.nextSibling);
+            }
+        }
+        const sign = eloChange >= 0 ? '+' : '';
+        const color = eloChange >= 0 ? '#4CAF50' : '#F44336';
+        eloDisplay.innerHTML = `<span style="color:${color};font-weight:bold">${sign}${eloChange} ELO</span> <span style="color:#888">(${newElo})</span>`;
+        eloDisplay.style.display = '';
     }
 
     handleBallPocketed(_ball) {

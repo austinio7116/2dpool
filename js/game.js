@@ -1800,12 +1800,41 @@ export class Game {
             this.winner = 2;
             this.gameOverReason = `Player 2 wins ${this.player2Score}-${this.player1Score}`;
         } else {
-            // Tie - re-spot black (simplified: just declare a tie)
-            this.winner = null;
-            this.gameOverReason = `Tie game ${this.player1Score}-${this.player2Score}`;
+            // Tie - re-spot black (WPBSA rules)
+            this.setupReSpottedBlack();
+            return;
         }
 
         this.endGame();
+    }
+
+    // Re-spot the black ball for a tied frame (WPBSA rules)
+    setupReSpottedBlack() {
+        // Re-spot the black ball on its spot
+        const black = this.balls.find(b => b.colorName === 'black');
+        if (black) {
+            this.respotSingleBall(black);
+        }
+
+        // Ensure cue ball is available
+        this.cueBall.pocketed = false;
+        this.cueBall.sinking = false;
+
+        // Set target to black only
+        this.snookerTarget = 'black';
+        this.colorsPhase = true;
+
+        // Coin toss for who plays first
+        this.currentPlayer = Math.random() < 0.5 ? 1 : 2;
+
+        // Ball in hand from D
+        this.state = GameState.BALL_IN_HAND;
+        this.isBreakShot = false;
+        this.currentBreak = 0;
+
+        if (this.onStateChange) {
+            this.onStateChange(this.state);
+        }
     }
 
     // Calculate remaining points on the table

@@ -3923,6 +3923,13 @@ img.persona-avatar {
     background: linear-gradient(135deg, #daa520 0%, #b8860b 50%, #daa520 100%);
 }
 
+/* ─── Career ELO Display (Game Over Screen) ─── */
+.career-elo-display {
+    text-align: center;
+    font-size: 1.1rem;
+    margin: 4px 0 8px;
+}
+
 /* ─── Achievement Notification ─── */
 .career-achievement-notif {
     position: fixed;

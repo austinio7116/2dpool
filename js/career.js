@@ -119,7 +119,7 @@ export class Career {
         this.state = {
             version: 1,
             playerName: playerName || 'Player',
-            playerElo: 1200,
+            playerElo: 1500,
             season: 1,
             leagues: {},
             aiElo,
@@ -179,7 +179,7 @@ export class Career {
                 points: 0,
                 framesFor: 0,
                 framesAgainst: 0,
-                elo: id === 'player' ? this.state.playerElo : (this.state.aiElo[id] || 1200)
+                elo: id === 'player' ? this.state.playerElo : (this.state.aiElo[id] || 1500)
             }));
 
             this.state.leagues[mode].seasonData = {
@@ -250,7 +250,7 @@ export class Career {
 
         // Update ELO
         const playerElo = this.state.playerElo;
-        const oppElo = this.state.aiElo[opponentId] || 1200;
+        const oppElo = this.state.aiElo[opponentId] || 1500;
 
         this.state.playerElo = calculateElo(playerElo, oppElo, userWon);
         this.state.aiElo[opponentId] = calculateElo(oppElo, playerElo, !userWon);
@@ -318,7 +318,7 @@ export class Career {
             s.points = 0;
             s.framesFor = 0;
             s.framesAgainst = 0;
-            s.elo = s.id === 'player' ? this.state.playerElo : (this.state.aiElo[s.id] || 1200);
+            s.elo = s.id === 'player' ? this.state.playerElo : (this.state.aiElo[s.id] || 1500);
         }
 
         // Recalculate from fixtures
@@ -366,8 +366,8 @@ export class Career {
         if (!fixture) return;
 
         const bestOf = this.getBestOf(mode);
-        const eloA = this.state.aiElo[fixture.home] || 1200;
-        const eloB = this.state.aiElo[fixture.away] || 1200;
+        const eloA = this.state.aiElo[fixture.home] || 1500;
+        const eloB = this.state.aiElo[fixture.away] || 1500;
 
         const result = simulateMatch(eloA, eloB, bestOf);
 
@@ -516,21 +516,21 @@ export class Career {
                 name: this.state?.playerName || 'Player',
                 color: '#FFFFFF',
                 initial: (this.state?.playerName || 'P')[0].toUpperCase(),
-                elo: this.state?.playerElo || 1200
+                elo: this.state?.playerElo || 1500
             };
         }
         const persona = AI_PERSONAS.find(p => p.id === id);
         if (!persona) return null;
         return {
             ...persona,
-            elo: this.state?.aiElo[id] || persona.elo
+            elo: this.state?.aiElo[id] || persona.elo || 1500
         };
     }
 
     // Get ELO for any player
     getElo(id) {
-        if (id === 'player') return this.state?.playerElo || 1200;
-        return this.state?.aiElo[id] || 1200;
+        if (id === 'player') return this.state?.playerElo || 1500;
+        return this.state?.aiElo[id] || 1500;
     }
 
     // Save/Load

@@ -109,10 +109,15 @@ export class ShotSimulator {
             .filter(b => b.pocketed && !b.isCueBall)
             .map(b => b.number);
 
+        const ballEndPositions = this.simBalls
+            .filter(b => !b.pocketed && !b.isCueBall)
+            .map(b => ({ number: b.number, position: { x: b.position.x, y: b.position.y } }));
+
         return {
             cueBallEndPos: { x: cueBall.position.x, y: cueBall.position.y },
             pocketedBalls,
-            cueBallPocketed: cueBall.pocketed
+            cueBallPocketed: cueBall.pocketed,
+            ballEndPositions
         };
     }
 

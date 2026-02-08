@@ -1224,9 +1224,11 @@ export class AI {
         const distTargetToPocket = Vec2.distance(target.position, pocket.position);
         const totalDist = distCueToTarget + distTargetToPocket;
         
-        // Base friction + cut angle inefficiency (45° cut needs ~1.5x power)
-        const cutFactor = 1 + (baseGeometry.cutAngle / 90);
-        const minPowerToReach = (totalDist / 45) * cutFactor + 2; // +2 buffer
+        // Cut angle: thinner cuts transfer less energy, need more cue ball power
+        const cutRad = baseGeometry.cutAngle * Math.PI / 180;
+        const cutFactor = 1 / Math.max(0.3, Math.cos(cutRad));
+        // minPowerToReach in "desired potting strength" units (before cut scaling)
+        const minPottingPower = (totalDist / 45) + 2;
 
         // 2. Define Your Sweep Arrays
         // (Using the values you provided)
@@ -1237,37 +1239,43 @@ export class AI {
         const spinLevels = allSpinLevels.filter(s => Math.abs(s) <= maxSpin); // Filter by spinAbility
 
         // 3. Iterate All Permutations
-        for (const power of powerLevels) {
-            
+        // powerLevels represent desired potting strength; we scale by cut angle to get actual cue ball power
+        for (const pottingPower of powerLevels) {
+
             // FILTER: Skip powers that are too soft to reach the pocket
-            if (power < minPowerToReach) continue;
+            if (pottingPower < minPottingPower) continue;
+
+            // Scale to actual cue ball power needed at this cut angle
+            const cueBallPower = pottingPower * cutFactor;
 
             for (const spinY of spinLevels) {
-                
-                // OPTIONAL: Skip high-spin on very low power (physics breakdown)
-                // Backspin needs some speed to "bite", but this is up to you.
-                // if (Math.abs(spinY) > 0.4 && power < 8) continue;
+
+                // Apply draw compensation (was previously in executeShot)
+                let effectivePower = cueBallPower;
+                if (spinY > 0.05) {
+                    effectivePower *= (1 + 0.20 * Math.min(1, Math.abs(spinY)));
+                }
 
                 // --- SIMULATION LOGIC ---
 
                 // Predict Scratch
                 const prediction = this.predictCueBallPath({
                     target, pocket, ghostBall: baseGeometry.ghostBall,
-                    direction: baseGeometry.direction, power: power, cutAngle: baseGeometry.cutAngle
+                    direction: baseGeometry.direction, power: effectivePower, cutAngle: baseGeometry.cutAngle
                 }, spinY);
-                
+
                 if (prediction.scratchRisk) continue;
 
                 // Predict Position
                 const predictedEndPos = this.predictEndPosition({
-                    ghostBall: baseGeometry.ghostBall, power: power
+                    ghostBall: baseGeometry.ghostBall, power: effectivePower, cutAngle: baseGeometry.cutAngle
                 }, spinY, prediction.direction);
-                
+
                 // Evaluate Next Shot
                 const { score: positionScore, nextBall } = this.evaluatePositionQuality(predictedEndPos, target);
 
                 // --- SCORING LOGIC ---
-                
+
                 // Start with base geometric difficulty
                 let potScore = baseDifficulty;
 
@@ -1278,12 +1286,12 @@ export class AI {
                 //   <1.0 = increase penalty (favor softer shots)
                 // Amplified so persona power preference strongly affects shot selection
                 const powerPenaltyScale = Math.max(0.05, 1 + (1 - persona.powerBias) * 3);
-                const powerPenalty = (power / 50) * 15 * powerPenaltyScale;
+                const powerPenalty = (effectivePower / 50) * 15 * powerPenaltyScale;
                 potScore -= powerPenalty;
 
                 // Apply Side Pocket + High Power Risk
-                if (pocket.type === 'side' && power > 30) {
-                    potScore -= 15; 
+                if (pocket.type === 'side' && effectivePower > 30) {
+                    potScore -= 15;
                 }
 
                 // Calculate Composite Score using persona's position awareness
@@ -1298,10 +1306,10 @@ export class AI {
 
                 variants.push({
                     ...baseGeometry,
-                    target, pocket, 
-                    power,
+                    target, pocket,
+                    power: effectivePower,
                     spin: { x: 0, y: spinY },
-                    powerLevel: `${typeName} (${power})`, // e.g., "Draw (18)"
+                    powerLevel: `${typeName} (${pottingPower}→${effectivePower.toFixed(0)})`,
                     potScore: Math.max(0, potScore),
                     positionScore,
                     nextBall,
@@ -1375,6 +1383,61 @@ export class AI {
             variant.compositeScore = (variant.potScore * (1 - posWeight)) + (simPosScore * posWeight);
 
             aiLog(`  SIM ${variant.powerLevel}: pos ${oldPosScore.toFixed(0)} -> ${simPosScore.toFixed(0)} | composite ${variant.compositeScore.toFixed(0)}`);
+        }
+    }
+
+    resimulateTopSafetyCandidates(candidates, opponentBalls) {
+        const SIM_COUNT = 8;
+
+        candidates.sort((a, b) => b.score - a.score);
+        const topN = candidates.slice(0, SIM_COUNT);
+
+        const simulator = this.ensureShotSimulator();
+
+        aiLog(`--- Safety Pass 2: Simulating top ${topN.length} candidates ---`);
+
+        for (const variant of topN) {
+            const result = simulator.simulate(
+                this.game.balls,
+                variant.direction,
+                variant.power,
+                variant.spin
+            );
+
+            // If cue ball pocketed, safety fails
+            if (result.cueBallPocketed) {
+                variant.score = 0;
+                variant.cueBallEndPos = result.cueBallEndPos;
+                aiLog(`  SIM SAFETY: SCRATCH`);
+                continue;
+            }
+
+            // Build updated opponent ball positions from simulation
+            const simPositions = new Map(
+                result.ballEndPositions.map(b => [b.number, b.position])
+            );
+            const updatedOpponentBalls = opponentBalls.map(ob => {
+                const simPos = simPositions.get(ob.number);
+                if (simPos) {
+                    return { ...ob, position: simPos };
+                }
+                return ob;
+            }).filter(ob => !result.pocketedBalls.includes(ob.number));
+
+            const oldScore = variant.score;
+            const oldEndPos = variant.cueBallEndPos;
+            variant.cueBallEndPos = result.cueBallEndPos;
+
+            // Re-score with accurate positions
+            const safetyResult = this.scoreSafetyPosition(
+                result.cueBallEndPos, updatedOpponentBalls, variant.target
+            );
+            variant.score = safetyResult.score;
+            variant.snookerBall = safetyResult.snookerBall;
+
+            aiLog(`  SIM SAFETY: score ${oldScore.toFixed(0)} -> ${variant.score.toFixed(0)} | ` +
+                  `endPos (${oldEndPos.x.toFixed(0)},${oldEndPos.y.toFixed(0)}) -> ` +
+                  `(${result.cueBallEndPos.x.toFixed(0)},${result.cueBallEndPos.y.toFixed(0)})`);
         }
     }
 
@@ -1505,8 +1568,11 @@ export class AI {
     predictEndPosition(shot, spinY, exitDirection) {
         // Simple friction physics approximation
         // High power = further travel. Backspin (spinY > 0) checks up. Topspin (spinY < 0) rolls further.
-        
-        let travelFactor = shot.power * 15; // Base distance factor
+
+        // After collision, cue ball retains sin(cutAngle) of its speed
+        const cutRad = (shot.cutAngle || 0) * Math.PI / 180;
+        const retained = shot.cutAngle > 5 ? Math.sin(cutRad) : 0.1; // Near-straight = stun
+        let travelFactor = shot.power * retained * 15;
         
         if (spinY > 0) { // Backspin/Draw
             // On a cut shot, draw acts perpendicular to tangent line somewhat, 
@@ -2557,11 +2623,6 @@ export class AI {
         const powerError = (Math.random() - 0.5) * 2 * settings.powerAccuracy;
         power = power * (1 + powerError);
 
-        // Adjust power for spin (spin was calculated earlier for model prediction)
-        if (spin.y > 0.05) {
-            const drawStrength = Math.min(1, Math.abs(spin.y)); // 0..1
-            power *= (1 + 0.20 * drawStrength); // +0%..+20%
-        }
         aiLog('Final power:', power.toFixed(1), '(error:', (powerError * 100).toFixed(1) + '%)');
 
 
@@ -3055,13 +3116,8 @@ export class AI {
 
             // Apply power error
             let power = safetyShot.power;
-            let spin = safetyShot.spin;
             const powerError = (Math.random() - 0.5) * 2 * settings.powerAccuracy;
             power = power * (1 + powerError);
-            if (spin.y > 0.05) {
-                const drawStrength = Math.min(1, Math.abs(spin.y)); // 0..1
-                power *= (1 + 0.20 * drawStrength); // +0%..+20%
-            }
 
             // Track safety shot for foul avoidance
             this.lastExecutedShot = {
@@ -3666,10 +3722,16 @@ export class AI {
                         }
                         // Try with and without backspin
                         for (const spinY of [-0.5,-0.2, 0, 0.2, 0.5]) { // 0 = stun, 0.5 = backspin
+                            // Apply draw compensation (same as analyzeShotVariants)
+                            let effectivePower = power;
+                            if (spinY > 0.05) {
+                                effectivePower *= (1 + 0.20 * Math.min(1, Math.abs(spinY)));
+                            }
+
                             // Predict where cue ball ends up
                             const cueBallEndPos = this.predictSafetyCueBallPosition(
                                 cueBall.position, target.position, ghostBall,
-                                aimDir, power, spinY, contactAngle
+                                aimDir, effectivePower, spinY, contactAngle
                             );
 
                             // Score this position based on opponent difficulty
@@ -3682,7 +3744,7 @@ export class AI {
                                     target,
                                     ghostBall,
                                     direction: aimDir,
-                                    power,
+                                    power: effectivePower,
                                     spin: { x: 0, y: spinY },
                                     contactAngle,
                                     cueBallEndPos,
@@ -3702,6 +3764,12 @@ export class AI {
 
         // Sort by score and return best
         safetyOptions.sort((a, b) => b.score - a.score);
+
+        // Pass 2: Re-simulate top candidates with Planck physics
+        if (safetyOptions.length > 0) {
+            this.resimulateTopSafetyCandidates(safetyOptions, opponentBalls);
+            safetyOptions.sort((a, b) => b.score - a.score);
+        }
 
         // Log top options
         aiLog('Found', safetyOptions.length, 'safety options');

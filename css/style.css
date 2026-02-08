@@ -3223,3 +3223,786 @@ img.persona-avatar {
         padding-bottom: 4px;
     }
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   CAREER MODE
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Career button in main menu */
+.career-btn-row {
+    margin-top: 6px;
+    padding-top: 6px;
+    border-top: 1px solid #4a4a6a;
+}
+
+.career-btn {
+    background: linear-gradient(135deg, #b8860b 0%, #8b6914 50%, #b8860b 100%) !important;
+    color: #fff !important;
+    font-weight: bold;
+    width: 100%;
+}
+
+.career-btn:hover {
+    background: linear-gradient(135deg, #daa520 0%, #b8860b 50%, #daa520 100%) !important;
+}
+
+/* Career modal */
+.career-modal-content {
+    width: 90vw;
+    max-width: 800px;
+    max-height: 85vh;
+    overflow-y: auto;
+}
+
+/* Career tabs */
+.career-tabs {
+    display: flex;
+    gap: 2px;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #4a4a6a;
+    padding-bottom: 0;
+}
+
+.career-tab {
+    background: rgba(40, 40, 60, 0.6);
+    border: none;
+    color: #aaa;
+    padding: 8px 14px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    border-radius: 6px 6px 0 0;
+    transition: all 0.2s;
+}
+
+.career-tab:hover {
+    background: rgba(60, 60, 80, 0.8);
+    color: #fff;
+}
+
+.career-tab.active {
+    background: rgba(74, 74, 106, 0.8);
+    color: #fff;
+    font-weight: bold;
+}
+
+/* Tab panels */
+.career-tab-panel {
+    display: none;
+    min-height: 300px;
+}
+
+.career-tab-panel.active {
+    display: block;
+}
+
+/* ─── Dashboard ─── */
+.career-dashboard {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.career-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.career-header h3 {
+    margin: 0;
+    color: #daa520;
+}
+
+.career-elo {
+    font-size: 1rem;
+    color: #ccc;
+}
+
+.career-elo strong {
+    color: #fff;
+    font-size: 1.1rem;
+}
+
+/* Mini league tables */
+.career-mini-leagues {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+
+.career-mini-league {
+    background: rgba(30, 30, 50, 0.8);
+    border: 1px solid #3a3a5a;
+    border-radius: 8px;
+    padding: 8px;
+}
+
+.mini-league-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 6px;
+    flex-wrap: wrap;
+}
+
+.mini-league-title {
+    font-weight: bold;
+    font-size: 0.85rem;
+    color: #fff;
+}
+
+.mini-league-div {
+    font-size: 0.7rem;
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-weight: bold;
+}
+
+.mini-league-div.lower {
+    background: #CD7F32;
+    color: #000;
+}
+
+.mini-league-div.upper {
+    background: #FFD700;
+    color: #000;
+}
+
+.mini-league-complete {
+    font-size: 0.7rem;
+    color: #4CAF50;
+    font-weight: bold;
+}
+
+.mini-league-table {
+    width: 100%;
+    font-size: 0.75rem;
+    border-collapse: collapse;
+}
+
+.mini-league-table th {
+    color: #888;
+    text-align: left;
+    padding: 2px 4px;
+    border-bottom: 1px solid #3a3a5a;
+}
+
+.mini-league-table td {
+    padding: 2px 4px;
+    color: #ccc;
+}
+
+.career-user-row {
+    background: rgba(218, 165, 32, 0.15) !important;
+    color: #fff !important;
+}
+
+.career-user-row td {
+    color: #fff;
+    font-weight: bold;
+}
+
+.career-ellipsis td {
+    color: #666;
+    text-align: center;
+}
+
+/* Next match */
+.career-next-match {
+    background: rgba(30, 30, 50, 0.8);
+    border: 1px solid #4a4a6a;
+    border-radius: 8px;
+    padding: 10px;
+}
+
+.career-next-match h4 {
+    margin: 0 0 8px;
+    color: #daa520;
+    font-size: 0.9rem;
+}
+
+.next-match-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.next-match-mode {
+    font-weight: bold;
+    color: #fff;
+    font-size: 0.9rem;
+}
+
+.next-match-opponent {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: #ccc;
+}
+
+.persona-avatar-small {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    font-size: 0.7rem;
+    font-weight: bold;
+    color: #fff;
+}
+
+.opponent-elo {
+    font-size: 0.8rem;
+    color: #888;
+}
+
+.next-match-format {
+    color: #888;
+    font-size: 0.85rem;
+}
+
+.career-play-btn {
+    background: linear-gradient(135deg, #4CAF50 0%, #388E3C 100%);
+    color: #fff;
+    border: none;
+    padding: 6px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: bold;
+    font-size: 0.85rem;
+    transition: background 0.2s;
+}
+
+.career-play-btn:hover {
+    background: linear-gradient(135deg, #66BB6A 0%, #4CAF50 100%);
+}
+
+/* Season complete */
+.career-season-complete {
+    text-align: center;
+    padding: 16px;
+    color: #daa520;
+}
+
+/* ─── Leagues Tab ─── */
+.career-leagues {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.league-mode-tabs {
+    display: flex;
+    gap: 4px;
+}
+
+.league-mode-tab {
+    background: rgba(40, 40, 60, 0.6);
+    border: 1px solid #3a3a5a;
+    color: #aaa;
+    padding: 6px 12px;
+    cursor: pointer;
+    font-size: 0.8rem;
+    border-radius: 4px;
+    transition: all 0.2s;
+}
+
+.league-mode-tab:hover {
+    background: rgba(60, 60, 80, 0.8);
+    color: #fff;
+}
+
+.league-mode-tab.active {
+    background: rgba(74, 74, 106, 0.8);
+    color: #fff;
+    border-color: #6a6a9a;
+}
+
+.league-division-badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    font-weight: bold;
+    margin-bottom: 8px;
+}
+
+.league-division-badge.lower {
+    background: #CD7F32;
+    color: #000;
+}
+
+.league-division-badge.upper {
+    background: #FFD700;
+    color: #000;
+}
+
+.league-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+}
+
+.league-table th {
+    background: rgba(40, 40, 60, 0.8);
+    color: #aaa;
+    padding: 6px 8px;
+    text-align: left;
+    border-bottom: 2px solid #4a4a6a;
+}
+
+.league-table td {
+    padding: 6px 8px;
+    border-bottom: 1px solid #2a2a4a;
+    color: #ccc;
+}
+
+.league-table tr:hover {
+    background: rgba(50, 50, 70, 0.5);
+}
+
+/* ─── Fixtures Tab ─── */
+.career-fixtures {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.fixture-mode-group h4 {
+    margin: 0 0 6px;
+    color: #fff;
+    font-size: 0.9rem;
+}
+
+.fixture-div {
+    font-size: 0.7rem;
+    padding: 1px 6px;
+    border-radius: 3px;
+    background: #4a4a6a;
+    color: #ccc;
+    margin-left: 6px;
+}
+
+.fixture-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 8px;
+    border-radius: 4px;
+    background: rgba(30, 30, 50, 0.6);
+    margin-bottom: 3px;
+}
+
+.fixture-opponent {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 1;
+    min-width: 140px;
+    color: #ccc;
+}
+
+.fixture-format {
+    color: #888;
+    font-size: 0.8rem;
+    width: 40px;
+    text-align: center;
+}
+
+.fixture-result {
+    font-weight: bold;
+    width: 40px;
+    text-align: center;
+    color: #fff;
+}
+
+.fixture-status {
+    font-size: 0.8rem;
+    font-weight: bold;
+    width: 60px;
+    text-align: center;
+}
+
+.fixture-status.upcoming { color: #888; }
+.fixture-status.won { color: #4CAF50; }
+.fixture-status.lost { color: #F44336; }
+
+.fixture-row.won { border-left: 3px solid #4CAF50; }
+.fixture-row.lost { border-left: 3px solid #F44336; }
+.fixture-row.upcoming { border-left: 3px solid #4a4a6a; }
+
+.fixture-play-btn {
+    padding: 4px 12px;
+    font-size: 0.8rem;
+}
+
+/* ─── Achievements Tab ─── */
+.career-achievements-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 8px;
+}
+
+.achievement-card {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px;
+    border-radius: 6px;
+    background: rgba(30, 30, 50, 0.6);
+    border: 1px solid #3a3a5a;
+}
+
+.achievement-card.locked {
+    opacity: 0.5;
+}
+
+.achievement-card.unlocked {
+    border-color: #4a4a6a;
+}
+
+.achievement-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 0.75rem;
+    color: #fff;
+    flex-shrink: 0;
+}
+
+.achievement-info {
+    min-width: 0;
+}
+
+.achievement-name {
+    font-weight: bold;
+    font-size: 0.8rem;
+    color: #fff;
+}
+
+.achievement-desc {
+    font-size: 0.7rem;
+    color: #888;
+}
+
+.achievement-date {
+    font-size: 0.65rem;
+    color: #666;
+}
+
+/* ─── Profile Tab ─── */
+.career-profile {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.profile-section {
+    background: rgba(30, 30, 50, 0.6);
+    border-radius: 8px;
+    padding: 10px;
+}
+
+.profile-section h4 {
+    margin: 0 0 8px;
+    color: #daa520;
+    font-size: 0.9rem;
+}
+
+.profile-name-row {
+    display: flex;
+    gap: 8px;
+}
+
+.profile-name-input {
+    flex: 1;
+    background: rgba(20, 20, 40, 0.8);
+    border: 1px solid #4a4a6a;
+    color: #fff;
+    padding: 6px 10px;
+    border-radius: 4px;
+    font-size: 0.9rem;
+}
+
+.profile-save-name-btn {
+    background: #4a4a6a;
+    color: #fff;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.profile-save-name-btn:hover {
+    background: #6a6a9a;
+}
+
+.profile-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 6px;
+}
+
+.stat-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 4px 8px;
+    background: rgba(20, 20, 40, 0.5);
+    border-radius: 3px;
+}
+
+.stat-label {
+    color: #888;
+    font-size: 0.8rem;
+}
+
+.stat-value {
+    color: #fff;
+    font-weight: bold;
+    font-size: 0.85rem;
+}
+
+/* Match history */
+.profile-history {
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.no-history {
+    color: #666;
+    font-size: 0.85rem;
+}
+
+.history-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 6px;
+    font-size: 0.8rem;
+    border-bottom: 1px solid #2a2a4a;
+}
+
+.history-mode {
+    color: #888;
+    width: 80px;
+    font-size: 0.75rem;
+}
+
+.history-opponent {
+    color: #ccc;
+    flex: 1;
+}
+
+.history-score {
+    color: #fff;
+    font-weight: bold;
+    width: 30px;
+    text-align: center;
+}
+
+.history-result {
+    font-weight: bold;
+    width: 20px;
+    text-align: center;
+}
+
+.history-row.won .history-result { color: #4CAF50; }
+.history-row.lost .history-result { color: #F44336; }
+
+.history-elo {
+    width: 40px;
+    text-align: right;
+    font-size: 0.75rem;
+}
+
+.history-row.won .history-elo { color: #4CAF50; }
+.history-row.lost .history-elo { color: #F44336; }
+
+/* Profile actions */
+.profile-buttons {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.career-action-btn {
+    background: rgba(40, 40, 60, 0.8);
+    border: 1px solid #4a4a6a;
+    color: #ccc;
+    padding: 6px 14px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    transition: all 0.2s;
+}
+
+.career-action-btn:hover {
+    background: rgba(60, 60, 80, 0.9);
+    color: #fff;
+}
+
+.career-danger-btn {
+    border-color: #8B0000;
+    color: #F44336;
+}
+
+.career-danger-btn:hover {
+    background: rgba(139, 0, 0, 0.3);
+}
+
+/* ─── New Career Dialog ─── */
+.career-new-dialog {
+    text-align: center;
+    padding: 20px;
+}
+
+.career-new-dialog h3 {
+    color: #daa520;
+    margin-bottom: 8px;
+}
+
+.career-new-dialog p {
+    color: #aaa;
+    font-size: 0.9rem;
+    margin: 4px 0;
+}
+
+.career-name-entry {
+    margin: 16px auto;
+    max-width: 300px;
+}
+
+.career-name-entry label {
+    display: block;
+    color: #888;
+    margin-bottom: 4px;
+    font-size: 0.85rem;
+}
+
+.career-name-entry input {
+    width: 100%;
+    background: rgba(20, 20, 40, 0.8);
+    border: 1px solid #4a4a6a;
+    color: #fff;
+    padding: 8px 12px;
+    border-radius: 4px;
+    font-size: 1rem;
+    text-align: center;
+    box-sizing: border-box;
+}
+
+.career-new-info {
+    margin: 12px 0;
+}
+
+.career-new-info p {
+    font-size: 0.8rem;
+    color: #888;
+}
+
+.career-start-btn {
+    background: linear-gradient(135deg, #b8860b 0%, #8b6914 50%, #b8860b 100%);
+    color: #fff;
+    border: none;
+    padding: 10px 30px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 1rem;
+    font-weight: bold;
+    margin-top: 10px;
+    transition: background 0.2s;
+}
+
+.career-start-btn:hover {
+    background: linear-gradient(135deg, #daa520 0%, #b8860b 50%, #daa520 100%);
+}
+
+/* ─── Achievement Notification ─── */
+.career-achievement-notif {
+    position: fixed;
+    top: -80px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: rgba(20, 20, 40, 0.95);
+    border: 2px solid #daa520;
+    border-radius: 8px;
+    padding: 10px 16px;
+    z-index: 2000;
+    transition: top 0.5s ease;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+}
+
+.career-achievement-notif.show {
+    top: 20px;
+}
+
+.achievement-notif-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    color: #fff;
+    font-size: 0.8rem;
+}
+
+.achievement-notif-title {
+    color: #daa520;
+    font-size: 0.75rem;
+    font-weight: bold;
+}
+
+.achievement-notif-name {
+    color: #fff;
+    font-size: 0.9rem;
+    font-weight: bold;
+}
+
+/* ─── Career Mobile ─── */
+@media (max-width: 700px) {
+    .career-modal-content {
+        width: 95vw;
+        max-height: 90vh;
+        padding: 10px;
+    }
+
+    .career-tabs {
+        flex-wrap: wrap;
+    }
+
+    .career-tab {
+        padding: 6px 10px;
+        font-size: 0.75rem;
+    }
+
+    .career-mini-leagues {
+        grid-template-columns: 1fr;
+    }
+
+    .career-achievements-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .league-mode-tabs {
+        flex-wrap: wrap;
+    }
+
+    .fixture-row {
+        flex-wrap: wrap;
+    }
+
+    .profile-stats {
+        grid-template-columns: 1fr 1fr;
+    }
+}

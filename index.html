@@ -124,6 +124,9 @@
                                 Resume <span class="resume-info"></span>
                             </button>
                         </div>
+                        <div class="career-btn-row">
+                            <button id="btn-career" class="mode-btn career-btn">Career Mode</button>
+                        </div>
                     </div>
                 </div>
                 <!-- Hidden elements for compatibility -->
@@ -806,6 +809,30 @@
             <div id="freeplay-controls" class="hidden">
                 <button id="btn-rerack" class="menu-btn small">Re-rack</button>
                 <button id="btn-exit-freeplay" class="menu-btn small">Exit</button>
+            </div>
+
+            <!-- Career Mode Modal -->
+            <div id="career-modal" class="modal hidden">
+                <div class="modal-content career-modal-content">
+                    <div class="modal-header">
+                        <h2>Career Mode</h2>
+                        <button class="modal-close" id="close-career-modal">&times;</button>
+                    </div>
+                    <div class="career-tabs">
+                        <button class="career-tab active" data-career-tab="dashboard">Dashboard</button>
+                        <button class="career-tab" data-career-tab="leagues">Leagues</button>
+                        <button class="career-tab" data-career-tab="fixtures">Fixtures</button>
+                        <button class="career-tab" data-career-tab="achievements">Achievements</button>
+                        <button class="career-tab" data-career-tab="profile">Profile</button>
+                    </div>
+                    <div class="career-tab-panels">
+                        <div class="career-tab-panel active" data-career-panel="dashboard" id="career-dashboard"></div>
+                        <div class="career-tab-panel" data-career-panel="leagues" id="career-leagues"></div>
+                        <div class="career-tab-panel" data-career-panel="fixtures" id="career-fixtures"></div>
+                        <div class="career-tab-panel" data-career-panel="achievements" id="career-achievements"></div>
+                        <div class="career-tab-panel" data-career-panel="profile" id="career-profile"></div>
+                    </div>
+                </div>
             </div>
         </div>
         <button id="btn-fullscreen-float" class="fullscreen-float mobile-only" title="Fullscreen">&#x26F6;</button>

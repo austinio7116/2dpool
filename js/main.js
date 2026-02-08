@@ -10,6 +10,9 @@ import { UI } from './ui.js';
 import { Audio } from './audio.js';
 import { AI } from './ai.js';
 import { Vec2 } from './utils.js';
+import { Career } from './career.js';
+import { CareerUI } from './career-ui.js';
+import { getPersonaById } from './ai-personas.js';
 
 class PoolGame {
     constructor() {
@@ -32,6 +35,10 @@ class PoolGame {
         this.ai.setPhysics(this.physics);
         this.ai.initializePocketGeometry(this.physics);
 
+        // Career mode
+        this.career = new Career();
+        this.careerUI = new CareerUI(this.career);
+        this.careerMatch = null;
 
         // Set canvas size for input positioning
         this.input.setCanvasSize(this.table.canvasWidth, this.table.canvasHeight);
@@ -148,6 +155,11 @@ class PoolGame {
         // Menu callbacks
         this.ui.onBallsUpright = () => this.animateBallsUpright();
         this.ui.onConcedeFrame = () => this.concedeFrame();
+
+        // Career callbacks
+        this.careerUI.onPlayMatch = (mode, opponentId, bestOf) => {
+            this.startCareerMatch(mode, opponentId, bestOf);
+        };
 
         // AI callbacks
         this.ai.onShot = (direction, power, spin) => this.executeShot(direction, power, spin);
@@ -336,6 +348,37 @@ class PoolGame {
         this.startGame(mode, options);
     }
 
+    startCareerMatch(mode, opponentId, bestOf) {
+        this.careerMatch = { mode, opponentId, bestOf };
+
+        // Set up AI for this match
+        const persona = getPersonaById(opponentId);
+        this.ai.setEnabled(true);
+        this.ai.trainingMode = false;
+        this.ai.setPersona(persona);
+
+        // Set career player name in UI
+        this.ui.setCareerPlayerName(this.career.getState().playerName);
+
+        // Update UI state so startGame's AI setup reads correct values
+        this.ui.aiEnabled = true;
+        this.ui.aiTrainingMode = false;
+        this.ui.selectedPersonaId = opponentId;
+
+        // Hide career modal and menu
+        this.careerUI.hide();
+        this.ui.mainMenu.classList.add('hidden');
+
+        // Build options
+        const options = { bestOf };
+        if (mode === 'uk8ball') {
+            options.colorScheme = this.ui.ukColorScheme?.value || 'red-yellow';
+        }
+
+        // Start the game
+        this.startGame(mode, options);
+    }
+
     returnToMenu() {
         // Save match if it's a multi-frame match in progress
         if (this.game.match.bestOf > 1 &&
@@ -344,9 +387,22 @@ class PoolGame {
             this.saveMatch();
         }
 
+        // If quitting a career match mid-way, don't record result
+        const wasCareerMatch = !!this.careerMatch || this.wasCareerGame;
+        this.careerMatch = null;
+        this.wasCareerGame = false;
+
+        // Clear career player name
+        this.ui.setCareerPlayerName(null);
+
         this.game.state = GameState.MENU;
         this.ui.showMainMenu();
         this.input.setCanShoot(false);
+
+        // Reopen career modal if we came from career mode
+        if (wasCareerMatch && this.career.isActive()) {
+            this.careerUI.show();
+        }
     }
 
     animateBallsUpright() {
@@ -616,6 +672,23 @@ class PoolGame {
 
         if (winner) {
             this.audio.playWin();
+        }
+
+        // Career mode: record result when match is complete
+        if (this.careerMatch && match?.matchComplete) {
+            const userWon = match.matchWinner === 1;
+            const userFrames = match.player1Frames;
+            const opponentFrames = match.player2Frames;
+            this.career.recordMatchResult(
+                this.careerMatch.mode,
+                this.careerMatch.opponentId,
+                userWon,
+                userFrames,
+                opponentFrames,
+                this.game.getGameInfo()
+            );
+            this.careerMatch = null;
+            this.wasCareerGame = true; // Flag to reopen career modal on menu return
         }
     }
 

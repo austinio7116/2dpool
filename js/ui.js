@@ -3622,8 +3622,16 @@ export class UI {
         return this.aiDifficulty;
     }
 
+    // Set career player name (null to clear)
+    setCareerPlayerName(name) {
+        this.careerPlayerName = name || null;
+    }
+
     // Get player name for display (uses persona names when AI is on)
     getPlayerName(player) {
+        if (player === 1 && this.careerPlayerName) {
+            return this.careerPlayerName;
+        }
         if (player === 2 && this.aiEnabled) {
             return getPersonaById(this.selectedPersonaId).name;
         }

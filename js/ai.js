@@ -813,6 +813,70 @@ export class AI {
         return 'play';
     }
 
+    // 9-ball: Decide whether to push out or play normal after break
+    decidePushOut() {
+        const cueBallPos = this.game.cueBall?.position;
+        if (!cueBallPos) return 'normal';
+
+        // Evaluate if we have a good shot on the lowest ball
+        const validTargets = this.getValidTargets();
+        const pockets = this.table.pockets;
+        let bestShotScore = 0;
+
+        for (const target of validTargets) {
+            for (const pocket of pockets) {
+                const shot = this.evaluatePotentialShot(cueBallPos, target, pocket);
+                if (shot && shot.score > bestShotScore) {
+                    bestShotScore = shot.score;
+                }
+            }
+        }
+
+        aiLog('Push-out decision - best shot score:', bestShotScore);
+
+        // If we have a good shot, play normal
+        if (bestShotScore > 40) {
+            aiLog('Decision: play normal (good shot available)');
+            return 'normal';
+        }
+
+        // No good shot - push out
+        aiLog('Decision: push out (no good shot)');
+        return 'pushout';
+    }
+
+    // 9-ball: Decide whether to play or pass back after opponent pushed out
+    decidePushOutResponse() {
+        const cueBallPos = this.game.cueBall?.position;
+        if (!cueBallPos) return 'play';
+
+        // Evaluate if we have a good shot from current position
+        const validTargets = this.getValidTargets();
+        const pockets = this.table.pockets;
+        let bestShotScore = 0;
+
+        for (const target of validTargets) {
+            for (const pocket of pockets) {
+                const shot = this.evaluatePotentialShot(cueBallPos, target, pocket);
+                if (shot && shot.score > bestShotScore) {
+                    bestShotScore = shot.score;
+                }
+            }
+        }
+
+        aiLog('Push-out response - best shot score:', bestShotScore);
+
+        // If we have a reasonable shot, play
+        if (bestShotScore > 30) {
+            aiLog('Response: play (decent shot available)');
+            return 'play';
+        }
+
+        // Bad position - pass back
+        aiLog('Response: pass back (bad position)');
+        return 'pass';
+    }
+
     // Choose which color to nominate when targeting colors
     chooseColorNomination(balls) {
         // AI strategy: nominate the highest value color that's pottable

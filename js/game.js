@@ -46,9 +46,16 @@ export class Game {
         this.foulReason = '';
         this.turnContinues = false;
 
+        // Cushion contact tracking (for US 8-ball and 9-ball rules)
+        this.railContactAfterHit = false;
+        this.ballPottedThisShot = false;
+
         // 9-ball specific
         this.lowestBall = 1;
         this.pushOutAvailable = false;
+        this.isPushOut = false;
+        this.pushOutPending = null;  // 'offer' or 'response'
+        this.consecutiveFouls = { 1: 0, 2: 0 };
 
         // UK 8-ball specific
         this.ukColorScheme = 'red-yellow';  // 'red-yellow' or 'blue-yellow'
@@ -110,6 +117,8 @@ export class Game {
         this.onFreeBallAwarded = null;      // Snooker: callback when free ball is awarded
         this.onFreeBallNominated = null;    // Snooker: callback when free ball nomination is made
         this.onMissWarning = null;          // Snooker: callback when player has 2 consecutive misses (warning before frame forfeit)
+        this.onPushOutOffer = null;         // 9-ball: callback when push-out is available after break
+        this.onPushOutResponse = null;      // 9-ball: callback when opponent decides after push-out
     }
 
     // Initialize match with bestOf format
@@ -137,6 +146,9 @@ export class Game {
         this.winner = null;
         this.lowestBall = 1;
         this.pushOutAvailable = false;
+        this.isPushOut = false;
+        this.pushOutPending = null;
+        this.consecutiveFouls = { 1: 0, 2: 0 };
 
         // UK 8-ball options
         this.ukColorScheme = options.colorScheme || 'red-yellow';
@@ -311,6 +323,8 @@ export class Game {
         this.foul = false;
         this.foulReason = '';
         this.turnContinues = false;
+        this.railContactAfterHit = false;
+        this.ballPottedThisShot = false;
     }
 
     // Called when a ball collision occurs
@@ -325,9 +339,18 @@ export class Game {
         }
     }
 
+    // Called when a ball hits a rail cushion
+    onRailContact(ball) {
+        // Only counts after cue ball has hit an object ball
+        if (this.firstBallHit !== null) {
+            this.railContactAfterHit = true;
+        }
+    }
+
     // Called when a ball is pocketed
     onBallPocket(ball) {
         this.ballsPocketed.push(ball);
+        this.ballPottedThisShot = true;
 
         if (this.onBallPocketed) {
             this.onBallPocketed(ball);
@@ -371,6 +394,45 @@ export class Game {
             return; // Snooker handles its own state changes
         }
 
+        // 9-ball push-out: if a push-out response is pending, pause for decision
+        if (this.pushOutPending === 'response') {
+            // Switch to opponent for their decision
+            this.switchPlayer();
+            this.state = GameState.AWAITING_DECISION;
+            this.isBreakShot = false;
+            if (this.onPushOutResponse) {
+                this.onPushOutResponse();
+            }
+            if (this.onStateChange) {
+                this.onStateChange(this.state);
+            }
+            return;
+        }
+
+        // 9-ball push-out offer: after break, offer push-out to incoming player
+        if (this.mode === GameMode.NINE_BALL && this.pushOutAvailable && this.isBreakShot) {
+            // The push-out offer happens after the normal turn change flow below
+            this.pushOutPending = 'offer';
+        }
+
+        // 9-ball: Track consecutive fouls (3 = loss)
+        if (this.mode === GameMode.NINE_BALL) {
+            if (this.foul) {
+                this.consecutiveFouls[this.currentPlayer]++;
+                if (this.consecutiveFouls[this.currentPlayer] >= 3) {
+                    this.winner = this.currentPlayer === 1 ? 2 : 1;
+                    this.gameOverReason = 'Three consecutive fouls';
+                    if (this.onFoul) {
+                        this.onFoul(this.foulReason);
+                    }
+                    this.endGame();
+                    return;
+                }
+            } else {
+                this.consecutiveFouls[this.currentPlayer] = 0;
+            }
+        }
+
         // Handle foul - UK 8-ball uses two-shot rule
         if (this.foul) {
             if (this.mode === GameMode.UK_EIGHT_BALL) {
@@ -391,7 +453,17 @@ export class Game {
                 this.state = GameState.BALL_IN_HAND;
             }
             if (this.onFoul) {
-                this.onFoul(this.foulReason + (this.mode === GameMode.UK_EIGHT_BALL ? ' - 2 shots' : ''));
+                let foulMsg = this.foulReason;
+                if (this.mode === GameMode.UK_EIGHT_BALL) {
+                    foulMsg += ' - 2 shots';
+                } else if (this.mode === GameMode.NINE_BALL) {
+                    // After switchPlayer, the fouling player is the OTHER player
+                    const foulingPlayer = this.currentPlayer === 1 ? 2 : 1;
+                    if (this.consecutiveFouls[foulingPlayer] === 2) {
+                        foulMsg += ' - WARNING: 3rd foul loses the game!';
+                    }
+                }
+                this.onFoul(foulMsg);
             }
         } else if (!this.turnContinues) {
             // UK 8-ball: check if we have shots remaining from two-shot rule
@@ -421,6 +493,18 @@ export class Game {
 
         if (this.onStateChange) {
             this.onStateChange(this.state);
+        }
+
+        // 9-ball: Trigger push-out offer after break settles
+        if (this.pushOutPending === 'offer') {
+            // Pause for push-out decision before the incoming player shoots
+            this.state = GameState.AWAITING_DECISION;
+            if (this.onPushOutOffer) {
+                this.onPushOutOffer();
+            }
+            if (this.onStateChange) {
+                this.onStateChange(this.state);
+            }
         }
     }
 
@@ -473,6 +557,14 @@ export class Game {
             }
         }
 
+        // Cushion contact rule: after hitting a legal ball, at least one ball must
+        // be potted or reach a cushion. Skip on break shots.
+        if (!this.foul && !this.isBreakShot && this.firstBallHit &&
+            !this.ballPottedThisShot && !this.railContactAfterHit) {
+            this.foul = true;
+            this.foulReason = 'No ball potted or reached a cushion';
+        }
+
         // Handle 8-ball pocketed
         if (eightBallPocketed) {
             const eightBall = this.balls.find(b => b.isEightBall);
@@ -502,18 +594,30 @@ export class Game {
         if (!this.player1Group && !this.isBreakShot) {
             // Logic: If Low (1-7) potted and High (9-15) NOT potted
             if (lowGroupPocketed.length > 0 && highGroupPocketed.length === 0) {
-                // Determine what Player 1 gets based on who potted the Low ball
-                // We keep the internal string 'solid' to represent 1-7 for compatibility
                 const p1Group = this.currentPlayer === 1 ? 'solid' : 'stripe';
                 this.assignGroups(p1Group);
                 this.turnContinues = true;
-            } 
+            }
             // Logic: If High (9-15) potted and Low (1-7) NOT potted
             else if (highGroupPocketed.length > 0 && lowGroupPocketed.length === 0) {
-                // We keep the internal string 'stripe' to represent 9-15 for compatibility
                 const p1Group = this.currentPlayer === 1 ? 'stripe' : 'solid';
                 this.assignGroups(p1Group);
                 this.turnContinues = true;
+            }
+            // Both groups potted (international rules)
+            else if (lowGroupPocketed.length > 0 && highGroupPocketed.length > 0) {
+                if (!this.foul && this.firstBallHit) {
+                    // Assign group based on first ball hit
+                    if (this.firstBallHit.number >= 1 && this.firstBallHit.number <= 7) {
+                        const p1Group = this.currentPlayer === 1 ? 'solid' : 'stripe';
+                        this.assignGroups(p1Group);
+                    } else if (this.firstBallHit.number >= 9 && this.firstBallHit.number <= 15) {
+                        const p1Group = this.currentPlayer === 1 ? 'stripe' : 'solid';
+                        this.assignGroups(p1Group);
+                    }
+                    this.turnContinues = true;
+                }
+                // If foul: table remains open, no assignment
             }
         } else if (this.player1Group) {
             // Check if player pocketed their own ball
@@ -527,8 +631,25 @@ export class Game {
             }
         }
 
+        // Legal break requirement: at least 3 object balls must be pocketed or
+        // end up past the center line (kitchen side)
+        if (this.isBreakShot && !this.foul) {
+            const centerX = this.table.center.x;
+            let count = 0;
+            for (const ball of this.balls) {
+                if (ball.isCueBall || ball.isEightBall) continue;
+                if (ball.pocketed || ball.position.x < centerX) {
+                    count++;
+                }
+            }
+            if (count < 3) {
+                this.foul = true;
+                this.foulReason = 'Illegal break - fewer than 3 balls past center';
+            }
+        }
+
         // On break, continue if any ball pocketed (except cue ball)
-        if (this.isBreakShot && this.ballsPocketed.length > 0 && !cueBallPocketed) {
+        if (this.isBreakShot && this.ballsPocketed.length > 0 && !cueBallPocketed && !this.foul) {
             this.turnContinues = true;
         }
     }
@@ -539,6 +660,30 @@ export class Game {
         const nineBall = this.balls.find(b => b.number === 9);
         const nineBallPocketed = this.ballsPocketed.includes(nineBall);
 
+        // Push-out: skip all foul rules, no turn continuation
+        if (this.isPushOut) {
+            this.isPushOut = false;
+            this.pushOutAvailable = false;
+
+            // If cue ball was pocketed during push-out, respot it
+            if (cueBallPocketed) {
+                this.cueBall.pocketed = false;
+                this.cueBall.sinking = false;
+            }
+
+            // If 9-ball was pocketed during push-out, respot it
+            if (nineBallPocketed) {
+                nineBall.pocketed = false;
+                nineBall.sinking = false;
+                nineBall.setPosition(this.table.footSpot.x, this.table.footSpot.y);
+            }
+
+            this.updateLowestBall();
+            // Opponent decides: play from here or pass back
+            this.pushOutPending = 'response';
+            return; // onBallsStopped will handle the decision flow
+        }
+
         // Check for first ball hit foul (before updating lowest ball)
         if (!this.firstBallHit && !cueBallPocketed) {
             this.foul = true;
@@ -547,6 +692,14 @@ export class Game {
             // Must hit lowest numbered ball first
             this.foul = true;
             this.foulReason = `Must hit ${this.lowestBall}-ball first`;
+        }
+
+        // Cushion contact rule: after hitting lowest ball, at least one ball must
+        // be potted or reach a cushion. Skip on break shots.
+        if (!this.foul && !this.isBreakShot && this.firstBallHit &&
+            !this.ballPottedThisShot && !this.railContactAfterHit) {
+            this.foul = true;
+            this.foulReason = 'No ball potted or reached a cushion';
         }
 
         // 9-ball pocketed legally - win condition
@@ -572,9 +725,46 @@ export class Game {
             this.turnContinues = true;
         }
 
-        // Push out available after break
+        // Push out available after break (for the incoming player's next shot)
         if (this.isBreakShot) {
             this.pushOutAvailable = true;
+        }
+    }
+
+    // Apply push-out choice from the player whose turn it is
+    applyPushOutChoice(choice) {
+        this.pushOutPending = null;
+
+        if (choice === 'pushout') {
+            // Player chose to push out - mark next shot as push-out
+            this.isPushOut = true;
+            this.state = GameState.PLAYING;
+            if (this.onStateChange) {
+                this.onStateChange(this.state);
+            }
+        } else {
+            // Player chose to play normal shot
+            this.pushOutAvailable = false;
+            this.state = GameState.PLAYING;
+            if (this.onStateChange) {
+                this.onStateChange(this.state);
+            }
+        }
+    }
+
+    // Apply push-out response (opponent decides after push-out was played)
+    applyPushOutResponse(choice) {
+        this.pushOutPending = null;
+
+        if (choice === 'pass') {
+            // Pass back to the player who pushed out
+            this.switchPlayer();
+        }
+        // 'play' = current player plays from this position (no switch needed)
+
+        this.state = GameState.PLAYING;
+        if (this.onStateChange) {
+            this.onStateChange(this.state);
         }
     }
 
@@ -861,6 +1051,9 @@ export class Game {
         this.gameOverReason = '';
         this.lowestBall = 1;
         this.pushOutAvailable = false;
+        this.isPushOut = false;
+        this.pushOutPending = null;
+        this.consecutiveFouls = { 1: 0, 2: 0 };
         this.twoShotRule = false;
         this.shotsRemaining = 1;
         this.isFreeShot = false;
@@ -1003,6 +1196,8 @@ export class Game {
             shotsRemaining: this.shotsRemaining,
             twoShotRule: this.twoShotRule,
             remainingUK: this.getRemainingUKBalls(),
+            // 9-ball consecutive fouls
+            consecutiveFouls: this.consecutiveFouls,
             // Match info
             match: this.getMatchInfo()
         };

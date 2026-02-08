@@ -2808,6 +2808,57 @@ body {
     display: none;
 }
 
+/* Review Table button inside decision panels */
+.review-table-btn {
+    display: block;
+    margin: 12px auto 0;
+    padding: 6px 16px;
+    background: none;
+    border: 1px solid #666;
+    color: #888;
+    font-size: 0.75rem;
+    border-radius: 4px;
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    transition: all 0.2s;
+}
+
+.review-table-btn:hover {
+    border-color: #ffd700;
+    color: #ffd700;
+}
+
+/* Restore Dialog Button (for reviewing table during decisions) */
+.restore-dialog-btn {
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 999;
+    background: linear-gradient(135deg, #2d5a27 0%, #1e3d1a 100%);
+    color: #fff;
+    border: 2px solid #3d7a37;
+    padding: 12px 24px;
+    font-size: 0.95rem;
+    border-radius: 8px;
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+    transition: all 0.2s;
+}
+
+.restore-dialog-btn:hover {
+    background: linear-gradient(135deg, #3d7a37 0%, #2d5a27 100%);
+    transform: translateX(-50%) translateY(-2px);
+    box-shadow: 0 6px 16px rgba(45, 90, 39, 0.4);
+}
+
+.restore-dialog-btn.hidden {
+    display: none;
+}
+
 /* ============================================
    SNOOKER NOMINATION MODAL
    ============================================ */

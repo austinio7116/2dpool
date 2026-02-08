@@ -74,6 +74,7 @@ export class UI {
         this.btnGameMenu = document.getElementById('btn-game-menu');
         this.gameMenuDropdown = document.getElementById('game-menu-dropdown');
         this.btnBallsUpright = document.getElementById('btn-balls-upright');
+        this.btnPickupBall = document.getElementById('btn-pickup-ball');
         this.btnConcedeFrame = document.getElementById('btn-concede-frame');
         this.btnQuitGame = document.getElementById('btn-quit-game');
         this.soundToggle = document.getElementById('sound-toggle');
@@ -253,6 +254,18 @@ export class UI {
         this.freeBallOptionsContainer = document.getElementById('free-ball-options');
         this.hudSnookerNomination = document.getElementById('hud-snooker-nomination');
 
+        // Push-out panel elements
+        this.pushoutPanel = document.getElementById('pushout-panel');
+        this.pushoutResponsePanel = document.getElementById('pushout-response-panel');
+        this.btnPlayNormal = document.getElementById('btn-play-normal');
+        this.btnPushOut = document.getElementById('btn-push-out');
+        this.btnAcceptPushout = document.getElementById('btn-accept-pushout');
+        this.btnPassPushout = document.getElementById('btn-pass-pushout');
+
+        // Restore dialog button (for reviewing table)
+        this.btnRestoreDialog = document.getElementById('btn-restore-dialog');
+        this.hiddenDialogPanel = null;  // Reference to the currently hidden panel
+
         // Callbacks
         this.onGameStart = null;
         this.onPlayAgain = null;
@@ -268,6 +281,9 @@ export class UI {
         this.onSnookerDecision = null;        // Snooker foul decision callback
         this.onColorNomination = null;         // Snooker color nomination callback
         this.onFreeBallNomination = null;      // Snooker free ball nomination callback
+        this.onPushOutChoice = null;           // 9-ball push-out choice callback
+        this.onPushOutResponse = null;         // 9-ball push-out response callback
+        this.onPickUpBall = null;              // Ball-in-hand: pick up ball again
 
         // Current game mode
         this.currentMode = null;
@@ -391,6 +407,13 @@ export class UI {
         this.btnGameMenu.addEventListener('click', (e) => {
             e.stopPropagation();
             this.toggleGameMenu();
+        });
+
+        this.btnPickupBall?.addEventListener('click', () => {
+            this.closeGameMenu();
+            if (this.onPickUpBall) {
+                this.onPickUpBall();
+            }
         });
 
         this.btnBallsUpright.addEventListener('click', () => {
@@ -848,6 +871,51 @@ export class UI {
                 this.hideNominationModal();
                 if (this.onColorNomination) {
                     this.onColorNomination(color);
+                }
+            });
+        });
+
+        // Push-out panel buttons
+        this.btnPlayNormal?.addEventListener('click', () => {
+            this.hidePushOutPanel();
+            if (this.onPushOutChoice) {
+                this.onPushOutChoice('normal');
+            }
+        });
+
+        this.btnPushOut?.addEventListener('click', () => {
+            this.hidePushOutPanel();
+            if (this.onPushOutChoice) {
+                this.onPushOutChoice('pushout');
+            }
+        });
+
+        this.btnAcceptPushout?.addEventListener('click', () => {
+            this.hidePushOutResponsePanel();
+            if (this.onPushOutResponse) {
+                this.onPushOutResponse('play');
+            }
+        });
+
+        this.btnPassPushout?.addEventListener('click', () => {
+            this.hidePushOutResponsePanel();
+            if (this.onPushOutResponse) {
+                this.onPushOutResponse('pass');
+            }
+        });
+
+        // Restore dialog button (for reviewing table during decisions)
+        this.btnRestoreDialog?.addEventListener('click', () => {
+            this.restoreDialog();
+        });
+
+        // Review Table buttons in all decision panels
+        document.querySelectorAll('.review-table-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const panelId = btn.dataset.panel;
+                const panel = document.getElementById(panelId);
+                if (panel) {
+                    this.hideDialogForReview(panel);
                 }
             });
         });
@@ -3782,6 +3850,55 @@ export class UI {
     hideDecisionPanel() {
         if (this.snookerDecisionPanel) {
             this.snookerDecisionPanel.classList.add('hidden');
+        }
+    }
+
+    // Show push-out offer panel
+    showPushOutPanel() {
+        if (this.pushoutPanel) {
+            this.pushoutPanel.classList.remove('hidden');
+        }
+    }
+
+    // Hide push-out offer panel
+    hidePushOutPanel() {
+        if (this.pushoutPanel) {
+            this.pushoutPanel.classList.add('hidden');
+        }
+    }
+
+    // Show push-out response panel
+    showPushOutResponsePanel() {
+        if (this.pushoutResponsePanel) {
+            this.pushoutResponsePanel.classList.remove('hidden');
+        }
+    }
+
+    // Hide push-out response panel
+    hidePushOutResponsePanel() {
+        if (this.pushoutResponsePanel) {
+            this.pushoutResponsePanel.classList.add('hidden');
+        }
+    }
+
+    // Hide a decision dialog to let user review the table
+    hideDialogForReview(panelElement) {
+        if (!panelElement) return;
+        this.hiddenDialogPanel = panelElement;
+        panelElement.classList.add('hidden');
+        if (this.btnRestoreDialog) {
+            this.btnRestoreDialog.classList.remove('hidden');
+        }
+    }
+
+    // Restore the hidden decision dialog
+    restoreDialog() {
+        if (this.hiddenDialogPanel) {
+            this.hiddenDialogPanel.classList.remove('hidden');
+            this.hiddenDialogPanel = null;
+        }
+        if (this.btnRestoreDialog) {
+            this.btnRestoreDialog.classList.add('hidden');
         }
     }
 

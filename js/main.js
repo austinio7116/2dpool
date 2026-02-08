@@ -46,6 +46,9 @@ class PoolGame {
         // Trajectory prediction cache
         this.trajectory = null;
 
+        // Ball-in-hand: track whether player can pick up the ball again
+        this.ballInHandActive = false;
+
         // Match persistence
         this.STORAGE_KEY = 'poolGame_savedMatch';
 
@@ -179,6 +182,15 @@ class PoolGame {
         this.ui.onSnookerDecision = (decision) => this.applySnookerDecision(decision);
         this.ui.onColorNomination = (colorName) => this.handleColorNomination(colorName);
         this.ui.onFreeBallNomination = (ball) => this.handleFreeBallNomination(ball);
+
+        // 9-ball push-out callbacks
+        this.game.onPushOutOffer = () => this.handlePushOutOffer();
+        this.game.onPushOutResponse = () => this.handlePushOutResponse();
+        this.ui.onPushOutChoice = (choice) => this.applyPushOutChoice(choice);
+        this.ui.onPushOutResponse = (choice) => this.applyPushOutResponse(choice);
+
+        // Ball-in-hand pick up callback
+        this.ui.onPickUpBall = () => this.pickUpCueBall();
     }
 
     // Check if current player is controlled by AI (training mode = both players)
@@ -604,6 +616,10 @@ class PoolGame {
         this.game.onShotTaken();
         this.input.setCanShoot(false);
         this.trajectory = null;
+        this.ballInHandActive = false;
+        if (this.ui.btnPickupBall) {
+            this.ui.btnPickupBall.classList.add('hidden');
+        }
     }
 
     updateAim(direction, power) {
@@ -682,7 +698,14 @@ class PoolGame {
         // Check if it's AI's turn (in training mode, both players are AI)
         const isAITurn = this.isCurrentPlayerAI();
 
+        // Hide pick-up ball button by default on any state change
+        if (this.ui.btnPickupBall) {
+            this.ui.btnPickupBall.classList.add('hidden');
+        }
+
         if (state === GameState.BALL_IN_HAND) {
+            this.ballInHandActive = true;
+
             // Determine placement mode based on game type
             // - Snooker: always D-zone
             // - UK 8-ball: always kitchen
@@ -751,6 +774,12 @@ class PoolGame {
                     this.ai.clearFoulTracking();
                 }
                 this.input.setCanShoot(true);
+
+                // Show "Pick Up Ball" option if player just placed the cue ball
+                if (this.ballInHandActive && this.game.mode !== GameMode.FREE_PLAY &&
+                    this.ui.btnPickupBall) {
+                    this.ui.btnPickupBall.classList.remove('hidden');
+                }
             }
         } else if (state === GameState.AWAITING_DECISION) {
             // Snooker: waiting for opponent's decision after foul
@@ -923,6 +952,62 @@ class PoolGame {
     // Handle miss warning (2 consecutive misses - 3rd will forfeit frame)
     handleMissWarning(player) {
         this.ui.showMessage(`Warning: Player ${player} has 2 consecutive misses. One more will forfeit the frame!`, 5000);
+    }
+
+    // Pick up the cue ball again (re-enter ball-in-hand mode)
+    pickUpCueBall() {
+        if (this.game.state !== GameState.PLAYING) return;
+        if (!this.ballInHandActive) return;
+        if (this.isCurrentPlayerAI()) return;
+
+        // Re-enter ball-in-hand state
+        this.game.state = GameState.BALL_IN_HAND;
+        this.handleStateChange(GameState.BALL_IN_HAND);
+    }
+
+    // Handle push-out offer (after break in 9-ball)
+    handlePushOutOffer() {
+        const isAITurn = this.isCurrentPlayerAI();
+
+        if (isAITurn) {
+            setTimeout(() => {
+                const choice = this.ai.decidePushOut();
+                if (choice === 'pushout') {
+                    this.ui.showMessage('Push out', 2000);
+                }
+                this.applyPushOutChoice(choice);
+            }, 500);
+        } else {
+            this.ui.showPushOutPanel();
+        }
+    }
+
+    // Handle push-out response (opponent decides after push-out)
+    handlePushOutResponse() {
+        const isAITurn = this.isCurrentPlayerAI();
+
+        if (isAITurn) {
+            setTimeout(() => {
+                const choice = this.ai.decidePushOutResponse();
+                const text = choice === 'pass' ? 'Pass back' : 'Play on';
+                this.ui.showMessage(`Decision: ${text}`, 2000);
+                this.applyPushOutResponse(choice);
+            }, 500);
+        } else {
+            this.ui.showPushOutResponsePanel();
+        }
+    }
+
+    // Apply push-out choice
+    applyPushOutChoice(choice) {
+        this.ui.hidePushOutPanel();
+        this.game.applyPushOutChoice(choice);
+    }
+
+    // Apply push-out response
+    applyPushOutResponse(choice) {
+        this.ui.hidePushOutResponsePanel();
+        this.game.applyPushOutResponse(choice);
     }
 
     // Start the next frame in a match
@@ -1127,6 +1212,8 @@ class PoolGame {
                     }
                 } else if (event.type === 'pocket') {
                     this.game.onBallPocket(event.ball);
+                } else if (event.type === 'rail') {
+                    this.game.onRailContact(event.ball);
                 }
             }
 

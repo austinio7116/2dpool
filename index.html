@@ -714,6 +714,7 @@
                         <button id="btn-make-replay" class="decision-btn">Make Opponent Replay</button>
                         <button id="btn-restore-position" class="decision-btn hidden">Restore & Replay</button>
                     </div>
+                    <button class="review-table-btn" data-panel="snooker-decision-panel">Review Table</button>
                 </div>
             </div>
 
@@ -730,6 +731,7 @@
                         <button class="nom-ball pink" data-color="pink" title="Pink (6)"></button>
                         <button class="nom-ball black" data-color="black" title="Black (7)"></button>
                     </div>
+                    <button class="review-table-btn" data-panel="snooker-nomination-modal">Review Table</button>
                 </div>
             </div>
 
@@ -741,14 +743,45 @@
                     <div class="nomination-balls" id="free-ball-options">
                         <!-- Balls will be dynamically populated -->
                     </div>
+                    <button class="review-table-btn" data-panel="free-ball-nomination-modal">Review Table</button>
                 </div>
             </div>
+
+            <!-- 9-Ball Push Out Offer Panel -->
+            <div id="pushout-panel" class="snooker-decision-panel hidden">
+                <div class="decision-content">
+                    <h3>Push Out Available</h3>
+                    <p class="decision-info">You may play a push out. No foul rules apply, but your opponent can choose to play or pass the shot back to you.</p>
+                    <div class="decision-buttons">
+                        <button id="btn-play-normal" class="decision-btn">Play Normal Shot</button>
+                        <button id="btn-push-out" class="decision-btn">Push Out</button>
+                    </div>
+                    <button class="review-table-btn" data-panel="pushout-panel">Review Table</button>
+                </div>
+            </div>
+
+            <!-- 9-Ball Push Out Response Panel -->
+            <div id="pushout-response-panel" class="snooker-decision-panel hidden">
+                <div class="decision-content">
+                    <h3>Opponent Pushed Out</h3>
+                    <p class="decision-info">Play from this position, or pass the shot back to your opponent?</p>
+                    <div class="decision-buttons">
+                        <button id="btn-accept-pushout" class="decision-btn">Play</button>
+                        <button id="btn-pass-pushout" class="decision-btn">Pass Back</button>
+                    </div>
+                    <button class="review-table-btn" data-panel="pushout-response-panel">Review Table</button>
+                </div>
+            </div>
+
+            <!-- Floating button to restore hidden decision dialogs -->
+            <button id="btn-restore-dialog" class="restore-dialog-btn hidden">Show Options</button>
 
             <div id="game-hud" class="hidden">
                 <!-- Left Panel - 25% - Game Info -->
                 <div id="hud-info-panel" class="hud-panel">
                     <button id="btn-game-menu" class="game-menu-btn" title="Menu">&#x2630;</button>
                     <div id="game-menu-dropdown" class="game-menu-dropdown hidden">
+                        <button id="btn-pickup-ball" class="game-menu-item hidden">Pick Up Ball</button>
                         <button id="btn-balls-upright" class="game-menu-item hidden">Balls Upright</button>
                         <button id="btn-concede-frame" class="game-menu-item hidden">Concede Frame</button>
                         <button id="btn-quit-game" class="game-menu-item">Quit to Menu</button>

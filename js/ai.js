@@ -1071,11 +1071,7 @@ export class AI {
             return null;
         }
 
-        // 1b. Physics simulation pass — re-score top candidates with accurate position data
         const persona = this.getCurrentPersona();
-        if (persona.position > 0) {
-            this.resimulateTopCandidates(candidateShots, persona);
-        }
 
         // 2. Group variants by target+pocket (each group = one pot opportunity)
         const shotGroups = new Map();
@@ -1141,6 +1137,12 @@ export class AI {
         const viable = chosenGroup.variants.filter(v => v.potScore >= chosenGroup.bestPot - POT_DROP_LIMIT);
         const pool = viable.length > 0 ? viable : chosenGroup.variants;
 
+        // 5b. Physics simulation pass — simulate all viable variants with Planck
+        // Done here (not earlier) so every selectable variant has accurate position data
+        if (persona.position > 0) {
+            this.resimulateTopCandidates(pool, persona);
+        }
+
         // Sort variants: position=0 sorts purely by potScore (easiest pot),
         // position=1 sorts purely by positionScore (best leave)
         // Lower power = more reliable position prediction, so boost position
@@ -1182,6 +1184,8 @@ export class AI {
             if (safePot) {
                 const safeName = safePot.target.colorName || safePot.target.number;
                 aiLog(`RESCUE: ${safeName} pot:${safePot.potScore.toFixed(0)} — taking safe pot over risky position`);
+                // Simulate rescue shot for accurate end position
+                this.resimulateTopCandidates([safePot], persona);
                 this.chosenShotEndPos = safePot.cueBallEndPos ? { x: safePot.cueBallEndPos.x, y: safePot.cueBallEndPos.y } : null;
                 aiLogGroupEnd();
                 return safePot;
@@ -1340,21 +1344,24 @@ export class AI {
      * and replaces their positionScore/compositeScore/cueBallEndPos with accurate values.
      */
     resimulateTopCandidates(candidates, persona) {
-        const SIM_COUNT = 10;
-
-        // Sort by composite score to find top candidates
-        candidates.sort((a, b) => b.compositeScore - a.compositeScore);
-        const topN = candidates.slice(0, SIM_COUNT);
-
         const simulator = this.ensureShotSimulator();
         const posWeight = persona.position * 0.3;
 
-        aiLog(`--- Pass 2: Simulating top ${topN.length} candidates ---`);
+        aiLog(`--- Pass 2: Simulating ${candidates.length} candidates ---`);
 
-        for (const variant of topN) {
+        for (const variant of candidates) {
+            // Apply throw compensation so simulation matches execution
+            const cueBallPos = this.game.cueBall.position;
+            const throwAdj = this.calculateThrowAdjustment(
+                cueBallPos, variant.ghostBall, variant.target.position,
+                variant.pocket.position, variant.cutAngle, variant.power,
+                variant.spin?.y || 0
+            );
+            const simDirection = throwAdj.adjustedDirection;
+
             const result = simulator.simulate(
                 this.game.balls,
-                variant.direction,
+                simDirection,
                 variant.power,
                 variant.spin
             );
@@ -3118,6 +3125,9 @@ export class AI {
             let power = safetyShot.power;
             const powerError = (Math.random() - 0.5) * 2 * settings.powerAccuracy;
             power = power * (1 + powerError);
+
+            // Set planned cue ball position for visualization
+            this.chosenShotEndPos = safetyShot.cueBallEndPos ? { x: safetyShot.cueBallEndPos.x, y: safetyShot.cueBallEndPos.y } : null;
 
             // Track safety shot for foul avoidance
             this.lastExecutedShot = {

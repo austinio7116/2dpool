@@ -114,10 +114,10 @@ export const AI_PERSONAS = [
         initial: 'M',
         elo: 1616,
         lineAccuracy: 0.0,
-        powerAccuracy: 0.01,
+        powerAccuracy: 0.0,
         safetyBias: 0,
-        powerBias: 0.9,
-        spinAbility: 0.9,
+        powerBias: 1,
+        spinAbility: 1,
         shotSelection: 'optimal',
         position: 1.0,
         thinkingDelay: 200

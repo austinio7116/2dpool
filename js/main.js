@@ -365,6 +365,13 @@ class PoolGame {
         this.ui.aiTrainingMode = false;
         this.ui.selectedPersonaId = opponentId;
 
+        // Enforce table restrictions per game mode
+        // Save current selection to restore after match
+        this._preCareerTable = this.ui.getSelectedTable();
+        this._preCareerBallSet = this.ui.getSelectedBallSet();
+        this._enforceCareerTable(mode);
+        this._enforceCareerBallSet(mode);
+
         // Hide career modal and menu
         this.careerUI.hide();
         this.ui.mainMenu.classList.add('hidden');
@@ -381,6 +388,49 @@ class PoolGame {
 
         // Start the game
         this.startGame(mode, options);
+    }
+
+    // Enforce table type for career mode
+    // Snooker: full-size snooker (9) only
+    // UK 8-ball: UK Pub (7) or Mini Snooker (8) only
+    // 8-ball / 9-ball: any table except full-size snooker (1-8)
+    _enforceCareerTable(mode) {
+        const currentTable = this.ui.getSelectedTable();
+        const baseTable = this.ui.getTableNumberForRendering(currentTable);
+
+        if (mode === 'snooker') {
+            if (baseTable !== 9) {
+                this.ui.selectTable(9);
+            }
+        } else if (mode === 'uk8ball') {
+            if (baseTable !== 7 && baseTable !== 8) {
+                this.ui.selectTable(7);
+            }
+        } else {
+            // 8ball / 9ball — any table except full-size snooker - default to tournament
+            if (baseTable == 9 || baseTable == 7 || baseTable == 8) {
+                this.ui.selectTable(4);
+            }
+        }
+    }
+
+    // Enforce ball set for career mode
+    // 8-ball / 9-ball: must be stripe style (numbered) — fall back to American if solid
+    // UK 8-ball: any set is fine
+    // Snooker: handled automatically by startGame
+    _enforceCareerBallSet(mode) {
+        if (mode === 'snooker' || mode === 'uk8ball') return;
+
+        const currentSet = this.ui.getSelectedBallSet();
+        if (!currentSet) return;
+
+        // 8-ball / 9-ball need stripe-style balls (numbered)
+        if (currentSet.style === 'solid') {
+            const americanSet = this.ui.ballSetManager.getSet('american');
+            if (americanSet) {
+                this.ui.selectedBallSet = americanSet;
+            }
+        }
     }
 
     // Check if AI should concede in snooker (hopeless position)
@@ -433,6 +483,19 @@ class PoolGame {
         if (mainMenuBtn) mainMenuBtn.textContent = 'Main Menu';
         const eloDisplay = document.getElementById('career-elo-display');
         if (eloDisplay) eloDisplay.style.display = 'none';
+
+        // Restore user's original table and ball set selections after career match
+        if (wasCareerMatch) {
+            if (this._preCareerTable !== undefined) {
+                this.ui.selectTable(this._preCareerTable);
+                this._preCareerTable = undefined;
+            }
+            if (this._preCareerBallSet !== undefined) {
+                this.ui.selectedBallSet = this._preCareerBallSet;
+                this.ui.updateBallSetPreview();
+                this._preCareerBallSet = undefined;
+            }
+        }
 
         this.game.state = GameState.MENU;
         this.ui.showMainMenu();

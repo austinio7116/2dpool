@@ -1712,12 +1712,9 @@ export class Game {
 
         // If we are in Clearance Phase (no reds left, potting colors in order)
         if (this.colorsPhase) {
-            // Free ball in colors phase: acts as the target color, so advance sequence
-            if (pottedFreeBall) {
-                this.advanceSequence();
-                return;
-            }
-            // If we potted the target, move to next
+            // If we potted the actual target colour, move to next in sequence
+            // Note: a potted free ball gets respotted, so it does NOT advance the sequence
+            // (the real target ball is still on the table)
             const pottedTarget = pocketedBalls.find(b => b.colorName === this.snookerTarget);
             if (pottedTarget) {
                 this.advanceSequence();

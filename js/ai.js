@@ -1244,7 +1244,12 @@ export class AI {
 
                 // Apply Power Penalty (Higher power = lower accuracy)
                 // This is crucial so it prefers the "Softest" successful power
-                const powerPenalty = (power / 50) * 15;
+                // powerBias weights which power levels are preferred:
+                //   >1.0 = reduce penalty (favor harder shots)
+                //   <1.0 = increase penalty (favor softer shots)
+                // Amplified so persona power preference strongly affects shot selection
+                const powerPenaltyScale = Math.max(0.05, 1 + (1 - persona.powerBias) * 3);
+                const powerPenalty = (power / 50) * 15 * powerPenaltyScale;
                 potScore -= powerPenalty;
 
                 // Apply Side Pocket + High Power Risk
@@ -2436,16 +2441,12 @@ export class AI {
         const powerError = (Math.random() - 0.5) * 2 * settings.powerAccuracy;
         power = power * (1 + powerError);
 
-        // Apply persona power bias
-        power *= settings.powerBias;
-
         // Adjust power for spin (spin was calculated earlier for model prediction)
         if (spin.y > 0.05) {
             const drawStrength = Math.min(1, Math.abs(spin.y)); // 0..1
             power *= (1 + 0.20 * drawStrength); // +0%..+20%
         }
-        //power = Math.max(2, Math.min(20, power));
-        aiLog('Final power:', power.toFixed(1), '(error:', (powerError * 100).toFixed(1) + '%, bias:', settings.powerBias + ')');
+        aiLog('Final power:', power.toFixed(1), '(error:', (powerError * 100).toFixed(1) + '%)');
 
 
         // Store visualization data for rendering overlay

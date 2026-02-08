@@ -370,7 +370,7 @@ export const Constants = {
             isSnooker: true,
             redCount: 15,
             tableWidth: 918,   // Wider aspect ratio to match snooker table image
-            boundsOffset: { top: 18, bottom: 15, left: 16, right: 15},  // Move cushions/pockets outward
+            boundsOffset: { top: 18, bottom: 15, left: 18, right: 17},  // Move cushions/pockets outward
             spotlocations: {
                 yellow: { x: -290, y: 73 },   // Left of D
                 green: { x: -290, y: -73 },     // Right of D

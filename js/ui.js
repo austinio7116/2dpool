@@ -3499,7 +3499,7 @@ export class UI {
 
             // Convert persona params to display values (higher = better for display)
             const accuracy = Math.round((1 - persona.lineAccuracy / 1.2) * 100);
-            const power = Math.round(((persona.powerBias - 0.85) / 0.4) * 100);
+            const power = Math.round(((persona.powerBias - 0.75) / 0.55) * 100);
             const spin = Math.round((persona.spinAbility / 0.9) * 100);
             const safety = Math.round(((persona.safetyBias + 30) / 50) * 100);
             const position = Math.round((persona.position || 0) * 100);

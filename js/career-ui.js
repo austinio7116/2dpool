@@ -170,7 +170,7 @@ export class CareerUI {
                 <div class="next-match-info">
                     <div class="next-match-mode">${MODE_LABELS[next.mode]}</div>
                     <div class="next-match-opponent">
-                        <span class="persona-avatar-small" style="background:${persona?.color || '#666'}">${persona?.initial || '?'}</span>
+                        <div class="persona-avatar-mini" style="background:url(assets/avatars/${persona?.initial}.png) center center / cover;"></div>
                         <span>${persona?.name || oppId}</span>
                         <span class="opponent-elo">(${persona?.elo || '?'})</span>
                     </div>
@@ -302,7 +302,7 @@ export class CareerUI {
 
                 html += `<div class="fixture-row ${statusClass}">
                     <div class="fixture-opponent">
-                        <span class="persona-avatar-small" style="background:${persona?.color || '#666'}">${persona?.initial || '?'}</span>
+                        <div class="persona-avatar-mini" style="background:url(assets/avatars/${persona?.initial}.png) center center / cover;"></div>
                         <span>${persona?.name || oppId}</span>
                     </div>
                     <div class="fixture-format">Bo${bestOf}</div>

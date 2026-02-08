@@ -3519,29 +3519,33 @@ export class UI {
                 </div>
             `;
 
-            // Secret long-press on The Machine's avatar to toggle AI debug visualization
+            // Secret long-press on The Machine's card to toggle AI debug visualization
             let suppressClick = false;
             if (persona.id === 'the_machine') {
-                const avatar = card.querySelector('.persona-avatar');
                 let pressTimer = null;
-                const startPress = () => {
+                let pressing = false;
+                const startPress = (e) => {
+                    pressing = true;
                     pressTimer = setTimeout(() => {
                         this.aiDebugVisualization = !this.aiDebugVisualization;
                         localStorage.setItem('poolGame_aiDebugVis', this.aiDebugVisualization);
-                        avatar.style.outline = this.aiDebugVisualization ? '3px solid cyan' : '';
+                        card.style.outline = this.aiDebugVisualization ? '3px solid cyan' : '';
                         suppressClick = true;
                         pressTimer = null;
                     }, 10000);
                 };
                 const endPress = () => {
+                    pressing = false;
                     if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; }
                 };
-                avatar.addEventListener('mousedown', startPress);
-                avatar.addEventListener('mouseup', endPress);
-                avatar.addEventListener('mouseleave', endPress);
-                avatar.addEventListener('touchstart', startPress, { passive: true });
-                avatar.addEventListener('touchend', endPress);
-                avatar.addEventListener('touchcancel', endPress);
+                card.addEventListener('mousedown', startPress);
+                card.addEventListener('mouseup', endPress);
+                card.addEventListener('mouseleave', endPress);
+                card.addEventListener('touchstart', startPress, { passive: false });
+                card.addEventListener('touchend', endPress);
+                card.addEventListener('touchcancel', endPress);
+                // Suppress native long-press context menu while holding
+                card.addEventListener('contextmenu', (e) => { if (pressing) e.preventDefault(); });
             }
 
             card.addEventListener('click', () => {

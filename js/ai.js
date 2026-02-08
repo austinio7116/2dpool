@@ -1616,7 +1616,20 @@ export class AI {
                 nextTargets = remainingBalls.filter(b => b.isColor);
             } else if (ballJustHit.isColor) {
                 const reds = remainingBalls.filter(b => b.isRed);
-                nextTargets = reds.length > 0 ? reds : remainingBalls;
+                if (reds.length > 0) {
+                    nextTargets = reds;
+                } else {
+                    // Colors phase: must pot in sequence yellow→green→brown→blue→pink→black
+                    // Find the lowest remaining color in sequence (excluding the one we just potted)
+                    const sequence = ['yellow', 'green', 'brown', 'blue', 'pink', 'black'];
+                    for (const colorName of sequence) {
+                        const ball = remainingBalls.find(b => b.colorName === colorName);
+                        if (ball) {
+                            nextTargets = [ball];
+                            break;
+                        }
+                    }
+                }
             }
         } else if (this.game.mode === GameMode.NINE_BALL) {
             // --- 9-BALL LOGIC ---

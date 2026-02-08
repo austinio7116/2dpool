@@ -146,7 +146,15 @@ export class Renderer {
 
         // Draw AI visualization overlay (if present)
         if (state.aiVisualization) {
-            // this.drawAIVisualization(state.aiVisualization);
+            if (state.aiVisualization.candidates) {
+                this.drawAIShotCandidates(state.aiVisualization.candidates);
+            }
+            if (state.aiVisualization.chosenEndPos) {
+                this.drawChosenEndPos(state.aiVisualization.chosenEndPos);
+            }
+            if (state.aiVisualization.main) {
+                this.drawAIVisualization(state.aiVisualization.main);
+            }
         }
 
         if (state.showSpinIndicator) {
@@ -1346,6 +1354,93 @@ export class Renderer {
         const G = Math.max(0, ((num >> 8) & 0x00FF) - amt);
         const B = Math.max(0, (num & 0x0000FF) - amt);
         return `rgb(${R},${G},${B})`;
+    }
+
+    // Convert pot score (0-100) to a colour: red → yellow → green
+    scoreToColor(score, alpha = 0.7) {
+        const t = Math.max(0, Math.min(100, score)) / 100;
+        let r, g, b;
+        if (t < 0.5) {
+            const u = t / 0.5;
+            r = 255;
+            g = Math.round(60 + (220 - 60) * u);
+            b = Math.round(60 + (50 - 60) * u);
+        } else {
+            const u = (t - 0.5) / 0.5;
+            r = Math.round(255 + (50 - 255) * u);
+            g = Math.round(220 + (220 - 220) * u);
+            b = 50;
+        }
+        return `rgba(${r},${g},${b},${alpha})`;
+    }
+
+    // Draw all candidate pot options the AI is considering
+    drawAIShotCandidates(candidates) {
+        const ctx = this.ctx;
+        ctx.save();
+        for (const c of candidates) {
+            const color = this.scoreToColor(c.potScore, 0.6);
+
+            // Line from target ball to pocket
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(c.targetPos.x, c.targetPos.y);
+            ctx.lineTo(c.pocketPos.x, c.pocketPos.y);
+            ctx.stroke();
+
+            // Small filled circle at target ball position
+            ctx.fillStyle = color;
+            ctx.beginPath();
+            ctx.arc(c.targetPos.x, c.targetPos.y, 5, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Score label near target ball
+            ctx.fillStyle = this.scoreToColor(c.potScore, 0.9);
+            ctx.font = 'bold 10px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText(Math.round(c.potScore).toString(), c.targetPos.x, c.targetPos.y - 10);
+        }
+        ctx.restore();
+    }
+
+    // Draw crosshair at predicted cue ball end position
+    drawChosenEndPos(endPos) {
+        const ctx = this.ctx;
+        ctx.save();
+
+        // Outer dashed circle
+        ctx.strokeStyle = 'rgba(0, 220, 255, 0.7)';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([4, 3]);
+        ctx.beginPath();
+        ctx.arc(endPos.x, endPos.y, 14, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Cross lines
+        ctx.strokeStyle = 'rgba(0, 220, 255, 0.6)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(endPos.x - 10, endPos.y);
+        ctx.lineTo(endPos.x + 10, endPos.y);
+        ctx.moveTo(endPos.x, endPos.y - 10);
+        ctx.lineTo(endPos.x, endPos.y + 10);
+        ctx.stroke();
+
+        // Inner dot
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+        ctx.beginPath();
+        ctx.arc(endPos.x, endPos.y, 3, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Label
+        ctx.fillStyle = 'rgba(0, 220, 255, 0.8)';
+        ctx.font = 'bold 9px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('CUE', endPos.x, endPos.y + 24);
+
+        ctx.restore();
     }
 
     // Draw AI visualization overlay showing aiming calculations

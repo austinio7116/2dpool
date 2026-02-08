@@ -14,8 +14,9 @@ const SCALE = 100;
 const VELOCITY_SCALE = 60;
 
 export class PlanckPhysics {
-    constructor(table) {
+    constructor(table, options = {}) {
         this.table = table;
+        this.simulationMode = options.simulationMode || false;
         this.collisionEvents = [];
         this.speedMultiplier = 1.0;
         this.accumulator = 0;
@@ -388,6 +389,9 @@ export class PlanckPhysics {
     }
 
     setupContactListener() {
+        // Skip collision event tracking in simulation mode (no sounds/rules needed)
+        if (this.simulationMode) return;
+
         // We only need to track collisions for Game Logic (sounds, rules).
         // Physics (English/Throw) is now handled natively by Planck friction.
         this.world.on('begin-contact', (contact) => {
@@ -678,9 +682,11 @@ export class PlanckPhysics {
         this.syncPlanckToBalls(balls);
         this.stopSlowBalls(balls);
         
-        // Update sinking animation
-        for (const ball of balls) {
-            if (ball.sinking) ball.update();
+        // Update sinking animation (skip in simulation mode)
+        if (!this.simulationMode) {
+            for (const ball of balls) {
+                if (ball.sinking) ball.update();
+            }
         }
 
         return this.collisionEvents;
@@ -704,19 +710,23 @@ export class PlanckPhysics {
                 const fallRadius = pocket.radius - ball.radius * 0.5;
 
                 if (distSq < fallRadius * fallRadius) {
-                    const velocity = body.getLinearVelocity();
-                    const speed = velocity.length();
-
                     ball.position.x = px;
                     ball.position.y = py;
-                    ball.startSinking(pocket);
 
-                    this.collisionEvents.push({
-                        type: 'pocket',
-                        ball: ball,
-                        pocket: pocket,
-                        speed: speed
-                    });
+                    if (this.simulationMode) {
+                        ball.pocketed = true;
+                    } else {
+                        const velocity = body.getLinearVelocity();
+                        const speed = velocity.length();
+                        ball.startSinking(pocket);
+
+                        this.collisionEvents.push({
+                            type: 'pocket',
+                            ball: ball,
+                            pocket: pocket,
+                            speed: speed
+                        });
+                    }
                     break;
                 }
             }

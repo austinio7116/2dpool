@@ -966,7 +966,7 @@ class PoolGame {
             showSpinIndicator: canShoot,
             isSettingSpin: aimState.isSettingSpin,
             isTouchSpin: aimState.isTouchSpin,
-            aiVisualization: this.ai.getVisualization(),
+            aiVisualization: this.ui.aiDebugVisualization ? this.ai.getVisualization() : null,
             showDZone: showDZone,
             shootButton: aimState.shootButton,
             powerOverrideActive: aimState.powerOverrideActive,

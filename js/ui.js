@@ -295,6 +295,7 @@ export class UI {
         this.selectedPersona2Id = this.loadPersonaId('poolGame_personaId2') || 'the_machine';
         this.aiTrainingMode = this.loadAITrainingMode();
         this.pendingPersonaSlot = 1; // Which slot the opponent modal is selecting for
+        this.aiDebugVisualization = localStorage.getItem('poolGame_aiDebugVis') === 'true';
 
         // Table names
         this.tableNames = [
@@ -3518,7 +3519,33 @@ export class UI {
                 </div>
             `;
 
+            // Secret long-press on The Machine's avatar to toggle AI debug visualization
+            let suppressClick = false;
+            if (persona.id === 'the_machine') {
+                const avatar = card.querySelector('.persona-avatar');
+                let pressTimer = null;
+                const startPress = () => {
+                    pressTimer = setTimeout(() => {
+                        this.aiDebugVisualization = !this.aiDebugVisualization;
+                        localStorage.setItem('poolGame_aiDebugVis', this.aiDebugVisualization);
+                        avatar.style.outline = this.aiDebugVisualization ? '3px solid cyan' : '';
+                        suppressClick = true;
+                        pressTimer = null;
+                    }, 10000);
+                };
+                const endPress = () => {
+                    if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; }
+                };
+                avatar.addEventListener('mousedown', startPress);
+                avatar.addEventListener('mouseup', endPress);
+                avatar.addEventListener('mouseleave', endPress);
+                avatar.addEventListener('touchstart', startPress, { passive: true });
+                avatar.addEventListener('touchend', endPress);
+                avatar.addEventListener('touchcancel', endPress);
+            }
+
             card.addEventListener('click', () => {
+                if (suppressClick) { suppressClick = false; return; }
                 this.selectPersona(persona.id, this.pendingPersonaSlot);
             });
 

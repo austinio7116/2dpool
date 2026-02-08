@@ -4,9 +4,10 @@
 import { Vec2 } from './utils.js';
 import { GameMode, GameState } from './game.js';
 import { AI_PERSONAS, getPersonaById } from './ai-personas.js';
+import { ShotSimulator } from './shot-simulator.js';
 
 // Debug logging - set to true to see AI decision making
-const AI_DEBUG = false;
+const AI_DEBUG = true;
 
 // Trained angle error prediction model (loaded dynamically if available)
 let angleModel = null;
@@ -91,6 +92,8 @@ export class AI {
     // Clear visualization when shot completes
     clearVisualization() {
         this.visualization = null;
+        this.shotCandidates = null;
+        this.chosenShotEndPos = null;
     }
 
     // Record that the AI's last shot resulted in a foul (called from main.js)
@@ -116,7 +119,12 @@ export class AI {
 
     // Get current visualization for rendering
     getVisualization() {
-        return this.visualization;
+        if (!this.visualization && !this.shotCandidates && !this.chosenShotEndPos) return null;
+        return {
+            main: this.visualization,
+            candidates: this.shotCandidates,
+            chosenEndPos: this.chosenShotEndPos
+        };
     }
 
     setDifficulty(difficulty) {
@@ -1063,6 +1071,12 @@ export class AI {
             return null;
         }
 
+        // 1b. Physics simulation pass — re-score top candidates with accurate position data
+        const persona = this.getCurrentPersona();
+        if (persona.position > 0) {
+            this.resimulateTopCandidates(candidateShots, persona);
+        }
+
         // 2. Group variants by target+pocket (each group = one pot opportunity)
         const shotGroups = new Map();
         const pocketNames = (p) => p.type + (p.position.x < this.table.center.x ? '-L' : '-R');
@@ -1083,6 +1097,18 @@ export class AI {
         // Sort groups by potScore (pure potting simplicity)
         groups.sort((a, b) => b.bestPot - a.bestPot);
 
+        // Store candidate summary for visualization overlay
+        this.shotCandidates = groups.map(g => {
+            const best = g.variants.reduce((a, b) => b.compositeScore > a.compositeScore ? b : a);
+            return {
+                targetPos: Vec2.clone(best.target.position),
+                pocketPos: { x: best.pocket.position.x, y: best.pocket.position.y },
+                ghostBall: Vec2.clone(best.ghostBall),
+                potScore: g.bestPot,
+                key: g.key
+            };
+        });
+
         // Log ranked pot opportunities
         aiLog('--- Pot opportunities (ranked by potScore) ---');
         for (const g of groups) {
@@ -1092,7 +1118,6 @@ export class AI {
         // 4. Pick the easiest pot, unless a similar-difficulty pot has much better position
         //    Controlled by persona.position: 0 = never switch for position, 1 = full switching
         let chosenGroup = groups[0];
-        const persona = this.getCurrentPersona();
         const posAwareness = persona.position;
 
         if (posAwareness > 0.05) {
@@ -1157,6 +1182,7 @@ export class AI {
             if (safePot) {
                 const safeName = safePot.target.colorName || safePot.target.number;
                 aiLog(`RESCUE: ${safeName} pot:${safePot.potScore.toFixed(0)} — taking safe pot over risky position`);
+                this.chosenShotEndPos = safePot.cueBallEndPos ? { x: safePot.cueBallEndPos.x, y: safePot.cueBallEndPos.y } : null;
                 aiLogGroupEnd();
                 return safePot;
             }
@@ -1169,16 +1195,19 @@ export class AI {
 
             if (safetyQuality < (bestOption.potScore + aggressionBias)) {
                 aiLog(`ATTACK: safety(${safetyQuality.toFixed(0)}) < pot(${bestOption.potScore.toFixed(0)}) + aggression(${aggressionBias}) — going for it`);
+                this.chosenShotEndPos = bestOption.cueBallEndPos ? { x: bestOption.cueBallEndPos.x, y: bestOption.cueBallEndPos.y } : null;
                 aiLogGroupEnd();
                 return bestOption;
             }
 
             aiLog(`SAFETY: safety(${safetyQuality.toFixed(0)}) beats pot(${bestOption.potScore.toFixed(0)}) + aggression(${aggressionBias})`);
+            this.chosenShotEndPos = null;
             aiLogGroupEnd();
             return null;
         }
 
         aiLog(`ACCEPTED (pot:${bestOption.potScore.toFixed(0)} >= threshold:${minPotConfidence.toFixed(0)})`);
+        this.chosenShotEndPos = bestOption.cueBallEndPos ? { x: bestOption.cueBallEndPos.x, y: bestOption.cueBallEndPos.y } : null;
         aiLogGroupEnd();
         return bestOption;
     }
@@ -1285,6 +1314,70 @@ export class AI {
         return variants;
     }
 
+    // Lazy-initialize the shot simulator and keep table style in sync
+    ensureShotSimulator() {
+        if (!this.shotSimulator) {
+            this.shotSimulator = new ShotSimulator(this.table);
+        }
+        // Always sync table style in case it changed between turns
+        if (this.physics && this.physics.tableStyle) {
+            this.shotSimulator.setTableStyle(this.physics.tableStyle);
+        }
+        return this.shotSimulator;
+    }
+
+    /**
+     * Pass 2: Re-score top candidates using physics simulation for accurate position.
+     * Takes the top N candidates by compositeScore, simulates each with Planck physics,
+     * and replaces their positionScore/compositeScore/cueBallEndPos with accurate values.
+     */
+    resimulateTopCandidates(candidates, persona) {
+        const SIM_COUNT = 10;
+
+        // Sort by composite score to find top candidates
+        candidates.sort((a, b) => b.compositeScore - a.compositeScore);
+        const topN = candidates.slice(0, SIM_COUNT);
+
+        const simulator = this.ensureShotSimulator();
+        const posWeight = persona.position * 0.3;
+
+        aiLog(`--- Pass 2: Simulating top ${topN.length} candidates ---`);
+
+        for (const variant of topN) {
+            const result = simulator.simulate(
+                this.game.balls,
+                variant.direction,
+                variant.power,
+                variant.spin
+            );
+
+            // Update with simulated position
+            variant.cueBallEndPos = result.cueBallEndPos;
+
+            // If cue ball was pocketed in simulation, mark as scratch
+            if (result.cueBallPocketed) {
+                variant.positionScore = 0;
+                variant.compositeScore = 0;
+                aiLog(`  SIM ${variant.powerLevel}: SCRATCH`);
+                continue;
+            }
+
+            // Re-evaluate position quality with accurate end position
+            const { score: simPosScore, nextBall } = this.evaluatePositionQuality(
+                result.cueBallEndPos, variant.target
+            );
+
+            const oldPosScore = variant.positionScore;
+            variant.positionScore = simPosScore;
+            variant.nextBall = nextBall;
+
+            // Recalculate composite score with accurate position
+            variant.compositeScore = (variant.potScore * (1 - posWeight)) + (simPosScore * posWeight);
+
+            aiLog(`  SIM ${variant.powerLevel}: pos ${oldPosScore.toFixed(0)} -> ${simPosScore.toFixed(0)} | composite ${variant.compositeScore.toFixed(0)}`);
+        }
+    }
+
     // Unified physics/geometry evaluator: Returns 0 (Impossible) to 100 (Guaranteed)
     // Unified physics/geometry evaluator
     calculatePottingDifficulty(cueBallPos, targetBall, pocket, debug = false) {
@@ -1319,34 +1412,41 @@ export class AI {
             return 0; 
         }
         
-        // Non-linear angle penalty
-        // 0° = 0 penalty, 30° = ~12.5 penalty, 60° = ~50 penalty
-        const anglePenalty = Math.pow(cutAngle / 60, 2) * 50;
+        // Pocket proximity factor: 0 = far (no forgiveness), 1 = on the pocket (max forgiveness)
+        const proximityFactor = Math.max(0, 1 - distTargetToPocket / 350);
+
+        // Non-linear angle penalty, scaled by pocket proximity
+        // Close to pocket: penalty reduced by up to 65% (angular errors don't compound over short distances)
+        const rawAnglePenalty = Math.pow(cutAngle / 60, 2) * 50;
+        const anglePenalty = rawAnglePenalty * (1 - proximityFactor * 0.65);
         score -= anglePenalty;
         penalties.angle = anglePenalty;
 
         // 4. Distance Factors
         // A: Cue to Ghost Ball (Aiming Difficulty)
-        // Using ghost ball distance is slightly more accurate for thin cuts
         const distToGhost = Vec2.distance(cueBallPos, ghostBall);
-        const aimingPenalty = Math.max(0, (distToGhost - 150) / 10); 
+        // Gentler base: straight long shots are manageable
+        const baseAimPenalty = Math.max(0, (distToGhost - 200) / 15);
+        // Cut angle amplifies aiming difficulty (thin cuts over distance are harder)
+        const cutAmplifier = 1 + (cutAngle / 60) * 0.8;
+        const aimingPenalty = baseAimPenalty * cutAmplifier;
         score -= aimingPenalty;
-        penalties.aimDist = aimingPenalty / 3; // Less weight than angle
+        penalties.aimDist = aimingPenalty;
 
         // B: Target to Pocket
-        let lengthPenalty = 0;
-        if (distTargetToPocket < 150) {
-             lengthPenalty = -1 * (distTargetToPocket - 150) / 5;
-             score += lengthPenalty; 
-             penalties.pocketDist = -lengthPenalty; 
-        } else if (distTargetToPocket > 600) {
-             lengthPenalty = 15; 
-             score -= lengthPenalty;
-             penalties.pocketDist = lengthPenalty;
+        if (distTargetToPocket < 120) {
+            // Close to pocket: significant bonus (balls hanging over pocket are near-certain)
+            const proximityBonus = ((120 - distTargetToPocket) / 120) * 30;
+            score += proximityBonus;
+            penalties.pocketDist = -proximityBonus;
+        } else if (distTargetToPocket > 200) {
+            // Long pots get progressively harder (non-linear)
+            const excessDist = distTargetToPocket - 200;
+            const pocketPenalty = Math.pow(excessDist / 250, 1.4) * 25;
+            score -= pocketPenalty;
+            penalties.pocketDist = pocketPenalty;
         } else {
-             lengthPenalty = (distTargetToPocket - 150) / 20;
-             score -= lengthPenalty;
-             penalties.pocketDist = lengthPenalty;
+            penalties.pocketDist = 0;
         }
 
         // 5. Side Pocket Knuckle Penalty
@@ -1361,10 +1461,23 @@ export class AI {
             }
         }
 
-        // 6. Blind Pocket Penalty
-        if (cutAngle > 70) {
-            score -= 20;
-            penalties.extremeCut = 20;
+        // 6. Corner pocket cushion penalty on curved-pocket tables
+        if (pocket.type === 'corner') {
+            const tableStyle = this.physics?.tableStyle || 1;
+            const hasCurvedPockets = tableStyle === 7 || tableStyle === 8 || tableStyle === 9;
+            if (hasCurvedPockets) {
+                // Calculate approach angle vs ideal entry line (diagonal into corner)
+                const idealDir = Vec2.normalize(Vec2.subtract(pocket.position, this.table.center));
+                const approachDot = Vec2.dot(pocketDir, idealDir);
+                const approachAngle = Math.acos(Math.max(-1, Math.min(1, approachDot))) * 180 / Math.PI;
+
+                // Penalty for steep approach angles (running along cushion)
+                if (approachAngle > 35) {
+                    const cushionPenalty = Math.pow((approachAngle - 35) / 45, 1.5) * 25;
+                    score -= cushionPenalty;
+                    penalties.cushionAngle = cushionPenalty;
+                }
+            }
         }
 
         const finalScore = Math.max(0, Math.min(100, score));
@@ -1375,12 +1488,12 @@ export class AI {
             
             let logStr = `   Eval ${ballName}->${pocketName} | Score: ${finalScore.toFixed(0)} | Cut: ${cutAngle.toFixed(1)}°`;
             
-            logStr += ` | P: Angle -${penalties.angle?.toFixed(0) || 0}`;
+            logStr += ` | P: Angle -${penalties.angle?.toFixed(0) || 0} (prox ${proximityFactor.toFixed(2)})`;
             logStr += ` AimDist -${penalties.aimDist?.toFixed(0) || 0}`;
             logStr += ` PktDist ${penalties.pocketDist > 0 ? '-' : '+'}${Math.abs(penalties.pocketDist?.toFixed(0) || 0)}`;
-            
+
             if (penalties.sidePocket) logStr += ` SideKnuckle -${penalties.sidePocket.toFixed(0)}`;
-            if (penalties.extremeCut) logStr += ` BlindCut -${penalties.extremeCut.toFixed(0)}`;
+            if (penalties.cushionAngle) logStr += ` CushionAngle -${penalties.cushionAngle.toFixed(0)}`;
             
             aiLog(logStr);
         }
@@ -1499,9 +1612,12 @@ export class AI {
              if (!this.isPathClear(predictedCuePos, nextBall.position, [nextBall], extraObstacles)) continue;
 
              for (const pocket of this.table.pockets) {
+                 // 0. Check if the path from next ball to pocket is clear of other balls
+                 if (!this.isPathClear(nextBall.position, pocket.position, [nextBall], extraObstacles)) continue;
+
                  // 1. Get the Unified Difficulty Score
                  const difficulty = this.calculatePottingDifficulty(predictedCuePos, nextBall, pocket);
-                 
+
                  // If the shot is too hard (<20), it's not a valid "position" to play for
                  if (difficulty < 20) continue;
 

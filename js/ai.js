@@ -863,6 +863,9 @@ export class AI {
     planAndExecuteShot() {
         if (!this.game || this.game.state !== GameState.PLAYING) return;
 
+        // Clear per-turn caches
+        this._unpottableCache = null;
+
         const settings = this.getCurrentPersona();
 
         this.isThinking = true;
@@ -893,18 +896,49 @@ export class AI {
 
                     this.executeShot(shot);
                 } else {
-                    // No good shot found, play safety
-                    aiLog('Shot type: SAFETY (no good pots)');
+                    // No good shot found — try freeing shot before safety
+                    const persona = this.getCurrentPersona();
+                    let playedFreeingShot = false;
 
-                    // For snooker safety, still need to nominate if on colors
-                    if (this.game.mode === GameMode.SNOOKER && this.game.snookerTarget === 'color') {
-                        const nomination = this.chooseColorNomination(this.game.balls);
-                        if (this.game.setNominatedColor) {
-                            this.game.setNominatedColor(nomination);
+                    if (persona.freeingAbility >= 0.1) {
+                        const ownBalls = this.getOwnGroupBalls();
+                        const unpottable = this.findUnpottableBalls(ownBalls);
+
+                        if (unpottable.length > 0) {
+                            const validTargets = this.getValidTargets();
+                            const freeingShot = this.findBestFreeingShot(validTargets, unpottable);
+                            const threshold = 60 - (persona.freeingAbility * 30); // 30-57
+
+                            if (freeingShot && freeingShot.score >= threshold) {
+                                aiLog('Shot type: FREEING SHOT');
+
+                                // Handle snooker color nomination for freeing shots
+                                if (this.game.mode === GameMode.SNOOKER && this.game.snookerTarget === 'color') {
+                                    const nomination = this.chooseColorNomination(this.game.balls);
+                                    if (this.game.setNominatedColor) {
+                                        this.game.setNominatedColor(nomination);
+                                    }
+                                }
+
+                                this.executeFreeingShot(freeingShot);
+                                playedFreeingShot = true;
+                            }
                         }
                     }
 
-                    this.playSafety();
+                    if (!playedFreeingShot) {
+                        aiLog('Shot type: SAFETY (no good pots)');
+
+                        // For snooker safety, still need to nominate if on colors
+                        if (this.game.mode === GameMode.SNOOKER && this.game.snookerTarget === 'color') {
+                            const nomination = this.chooseColorNomination(this.game.balls);
+                            if (this.game.setNominatedColor) {
+                                this.game.setNominatedColor(nomination);
+                            }
+                        }
+
+                        this.playSafety();
+                    }
                 }
             }
 
@@ -1386,10 +1420,31 @@ export class AI {
             variant.positionScore = simPosScore;
             variant.nextBall = nextBall;
 
-            // Recalculate composite score with accurate position
-            variant.compositeScore = (variant.potScore * (1 - posWeight)) + (simPosScore * posWeight);
+            // Opportunistic freeing bonus: prefer shots that also disturb stuck balls
+            if (persona.freeingAbility >= 0.3) {
+                const ownBalls = this.getOwnGroupBalls();
+                const unpottable = this.findUnpottableBalls(ownBalls);
 
-            aiLog(`  SIM ${variant.powerLevel}: pos ${oldPosScore.toFixed(0)} -> ${simPosScore.toFixed(0)} | composite ${variant.compositeScore.toFixed(0)}`);
+                if (unpottable.length > 0) {
+                    let freeingBonus = 0;
+                    for (const stuckBall of unpottable) {
+                        const simPos = result.ballEndPositions.find(b => b.number === (stuckBall.number ?? stuckBall.colorName));
+                        if (!simPos) { freeingBonus += 15; continue; } // Pocketed
+                        const displacement = Vec2.distance(simPos.position, stuckBall.position);
+                        if (displacement > (stuckBall.radius || 12) * 2) {
+                            freeingBonus += Math.min(10, displacement / 10);
+                        }
+                    }
+                    if (freeingBonus > 0) {
+                        variant.positionScore += freeingBonus;
+                    }
+                }
+            }
+
+            // Recalculate composite score with accurate position
+            variant.compositeScore = (variant.potScore * (1 - posWeight)) + (variant.positionScore * posWeight);
+
+            aiLog(`  SIM ${variant.powerLevel}: pos ${oldPosScore.toFixed(0)} -> ${variant.positionScore.toFixed(0)} | composite ${variant.compositeScore.toFixed(0)}`);
         }
     }
 
@@ -1569,6 +1624,106 @@ export class AI {
         }
 
         return finalScore;
+    }
+
+    // Check whether a ball has ANY viable pot to ANY pocket
+    isBallPottable(ball) {
+        const cueBallRadius = this.game.cueBall?.radius || 12;
+        const ballRadius = ball.radius || 12;
+
+        for (const pocket of this.table.pockets) {
+            // Path from ball to pocket must be clear
+            if (!this.isPathClear(ball.position, pocket.position, [ball])) continue;
+            if (!this.checkPocketApproach(ball.position, pocket)) continue;
+
+            // Ghost ball position for this pocket
+            const pocketDir = Vec2.normalize(Vec2.subtract(pocket.position, ball.position));
+            const ghostBall = Vec2.subtract(ball.position, Vec2.multiply(pocketDir, ballRadius + cueBallRadius));
+
+            // Sample 6 approach angles around the ghost ball
+            for (let angle = 0; angle < 360; angle += 60) {
+                const rad = angle * Math.PI / 180;
+                const samplePos = {
+                    x: ghostBall.x + Math.cos(rad) * cueBallRadius * 6,
+                    y: ghostBall.y + Math.sin(rad) * cueBallRadius * 6
+                };
+                // Clamp to table bounds
+                const b = this.table.bounds;
+                samplePos.x = Math.max(b.left + cueBallRadius, Math.min(b.right - cueBallRadius, samplePos.x));
+                samplePos.y = Math.max(b.top + cueBallRadius, Math.min(b.bottom - cueBallRadius, samplePos.y));
+
+                if (this.isPathClear(samplePos, ghostBall, [ball])) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    // Check pottability at a simulated position using simulated ball layout
+    isBallPottableAtSimPosition(ballPos, ballRadius, simBallPositions, excludeNumber) {
+        const cueBallRadius = this.game.cueBall?.radius || 12;
+
+        for (const pocket of this.table.pockets) {
+            if (!this.checkPocketApproach(ballPos, pocket)) continue;
+
+            // Check if path from ball to pocket is clear of other simulated balls
+            const pocketDir = Vec2.normalize(Vec2.subtract(pocket.position, ballPos));
+            const dist = Vec2.distance(ballPos, pocket.position);
+            let blocked = false;
+
+            for (const simBall of simBallPositions) {
+                if (simBall.number === excludeNumber) continue;
+                const toBall = Vec2.subtract(simBall.position, ballPos);
+                const projection = Vec2.dot(toBall, pocketDir);
+                if (projection < 0 || projection > dist) continue;
+
+                const closestPoint = Vec2.add(ballPos, Vec2.multiply(pocketDir, projection));
+                const perpDist = Vec2.distance(simBall.position, closestPoint);
+                const clearance = (simBall.radius || 12) + ballRadius;
+                if (perpDist < clearance) {
+                    blocked = true;
+                    break;
+                }
+            }
+            if (blocked) continue;
+
+            // Check if a cue ball could approach from any reasonable angle
+            const ghostBall = Vec2.subtract(ballPos, Vec2.multiply(pocketDir, ballRadius + cueBallRadius));
+
+            for (let angle = 0; angle < 360; angle += 60) {
+                const rad = angle * Math.PI / 180;
+                const samplePos = {
+                    x: ghostBall.x + Math.cos(rad) * cueBallRadius * 6,
+                    y: ghostBall.y + Math.sin(rad) * cueBallRadius * 6
+                };
+                const b = this.table.bounds;
+                samplePos.x = Math.max(b.left + cueBallRadius, Math.min(b.right - cueBallRadius, samplePos.x));
+                samplePos.y = Math.max(b.top + cueBallRadius, Math.min(b.bottom - cueBallRadius, samplePos.y));
+
+                // Check approach path clear of simulated balls
+                let approachBlocked = false;
+                const approachDir = Vec2.normalize(Vec2.subtract(ghostBall, samplePos));
+                const approachDist = Vec2.distance(samplePos, ghostBall);
+
+                for (const simBall of simBallPositions) {
+                    if (simBall.number === excludeNumber) continue;
+                    const toBall = Vec2.subtract(simBall.position, samplePos);
+                    const projection = Vec2.dot(toBall, approachDir);
+                    if (projection < 0 || projection > approachDist) continue;
+
+                    const closestPoint = Vec2.add(samplePos, Vec2.multiply(approachDir, projection));
+                    const perpDist = Vec2.distance(simBall.position, closestPoint);
+                    const clearance = (simBall.radius || 12) + cueBallRadius;
+                    if (perpDist < clearance) {
+                        approachBlocked = true;
+                        break;
+                    }
+                }
+                if (!approachBlocked) return true;
+            }
+        }
+        return false;
     }
 
     // Estimate where the cue ball physically stops
@@ -1816,6 +1971,41 @@ export class AI {
             // Specific color in sequence
             return balls.filter(b => b.colorName === target);
         }
+    }
+
+    // Get all of the AI's own group balls (for freeing evaluation)
+    getOwnGroupBalls() {
+        const balls = this.game.balls.filter(b => !b.pocketed && !b.isCueBall);
+        const mode = this.game.mode;
+
+        if (mode === GameMode.SNOOKER) {
+            return balls.filter(b => b.isRed);
+        }
+        if (mode === GameMode.NINE_BALL) {
+            return balls;
+        }
+        // 8-ball / UK 8-ball
+        const playerGroup = this.game.currentPlayer === 1 ? this.game.player1Group : this.game.player2Group;
+        if (!playerGroup) return balls.filter(b => !b.isEightBall);
+
+        return balls.filter(b => {
+            if (playerGroup === 'solid' || playerGroup === 'group1') return b.number >= 1 && b.number <= 7;
+            if (playerGroup === 'stripe' || playerGroup === 'group2') return b.number >= 9 && b.number <= 15;
+            return false;
+        });
+    }
+
+    // Find balls that have no viable pot to any pocket (cached per turn)
+    findUnpottableBalls(targetBalls) {
+        if (!this._unpottableCache) this._unpottableCache = new Map();
+
+        return targetBalls.filter(b => {
+            const key = b.number ?? b.colorName;
+            if (this._unpottableCache.has(key)) return this._unpottableCache.get(key);
+            const unpottable = !this.isBallPottable(b);
+            this._unpottableCache.set(key, unpottable);
+            return unpottable;
+        });
     }
 
     // Evaluate a potential shot (target ball into pocket)
@@ -2685,6 +2875,54 @@ export class AI {
         aiLogGroupEnd();
         if (this.onShot) {
             this.onShot(direction, power, spin);
+        }
+    }
+
+    // Execute a freeing shot (same pattern as safety shot execution)
+    executeFreeingShot(shot) {
+        aiLogGroup('Freeing Shot');
+        const targetName = shot.target.colorName || shot.target.number || 'ball';
+        const freedName = shot.freedBall?.colorName || shot.freedBall?.number || 'ball';
+        aiLog('Target:', targetName, '| Freeing:', freedName,
+              '| Angle:', shot.contactAngle + '°',
+              '| Power:', shot.power.toFixed(1),
+              '| Score:', shot.score.toFixed(1));
+
+        const settings = this.getCurrentPersona();
+
+        // Apply aim error
+        let aimError = (Math.random() - 0.5) * 2 * settings.lineAccuracy * (Math.PI / 180);
+
+        // Check foul avoidance
+        const targetId = shot.target.id || shot.target.number;
+        if (this.lastFoulShot && this.lastFoulShot.targetId === targetId && this.lastFoulShot.isFreeingShot) {
+            const foulAvoidanceAngle = (Math.random() > 0.5 ? 1 : -1) * (5 + Math.random() * 10) * (Math.PI / 180);
+            aimError += foulAvoidanceAngle;
+            aiLog('Foul avoidance: adding', (foulAvoidanceAngle * 180 / Math.PI).toFixed(1) + '° to freeing shot');
+        }
+
+        const direction = Vec2.rotate(shot.direction, aimError);
+
+        // Apply power error
+        let power = shot.power;
+        const powerError = (Math.random() - 0.5) * 2 * settings.powerAccuracy;
+        power = power * (1 + powerError);
+
+        aiLog('Final power:', power.toFixed(1), '(error:', (powerError * 100).toFixed(1) + '%)');
+
+        this.chosenShotEndPos = shot.cueBallEndPos ? { x: shot.cueBallEndPos.x, y: shot.cueBallEndPos.y } : null;
+
+        this.lastExecutedShot = {
+            target: shot.target,
+            pocket: { position: shot.target.position },
+            cutAngle: shot.contactAngle || 0,
+            direction: Vec2.clone(shot.direction),
+            isFreeingShot: true
+        };
+
+        aiLogGroupEnd();
+        if (this.onShot) {
+            this.onShot(Vec2.normalize(direction), power, shot.spin);
         }
     }
 
@@ -3803,6 +4041,130 @@ export class AI {
         });
 
         return safetyOptions[0];
+    }
+
+    // Check if a line segment from contact→end passes within threshold of a ball's position
+    pathPassesNearBall(_start, contact, end, ball, threshold) {
+        // Check the segment from contact to end (post-contact trajectory)
+        const segDir = Vec2.subtract(end, contact);
+        const segLen = Vec2.length(segDir);
+        if (segLen < 1) return Vec2.distance(contact, ball.position) < threshold;
+
+        const segNorm = Vec2.normalize(segDir);
+        const toBall = Vec2.subtract(ball.position, contact);
+        const projection = Vec2.dot(toBall, segNorm);
+        const clampedProj = Math.max(0, Math.min(segLen, projection));
+        const closestPoint = Vec2.add(contact, Vec2.multiply(segNorm, clampedProj));
+        return Vec2.distance(ball.position, closestPoint) < threshold;
+    }
+
+    // Find a shot that legally contacts a valid target and disturbs an unpottable ball
+    findBestFreeingShot(validTargets, unpottableBalls) {
+        const cueBall = this.game.cueBall;
+        const cueBallRadius = cueBall?.radius || 12;
+        const freeingOptions = [];
+
+        for (const target of validTargets) {
+            if (!this.canLegallyReachBall(cueBall.position, target)) continue;
+
+            const ballRadius = target.radius || 12;
+
+            // Same ghost ball / contact angle iteration as findBestSafetyShot
+            for (let contactAngle = 0; contactAngle <= 70; contactAngle += 15) {
+                const sides = contactAngle === 0 ? [0] : [-1, 1];
+                for (const side of sides) {
+                    const directDir = Vec2.normalize(Vec2.subtract(target.position, cueBall.position));
+                    const perpDir = { x: -directDir.y * side, y: directDir.x * side };
+                    const angleRad = contactAngle * Math.PI / 180;
+                    const lateralOffset = Math.sin(angleRad) * (ballRadius + cueBallRadius);
+
+                    const ghostBall = Vec2.add(
+                        Vec2.subtract(target.position, Vec2.multiply(directDir, ballRadius + cueBallRadius)),
+                        Vec2.multiply(perpDir, lateralOffset)
+                    );
+
+                    const aimDir = Vec2.normalize(Vec2.subtract(ghostBall, cueBall.position));
+                    if (!this.willHitTargetFirst(cueBall.position, aimDir, target)) continue;
+
+                    const distanceToGhost = Vec2.distance(cueBall.position, ghostBall);
+                    const minPowerToReach = 5 + (distanceToGhost / 40);
+
+                    for (const power of [8, 12, 18, 24, 30, 38]) {
+                        if (power < minPowerToReach) continue;
+
+                        for (const spinY of [-0.3, 0, 0.3]) {
+                            let effectivePower = power;
+                            if (spinY > 0.05) {
+                                effectivePower *= (1 + 0.20 * Math.min(1, Math.abs(spinY)));
+                            }
+
+                            // Lightweight pre-check: does predicted cue ball path
+                            // pass within ~50px of any unpottable ball?
+                            const predicted = this.predictSafetyCueBallPosition(
+                                cueBall.position, target.position, ghostBall,
+                                aimDir, effectivePower, spinY, contactAngle
+                            );
+
+                            const hitsUnpottable = unpottableBalls.some(ub =>
+                                Vec2.distance(predicted, ub.position) < 50 ||
+                                this.pathPassesNearBall(cueBall.position, target.position, predicted, ub, 50)
+                            );
+                            if (!hitsUnpottable) continue;
+
+                            // Full Planck simulation
+                            const simulator = this.ensureShotSimulator();
+                            const result = simulator.simulate(this.game.balls, aimDir, effectivePower, { x: 0, y: spinY });
+                            if (result.cueBallPocketed) continue;
+
+                            // Check each unpottable ball: did it move? Is it now pottable?
+                            for (const ub of unpottableBalls) {
+                                const simPos = result.ballEndPositions.find(b => b.number === (ub.number ?? ub.colorName));
+                                if (!simPos) {
+                                    // Ball was pocketed in simulation — great result
+                                    freeingOptions.push({
+                                        target, ghostBall, direction: aimDir,
+                                        power: effectivePower, spin: { x: 0, y: spinY },
+                                        contactAngle, cueBallEndPos: result.cueBallEndPos,
+                                        freedBall: ub, score: 80, isFreeingShot: true
+                                    });
+                                    continue;
+                                }
+
+                                const displacement = Vec2.distance(simPos.position, ub.position);
+                                if (displacement < (ub.radius || 12)) continue; // Barely moved
+
+                                // Check pottability at new position
+                                const nowPottable = this.isBallPottableAtSimPosition(
+                                    simPos.position, ub.radius || 12, result.ballEndPositions, ub.number
+                                );
+
+                                let score = 0;
+                                if (nowPottable) score += 60;
+                                else if (displacement > (ub.radius || 12) * 3) score += 15;
+                                else continue;
+
+                                // Position bonus: is the cue ball left somewhere useful?
+                                const posResult = this.evaluatePositionQuality(result.cueBallEndPos, target);
+                                score += posResult.score * 0.2;
+
+                                freeingOptions.push({
+                                    target, ghostBall, direction: aimDir,
+                                    power: effectivePower, spin: { x: 0, y: spinY },
+                                    contactAngle, cueBallEndPos: result.cueBallEndPos,
+                                    freedBall: ub, score, isFreeingShot: true
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if (freeingOptions.length === 0) return null;
+        freeingOptions.sort((a, b) => b.score - a.score);
+
+        aiLog('Found', freeingOptions.length, 'freeing options, best score:', freeingOptions[0].score.toFixed(1));
+        return freeingOptions[0];
     }
 
     // Check if shooting in a direction will hit the target ball FIRST (not another ball)

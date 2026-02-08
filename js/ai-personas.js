@@ -13,6 +13,7 @@ export const AI_PERSONAS = [
         safetyBias: -30,
         powerBias: 1.3,
         spinAbility: 0.3,
+        freeingAbility: 0.0,
         shotSelection: 'random',
         position: 0.0,
         thinkingDelay: 400
@@ -28,6 +29,7 @@ export const AI_PERSONAS = [
         safetyBias: 15,
         powerBias: 0.85,
         spinAbility: 0.5,
+        freeingAbility: 0.2,
         shotSelection: 'top3',
         position: 0.4,
         thinkingDelay: 350
@@ -43,6 +45,7 @@ export const AI_PERSONAS = [
         safetyBias: -15,
         powerBias: 1.3,
         spinAbility: 0.6,
+        freeingAbility: 0.3,
         shotSelection: 'top3',
         position: 0.2,
         thinkingDelay: 300
@@ -58,6 +61,7 @@ export const AI_PERSONAS = [
         safetyBias: 20,
         powerBias: 0.8,
         spinAbility: 0.7,
+        freeingAbility: 0.7,
         shotSelection: 'optimal',
         position: 0.7,
         thinkingDelay: 350
@@ -73,6 +77,7 @@ export const AI_PERSONAS = [
         safetyBias: 10,
         powerBias: 0.85,
         spinAbility: 0.8,
+        freeingAbility: 0.6,
         shotSelection: 'optimal',
         position: 0.6,
         thinkingDelay: 300
@@ -88,6 +93,7 @@ export const AI_PERSONAS = [
         safetyBias: -20,
         powerBias: 1.15,
         spinAbility: 0.9,
+        freeingAbility: 0.4,
         shotSelection: 'optimal',
         position: 0.3,
         thinkingDelay: 250
@@ -103,6 +109,7 @@ export const AI_PERSONAS = [
         safetyBias: 5,
         powerBias: 0.75,
         spinAbility: 0.9,
+        freeingAbility: 0.9,
         shotSelection: 'optimal',
         position: 0.85,
         thinkingDelay: 300
@@ -118,6 +125,7 @@ export const AI_PERSONAS = [
         safetyBias: 0,
         powerBias: 1,
         spinAbility: 1,
+        freeingAbility: 1.0,
         shotSelection: 'optimal',
         position: 1.0,
         thinkingDelay: 200

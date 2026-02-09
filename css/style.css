@@ -4064,3 +4064,9 @@ img.persona-avatar {
         grid-template-columns: 1fr 1fr;
     }
 }
+
+.achievement-image {
+    width: 36px; /* Adjust to your preferred size */
+    height: 36px;
+    object-fit: contain;
+}

@@ -353,8 +353,32 @@ export class CareerUI {
             const lockedClass = unlocked ? 'unlocked' : 'locked';
             const date = unlocked ? new Date(unlocked.unlockedAt).toLocaleDateString() : '';
 
+            // 1. Determine Image Filename (handling league prefixes)
+            let imageFilename = def.id;
+            if (def.id.startsWith('league_lower')) imageFilename = 'league_lower';
+            else if (def.id.startsWith('league_upper')) imageFilename = 'league_upper';
+            const imgSrc = `assets/trophies/${imageFilename}.png`;
+
+            // 2. Image Style: Grayscale + Dark if locked
+            const imgStyle = unlocked ? '' : 'filter: grayscale(100%) brightness(40%); opacity: 0.8;';
+
+            // 3. Icon Style: Hidden by default (display:none). 
+            //    It matches the old logic (background color) if it ends up being revealed.
+            const iconBg = unlocked ? def.color : '#444';
+            const iconStyle = `display: none; background: ${iconBg}`;
+
             html += `<div class="achievement-card ${lockedClass}">
-                <div class="achievement-icon" style="background:${unlocked ? def.color : '#444'}">${def.icon}</div>
+                
+                <img 
+                    src="${imgSrc}" 
+                    class="achievement-image" 
+                    style="${imgStyle}" 
+                    alt="${def.name}"
+                    onerror="this.style.display='none'; this.nextElementSibling.style.display=''"
+                >
+
+                <div class="achievement-icon" style="${iconStyle}">${def.icon}</div>
+
                 <div class="achievement-info">
                     <div class="achievement-name">${def.name}</div>
                     <div class="achievement-desc">${def.description}</div>

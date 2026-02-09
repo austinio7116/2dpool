@@ -1,5 +1,0 @@
-I want to to make major improvements to the main menu UI in this snooker game - first I want the game selection screen to fit all on one screen on landscape mobile without scrolling - I want it to be easy to select table type, ball type and game    
-  mode (remove the sound effects checkbox and simulation speed inputs) - I want the table select to pop up a nice table selection screen where you can actually see the images of the tables in a really attractive style.  For the ball selection I want  
-  a nice ball set selector that shows the full sets for you to choose from.  Finally I want to add a ball set customisation option where you can create and save to local storage custom ball sets that can then be applied in any game mode .  The        
-  custom ball set creator mode needs to have colourpickers and the option to choose solid colours or spots and stripes - with spots and stripes it must be possible to select single colour per group and to select whether the number circles have a      
-  border.  Make sure all these custom ball sets are rendered by the existing 3d ball renderer tool 

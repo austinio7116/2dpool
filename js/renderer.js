@@ -149,6 +149,9 @@ export class Renderer {
             if (state.aiVisualization.candidates) {
                 this.drawAIShotCandidates(state.aiVisualization.candidates);
             }
+            if (state.aiVisualization.safetyCandidates) {
+                this.drawAISafetyCandidates(state.aiVisualization.safetyCandidates);
+            }
             if (state.aiVisualization.chosenEndPos) {
                 this.drawChosenEndPos(state.aiVisualization.chosenEndPos);
             }
@@ -1401,6 +1404,46 @@ export class Renderer {
             ctx.textAlign = 'center';
             ctx.fillText(Math.round(c.potScore).toString(), c.targetPos.x, c.targetPos.y - 10);
         }
+        ctx.restore();
+    }
+
+    // Draw all safety shot candidates the AI considered, coloured by score
+    drawAISafetyCandidates(candidates) {
+        const ctx = this.ctx;
+        ctx.save();
+
+        for (const c of candidates) {
+            const color = this.scoreToColor(c.score, 0.45);
+            const labelColor = this.scoreToColor(c.score, 0.85);
+
+            // Dashed line from target ball to predicted cue ball end position
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 1.5;
+            ctx.setLineDash([4, 4]);
+            ctx.beginPath();
+            ctx.moveTo(c.targetPos.x, c.targetPos.y);
+            ctx.lineTo(c.cueBallEndPos.x, c.cueBallEndPos.y);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            // Small "x" at predicted cue ball end position
+            const sz = 4;
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(c.cueBallEndPos.x - sz, c.cueBallEndPos.y - sz);
+            ctx.lineTo(c.cueBallEndPos.x + sz, c.cueBallEndPos.y + sz);
+            ctx.moveTo(c.cueBallEndPos.x + sz, c.cueBallEndPos.y - sz);
+            ctx.lineTo(c.cueBallEndPos.x - sz, c.cueBallEndPos.y + sz);
+            ctx.stroke();
+
+            // Score label near the end position
+            ctx.fillStyle = labelColor;
+            ctx.font = 'bold 9px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText(Math.round(c.score).toString(), c.cueBallEndPos.x, c.cueBallEndPos.y - 8);
+        }
+
         ctx.restore();
     }
 

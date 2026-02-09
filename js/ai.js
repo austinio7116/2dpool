@@ -3590,43 +3590,84 @@ export class AI {
         return true; // No targets reachable - we're snookered
     }
 
-    // Check if we can legally reach a ball (path is clear of other balls)
+    // Check if we can legally reach a ball (any part of it visible, not just center)
+    // Uses angular range approach: checks if obstructing balls fully cover the
+    // target's visible arc, or if there's a gap the cue ball can travel through
     canLegallyReachBall(fromPos, targetBall) {
         const cueBallRadius = this.game.cueBall?.radius || 12;
         const targetRadius = targetBall.radius || 12;
+        const contactRadius = cueBallRadius + targetRadius;
 
         // Get all other balls (not cue ball, not target, not pocketed)
         const otherBalls = this.game.balls.filter(b =>
             !b.pocketed && !b.isCueBall && b !== targetBall
         );
 
-        const direction = Vec2.subtract(targetBall.position, fromPos);
-        const distance = Vec2.length(direction);
-        if (distance < 1) return true;
+        const toTarget = Vec2.subtract(targetBall.position, fromPos);
+        const distToTarget = Vec2.length(toTarget);
+        if (distToTarget < contactRadius) return true; // Touching or overlapping
 
-        const normalized = Vec2.normalize(direction);
+        // Angle from cue ball to target center
+        const baseAngle = Math.atan2(toTarget.y, toTarget.x);
 
-        // Check each ball to see if it blocks the path
+        // Angular half-width of the target's contact circle as seen from cue ball
+        const targetHalfAngle = Math.asin(Math.min(1, contactRadius / distToTarget));
+
+        // Collect angular ranges blocked by each obstacle (relative to baseAngle)
+        const blockedRanges = [];
+
         for (const ball of otherBalls) {
             const ballRadius = ball.radius || 12;
+            const obstRadius = cueBallRadius + ballRadius;
+
             const toBall = Vec2.subtract(ball.position, fromPos);
-            const projection = Vec2.dot(toBall, normalized);
+            const distToBall = Vec2.length(toBall);
 
-            // Ball is behind us or beyond target
-            if (projection < 0 || projection > distance - targetRadius) continue;
+            // Skip balls beyond the target (they can't block the path)
+            if (distToBall > distToTarget + targetRadius) continue;
 
-            // Calculate perpendicular distance to path
-            const closestPoint = Vec2.add(fromPos, Vec2.multiply(normalized, projection));
-            const perpDist = Vec2.distance(ball.position, closestPoint);
+            // Skip balls we're overlapping with (shouldn't happen in practice)
+            if (distToBall < 1) continue;
 
-            // Check if this ball blocks the path
-            const clearance = ballRadius + cueBallRadius;
-            if (perpDist < clearance) {
-                return false; // Path is blocked
+            // Angular half-width this obstacle blocks
+            const obstHalfAngle = Math.asin(Math.min(1, obstRadius / distToBall));
+
+            // Obstacle's angle relative to the target direction
+            const obstAngle = Math.atan2(toBall.y, toBall.x);
+            let relAngle = obstAngle - baseAngle;
+            // Normalize to [-PI, PI]
+            if (relAngle > Math.PI) relAngle -= 2 * Math.PI;
+            if (relAngle < -Math.PI) relAngle += 2 * Math.PI;
+
+            // Check if this obstacle's blocked range overlaps the target's visible range
+            const obstMin = relAngle - obstHalfAngle;
+            const obstMax = relAngle + obstHalfAngle;
+
+            if (obstMax > -targetHalfAngle && obstMin < targetHalfAngle) {
+                // Clip to target range
+                blockedRanges.push({
+                    min: Math.max(obstMin, -targetHalfAngle),
+                    max: Math.min(obstMax, targetHalfAngle)
+                });
             }
         }
 
-        return true;
+        // No obstructions overlap the target - fully visible
+        if (blockedRanges.length === 0) return true;
+
+        // Sort blocked ranges by start angle, then merge and check for gaps
+        blockedRanges.sort((a, b) => a.min - b.min);
+
+        let covered = -targetHalfAngle;
+        for (const range of blockedRanges) {
+            if (range.min > covered + 0.001) {
+                return true; // Gap found - ball is reachable through this gap
+            }
+            covered = Math.max(covered, range.max);
+        }
+
+        // Check if coverage extends to the end of the target range
+        return covered < targetHalfAngle - 0.001;
     }
 
     // Find an escape shot when snookered - try all angles and trace through rail bounces
@@ -4133,11 +4174,11 @@ export class AI {
         // --- Pass 1a: Breadth-first across ALL balls with fine/mid cuts ---
         // Fine cuts (30-60°) are the bread and butter of safety play:
         //   minimal target movement, predictable cue ball deflection
-        const fineAngles = [55, 60, 65, 70, 75, 80];
+        const fineAngles = [55, 60, 65, 70, 75];
         const fineContacts = this.buildSafetyContacts(cueBall, cueBallRadius, validTargets, fineAngles);
 
         // Moderate power/spin grid for fine cuts
-        const finePowers = [4, 6, 8, 12, 18, 25, 30, 35, 40, 45];
+        const finePowers = [4, 6, 8, 12, 16, 20, 25, 30, 35, 40, 45];
         const fineSpins = [-0.3, 0, 0.3];
 
         for (const c of fineContacts) {
@@ -4156,7 +4197,7 @@ export class AI {
         // --- Pass 1b: Mid-range cuts (15-25°, 65-70°) with moderate grid ---
         const midAngles = [30, 40, 45, 50];
         const midContacts = this.buildSafetyContacts(cueBall, cueBallRadius, validTargets, midAngles);
-        const midPowers = [5, 8, 12, 18, 26, 30, 35, 40, 45];
+        const midPowers = [5, 8, 12, 16, 20, 26, 30, 35, 40, 45];
         const midSpins = [-0.3, 0, 0.3];
 
         for (const c of midContacts) {
@@ -4176,7 +4217,7 @@ export class AI {
         // Gentle full-ball can work for short-range safety but fewer options needed
         const fullAngles = [0, 5, 10];
         const fullContacts = this.buildSafetyContacts(cueBall, cueBallRadius, validTargets, fullAngles);
-        const fullPowers = [3, 5, 8, 12, 30];
+        const fullPowers = [3, 5, 8, 12, 16, 20];
         const fullSpins = [-0.4, 0, 0.4];
 
         for (const c of fullContacts) {
@@ -4190,11 +4231,6 @@ export class AI {
                     if (candidate) safetyOptions.push(candidate);
                 }
             }
-        }
-
-        // Snooker-specific: search for "return to baulk" trajectories
-        if (this.game.mode === GameMode.SNOOKER) {
-            this.findBaulkReturnCandidates(cueBall, cueBallRadius, validTargets, opponentBalls, safetyOptions);
         }
 
         if (safetyOptions.length === 0) {
@@ -4246,115 +4282,6 @@ export class AI {
         return Vec2.distance(ball.position, closestPoint) < threshold;
     }
 
-    // Find a shot that legally contacts a valid target and disturbs an unpottable ball
-    findBestFreeingShot(validTargets, unpottableBalls) {
-        const cueBall = this.game.cueBall;
-        const cueBallRadius = cueBall?.radius || 12;
-        const freeingOptions = [];
-
-        for (const target of validTargets) {
-            if (!this.canLegallyReachBall(cueBall.position, target)) continue;
-
-            const ballRadius = target.radius || 12;
-
-            // Same ghost ball / contact angle iteration as findBestSafetyShot
-            for (let contactAngle = 0; contactAngle <= 70; contactAngle += 15) {
-                const sides = contactAngle === 0 ? [0] : [-1, 1];
-                for (const side of sides) {
-                    const directDir = Vec2.normalize(Vec2.subtract(target.position, cueBall.position));
-                    const perpDir = { x: -directDir.y * side, y: directDir.x * side };
-                    const angleRad = contactAngle * Math.PI / 180;
-                    const lateralOffset = Math.sin(angleRad) * (ballRadius + cueBallRadius);
-
-                    const ghostBall = Vec2.add(
-                        Vec2.subtract(target.position, Vec2.multiply(directDir, ballRadius + cueBallRadius)),
-                        Vec2.multiply(perpDir, lateralOffset)
-                    );
-
-                    const aimDir = Vec2.normalize(Vec2.subtract(ghostBall, cueBall.position));
-                    if (!this.willHitTargetFirst(cueBall.position, aimDir, target)) continue;
-
-                    const distanceToGhost = Vec2.distance(cueBall.position, ghostBall);
-                    const minPowerToReach = 5 + (distanceToGhost / 40);
-
-                    for (const power of [8, 12, 18, 24, 30, 38]) {
-                        if (power < minPowerToReach) continue;
-
-                        for (const spinY of [-0.3, 0, 0.3]) {
-                            let effectivePower = power;
-                            if (spinY > 0.05) {
-                                effectivePower *= (1 + 0.20 * Math.min(1, Math.abs(spinY)));
-                            }
-
-                            // Lightweight pre-check: does predicted cue ball path
-                            // pass within ~50px of any unpottable ball?
-                            const predictedResult = this.predictSafetyCueBallPosition(
-                                cueBall.position, target.position, ghostBall,
-                                aimDir, effectivePower, spinY, contactAngle
-                            );
-                            const predicted = predictedResult.position;
-
-                            const hitsUnpottable = unpottableBalls.some(ub =>
-                                Vec2.distance(predicted, ub.position) < 50 ||
-                                this.pathPassesNearBall(cueBall.position, target.position, predicted, ub, 50)
-                            );
-                            if (!hitsUnpottable) continue;
-
-                            // Full Planck simulation
-                            const simulator = this.ensureShotSimulator();
-                            const result = simulator.simulate(this.game.balls, aimDir, effectivePower, { x: 0, y: spinY });
-                            if (result.cueBallPocketed) continue;
-
-                            // Check each unpottable ball: did it move? Is it now pottable?
-                            for (const ub of unpottableBalls) {
-                                const simPos = result.ballEndPositions.find(b => b.number === (ub.number ?? ub.colorName));
-                                if (!simPos) {
-                                    // Ball was pocketed in simulation — great result
-                                    freeingOptions.push({
-                                        target, ghostBall, direction: aimDir,
-                                        power: effectivePower, spin: { x: 0, y: spinY },
-                                        contactAngle, cueBallEndPos: result.cueBallEndPos,
-                                        freedBall: ub, score: 80, isFreeingShot: true
-                                    });
-                                    continue;
-                                }
-
-                                const displacement = Vec2.distance(simPos.position, ub.position);
-                                if (displacement < (ub.radius || 12)) continue; // Barely moved
-
-                                // Check pottability at new position
-                                const nowPottable = this.isBallPottableAtSimPosition(
-                                    simPos.position, ub.radius || 12, result.ballEndPositions, ub.number
-                                );
-
-                                let score = 0;
-                                if (nowPottable) score += 60;
-                                else if (displacement > (ub.radius || 12) * 3) score += 15;
-                                else continue;
-
-                                // Position bonus: is the cue ball left somewhere useful?
-                                const posResult = this.evaluatePositionQuality(result.cueBallEndPos, target);
-                                score += posResult.score * 0.2;
-
-                                freeingOptions.push({
-                                    target, ghostBall, direction: aimDir,
-                                    power: effectivePower, spin: { x: 0, y: spinY },
-                                    contactAngle, cueBallEndPos: result.cueBallEndPos,
-                                    freedBall: ub, score, isFreeingShot: true
-                                });
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        if (freeingOptions.length === 0) return null;
-        freeingOptions.sort((a, b) => b.score - a.score);
-
-        aiLog('Found', freeingOptions.length, 'freeing options, best score:', freeingOptions[0].score.toFixed(1));
-        return freeingOptions[0];
-    }
 
     // Check if shooting in a direction will hit the target ball FIRST (not another ball)
     willHitTargetFirst(cueBallPos, aimDir, targetBall) {
@@ -4667,32 +4594,6 @@ export class AI {
         return { endPos: targetEndPos, nearPocket, hitsOtherBall, travelDist };
     }
 
-    // Snooker-specific: fill in the gaps with extra in-between angles
-    // The main search covers 0,5,10,15,20,25,30,35,40,45,50,55,60,65,70
-    // This adds 2-3° offsets in the fine cut range for extra precision
-    findBaulkReturnCandidates(cueBall, cueBallRadius, validTargets, opponentBalls, safetyOptions) {
-        const extraAngles = [27, 33, 37, 42, 47, 52, 57, 62];
-        const contacts = this.buildSafetyContacts(cueBall, cueBallRadius, validTargets, extraAngles);
-
-        if (contacts.length === 0) return;
-
-        const powers = [6, 10, 16, 22];
-        const spins = [-0.3, 0, 0.3];
-
-        for (const c of contacts) {
-            for (const power of powers) {
-                if (power < c.minPower) continue;
-                for (const spinY of spins) {
-                    const candidate = this.evaluateSafetyCandidate(
-                        cueBall, c.target, c.ghostBall, c.aimDir,
-                        c.contactAngle, power, spinY, opponentBalls
-                    );
-                    if (candidate) safetyOptions.push(candidate);
-                }
-            }
-        }
-        aiLog('Snooker fine search added', safetyOptions.length, 'total candidates');
-    }
 
     // Score a safety position based on the opponent's "Best Case Scenario"
     // Higher score = Better safety (harder for opponent)

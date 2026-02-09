@@ -1486,7 +1486,9 @@ export class AI {
     }
 
     resimulateTopSafetyCandidates(candidates, opponentBalls) {
-        const SIM_COUNT = 12;
+        // Scale simulation budget by safety skill: -30 bias → 8, 0 → 14, +20 → 18
+        const persona = this.getCurrentPersona();
+        const SIM_COUNT = Math.round(8 + ((persona.safetyBias + 30) / 50) * 10);
 
         candidates.sort((a, b) => b.score - a.score);
 

@@ -268,6 +268,14 @@
 
                 this.game.onBallPocketed = () => {};
 
+                // 9-ball push-out callbacks
+                this.game.onPushOutOffer = () => {
+                    this._handlePushOutOffer();
+                };
+                this.game.onPushOutResponse = () => {
+                    this._handlePushOutResponse();
+                };
+
                 // Snooker callbacks
                 this.game.onFoulDecision = (foulInfo) => {
                     this._handleFoulDecision(foulInfo);
@@ -499,6 +507,20 @@
                     state === GameState.PLAYING) {
                     this._triggerAI();
                 }
+            }
+
+            _handlePushOutOffer() {
+                setTimeout(() => {
+                    const choice = this.ai.decidePushOut();
+                    this.game.applyPushOutChoice(choice);
+                }, 1);
+            }
+
+            _handlePushOutResponse() {
+                setTimeout(() => {
+                    const choice = this.ai.decidePushOutResponse();
+                    this.game.applyPushOutResponse(choice);
+                }, 1);
             }
 
             _handleFoulDecision(foulInfo) {

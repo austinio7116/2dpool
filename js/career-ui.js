@@ -136,7 +136,7 @@ export class CareerUI {
             const sd = league.seasonData;
             if (!sd) continue;
 
-            const divLabel = league.division === 'upper' ? 'Upper' : 'Lower';
+            const divLabel = league.division === 'upper' ? 'Pro' : 'Amateur';
             html += `<div class="career-mini-league">
                 <div class="mini-league-header">
                     <span class="mini-league-title">${MODE_LABELS[mode]}</span>
@@ -242,7 +242,7 @@ export class CareerUI {
         const league = state.leagues[this.activeLeagueMode];
         const sd = league?.seasonData;
         if (sd) {
-            const divLabel = league.division === 'upper' ? 'Upper Division' : 'Lower Division';
+            const divLabel = league.division === 'upper' ? 'Pro Division' : 'Amateur Division';
             html += `<div class="league-division-badge ${league.division}">${divLabel}</div>`;
 
             html += `<table class="league-table">
@@ -300,7 +300,7 @@ export class CareerUI {
             );
 
             html += `<div class="fixture-mode-group">
-                <h4>${MODE_LABELS[mode]} <span class="fixture-div">${state.leagues[mode].division === 'upper' ? 'Upper' : 'Lower'}</span></h4>`;
+                <h4>${MODE_LABELS[mode]} <span class="fixture-div">${state.leagues[mode].division === 'upper' ? 'Pro' : 'Amateur'}</span></h4>`;
 
             const bestOf = this.career.getBestOf(mode);
 

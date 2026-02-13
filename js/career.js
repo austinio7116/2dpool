@@ -30,27 +30,27 @@ const ACHIEVEMENTS = [
     // League champions
     ...GAME_MODES.map(m => ({
         id: `league_lower_${m}`,
-        name: `${MODE_LABELS[m]} Lower Champion`,
-        description: `Win the lower league in ${MODE_LABELS[m]}`,
-        icon: 'L',
+        name: `${MODE_LABELS[m]} Amateur Champion`,
+        description: `Win the amateur league in ${MODE_LABELS[m]}`,
+        icon: 'A',
         color: '#CD7F32'
     })),
     ...GAME_MODES.map(m => ({
         id: `league_upper_${m}`,
-        name: `${MODE_LABELS[m]} Upper Champion`,
-        description: `Win the upper league in ${MODE_LABELS[m]}`,
-        icon: 'U',
+        name: `${MODE_LABELS[m]} Pro Champion`,
+        description: `Win the pro league in ${MODE_LABELS[m]}`,
+        icon: 'P',
         color: '#FFD700'
     })),
     // Milestones
-    { id: 'promotion_first', name: 'Moving Up', description: 'First promotion to upper division', icon: '^', color: '#2196F3' },
+    { id: 'promotion_first', name: 'Moving Up', description: 'First promotion to pro division', icon: '^', color: '#2196F3' },
     { id: 'snooker_break_30', name: 'Solid Break', description: 'Score a snooker break of 30+', icon: '30', color: '#4CAF50' },
     { id: 'snooker_break_50', name: 'Half Century', description: 'Score a snooker break of 50+', icon: '50', color: '#FF9800' },
     { id: 'snooker_century', name: 'Century Break', description: 'Score a snooker break of 100+', icon: '100', color: '#F44336' },
     { id: 'clean_sweep', name: 'Clean Sweep', description: 'Win a match without losing a frame', icon: '!', color: '#E91E63' },
     { id: 'season_complete', name: 'Season Veteran', description: 'Complete an entire season', icon: 'SV', color: '#9C27B0' },
-    { id: 'all_upper', name: 'Top Flight', description: 'All 4 leagues in upper division', icon: 'TF', color: '#FFD700' },
-    { id: 'grand_champion', name: 'Grand Champion', description: 'Win all 4 upper leagues', icon: 'GC', color: '#FFD700' }
+    { id: 'all_upper', name: 'Top Flight', description: 'All 4 leagues in pro division', icon: 'TF', color: '#FFD700' },
+    { id: 'grand_champion', name: 'Grand Champion', description: 'Win all 4 pro leagues', icon: 'GC', color: '#FFD700' }
 ];
 
 function calculateElo(playerElo, opponentElo, won) {

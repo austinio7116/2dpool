@@ -121,7 +121,6 @@ export class Renderer {
 
     render(state) {
         this.clear();
-        this.drawTable();
 
         // Draw table image overlay (if loaded)
         if (this.tableImagesLoaded[this.currentTableIndex]) {
@@ -178,60 +177,6 @@ export class Renderer {
     clear() {
         this.ctx.fillStyle = '#1a1a2e';
         this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
-    }
-
-    drawTable() {
-        const ctx = this.ctx;
-        const t = this.table;
-        const b = t.bounds;
-
-        // Outer wood frame
-        ctx.fillStyle = this.createWoodGradient(0, 0, t.canvasWidth, t.canvasHeight);
-        ctx.fillRect(0, 0, t.canvasWidth, t.canvasHeight);
-
-        // Inner wood border
-        const railOuter = 25;
-        ctx.fillStyle = '#5D2E0C';
-        ctx.fillRect(
-            b.left - railOuter,
-            b.top - railOuter,
-            t.width + railOuter * 2,
-            t.height + railOuter * 2
-        );
-
-        // Green felt playing surface
-        ctx.fillStyle = this.createFeltGradient();
-        ctx.fillRect(b.left, b.top, t.width, t.height);
-        this.drawFeltTexture();
-
-        // Draw cushions with pocket cutouts
-        this.drawCushions();
-
-        // Draw pockets
-        for (const pocket of t.pockets) {
-            this.drawPocket(pocket);
-        }
-
-        // Draw diamond sights
-        for (const diamond of t.diamonds) {
-            this.drawDiamond(diamond);
-        }
-
-        // Kitchen line
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
-        ctx.lineWidth = 1;
-        ctx.setLineDash([5, 5]);
-        ctx.beginPath();
-        ctx.moveTo(t.kitchenLine, b.top);
-        ctx.lineTo(t.kitchenLine, b.bottom);
-        ctx.stroke();
-        ctx.setLineDash([]);
-
-        // Foot spot
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
-        ctx.beginPath();
-        ctx.arc(t.footSpot.x, t.footSpot.y, 3, 0, Math.PI * 2);
-        ctx.fill();
     }
 
     // Draw colorize overlay with HSB adjustments

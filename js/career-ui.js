@@ -60,7 +60,26 @@ export class CareerUI {
     show() {
         if (!this.modal) return;
         this.modal.classList.remove('hidden');
+        this.preloadTrophyImages();
         this.renderActiveTab();
+    }
+
+    preloadTrophyImages() {
+        if (this._trophiesPreloaded) return;
+        this._trophiesPreloaded = true;
+
+        const trophyFiles = [
+            ...AI_PERSONAS.map(p => `beat_${p.id}`),
+            'win_8ball', 'win_uk8ball', 'win_9ball', 'win_snooker',
+            'league_lower', 'league_upper',
+            'promotion_first', 'snooker_break_30', 'snooker_break_50',
+            'snooker_century', 'clean_sweep', 'season_complete',
+            'all_upper', 'grand_champion'
+        ];
+        for (const name of trophyFiles) {
+            const img = new Image();
+            img.src = `assets/trophies/${name}.png`;
+        }
     }
 
     hide() {

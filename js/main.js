@@ -363,6 +363,13 @@ class PoolGame {
     startCareerMatch(mode, opponentId, bestOf) {
         this.careerMatch = { mode, opponentId, bestOf };
 
+        // Save current selections BEFORE overwriting for career
+        this._preCareerTable = this.ui.getSelectedTable();
+        this._preCareerBallSet = this.ui.getSelectedBallSet();
+        this._preCareerPersonaId = this.ui.selectedPersonaId;
+        this._preCareerAIEnabled = this.ui.aiEnabled;
+        this._preCareerTrainingMode = this.ui.aiTrainingMode;
+
         // Set up AI for this match
         const persona = getPersonaById(opponentId);
         this.ai.setEnabled(true);
@@ -378,9 +385,6 @@ class PoolGame {
         this.ui.selectedPersonaId = opponentId;
 
         // Enforce table restrictions per game mode
-        // Save current selection to restore after match
-        this._preCareerTable = this.ui.getSelectedTable();
-        this._preCareerBallSet = this.ui.getSelectedBallSet();
         this._enforceCareerTable(mode);
         this._enforceCareerBallSet(mode);
 
@@ -496,7 +500,7 @@ class PoolGame {
         const eloDisplay = document.getElementById('career-elo-display');
         if (eloDisplay) eloDisplay.style.display = 'none';
 
-        // Restore user's original table and ball set selections after career match
+        // Restore user's original selections after career match
         if (wasCareerMatch) {
             if (this._preCareerTable !== undefined) {
                 this.ui.selectTable(this._preCareerTable);
@@ -506,6 +510,20 @@ class PoolGame {
                 this.ui.selectedBallSet = this._preCareerBallSet;
                 this.ui.updateBallSetPreview();
                 this._preCareerBallSet = undefined;
+            }
+            if (this._preCareerPersonaId !== undefined) {
+                this.ui.selectedPersonaId = this._preCareerPersonaId;
+                this.ui.updatePersonaPreview(1);
+                this._preCareerPersonaId = undefined;
+            }
+            if (this._preCareerAIEnabled !== undefined) {
+                this.ui.aiEnabled = this._preCareerAIEnabled;
+                this.ui.updateAIVisibility();
+                this._preCareerAIEnabled = undefined;
+            }
+            if (this._preCareerTrainingMode !== undefined) {
+                this.ui.aiTrainingMode = this._preCareerTrainingMode;
+                this._preCareerTrainingMode = undefined;
             }
         }
 

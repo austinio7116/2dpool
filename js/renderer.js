@@ -93,6 +93,15 @@ export class Renderer {
         this.cueImage = new Image();
         this.cueImage.src = 'assets/cue.png';
 
+        // Preload avatar images
+        this.avatarImages = {};
+        const avatarInitials = ['C', 'D', 'H', 'M', 'N', 'P', 'R', 'S'];
+        for (const initial of avatarInitials) {
+            const img = new Image();
+            img.src = `assets/avatars/${initial}.png`;
+            this.avatarImages[initial] = img;
+        }
+
         // HSB adjustments for current table
         this.currentHSBAdjustments = null;
 

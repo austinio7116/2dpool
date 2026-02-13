@@ -87,6 +87,7 @@ export class AI {
         // Track last shot that resulted in a foul (to avoid repeated fouls)
         this.lastFoulShot = null;  // { targetId, pocketIndex, cutAngle, direction }
         this.lastExecutedShot = null;  // Most recent shot executed (for foul tracking)
+        this.foulHistory = [];  // Recent foul directions for escape filtering (up to 4)
     }
 
     // Clear visualization when shot completes
@@ -109,13 +110,26 @@ export class AI {
                 direction: foulShot.direction ? Vec2.clone(foulShot.direction) : null,
                 isSafetyShot: foulShot.isSafetyShot || false
             };
-            aiLog('Recorded foul shot:', this.lastFoulShot);
+            // Track direction in foul history for escape filtering
+            if (foulShot.direction) {
+                this.foulHistory.push({
+                    direction: Vec2.clone(foulShot.direction),
+                    targetId: foulShot.target.id || foulShot.target.number,
+                    isSafetyShot: foulShot.isSafetyShot || false
+                });
+                // Keep only last 4 fouls
+                if (this.foulHistory.length > 4) {
+                    this.foulHistory.shift();
+                }
+            }
+            aiLog('Recorded foul shot:', this.lastFoulShot, '| History:', this.foulHistory.length);
         }
     }
 
     // Clear foul tracking (called when AI successfully completes a shot without fouling)
     clearFoulTracking() {
         this.lastFoulShot = null;
+        this.foulHistory = [];
     }
 
     // Get current visualization for rendering
@@ -1030,7 +1044,15 @@ export class AI {
 
             // Adjust power based on table size (15 reds = full size, 6 reds = mini)
             const isFullSize = redBalls.length >= 15;
-            basePower = isFullSize ? 35 : 35;
+
+            // Break skill: 1.0 = perfect (Machine), 0.0 = weakest (Rookie Rick)
+            // Scales all micro-variations so better players break more consistently
+            const breakImprecision = Math.min(1, settings.lineAccuracy / 1.2);
+            aiLog('Break imprecision:', breakImprecision.toFixed(3), '(0=perfect, 1=max)');
+
+            // Power: tight range for skilled players, wider for weaker
+            const powerSpread = 0.5 + breakImprecision * 4; // Machine: ±0.25, Rick: ±2.25
+            basePower = 35 + (Math.random() - 0.5) * powerSpread;
             aiLog('Table size:', isFullSize ? 'FULL (15 reds)' : 'MINI', '| Red count:', redBalls.length);
             aiLog('Target red:', `Ball at (${targetBall.position.x.toFixed(1)}, ${targetBall.position.y.toFixed(1)})`);
 
@@ -1038,8 +1060,11 @@ export class AI {
             // Thin cut on the right side of the ball
             // Full-size tables need thinner contact to avoid sending cue ball into the pack
             const ballRadius = targetBall.radius || 12;
-            const thinCutOffset = isFullSize ? ballRadius * + 1.8 + (Math.random() - 0.5) * 0.01 : ballRadius * + 1.7 + (Math.random() - 0.5) * 0.01;
-            aiLog('Thin cut offset:', thinCutOffset.toFixed(2), '(', isFullSize ? '0.5x' : '0.5x', 'ball radius)');
+            // Cut variation scales with skill: Machine ±0.02, Rick ±0.17
+            const cutSpread = 0.04 + breakImprecision * 0.3;
+            const cutVariation = (Math.random() - 0.5) * cutSpread;
+            const thinCutOffset = isFullSize ? ballRadius * (1.8 + cutVariation) : ballRadius * (1.7 + cutVariation);
+            aiLog('Thin cut offset:', thinCutOffset.toFixed(2), '| variation:', cutVariation.toFixed(3));
 
             // Offset perpendicular to aim line
             const aimDir = Vec2.normalize(Vec2.subtract(targetBall.position, cueBall.position));
@@ -1054,12 +1079,17 @@ export class AI {
             const powerVariation = settings.powerAccuracy * basePower * 0.1;
             const power = basePower - Math.random() * powerVariation;
 
-            // Apply aim error based on difficulty
-            const aimError = (Math.random() - 0.5) * settings.lineAccuracy * (Math.PI / 180);
+            // Aim error: persona's lineAccuracy plus a small natural variation scaled by skill
+            const naturalAimVar = (Math.random() - 0.5) * (0.05 + breakImprecision * 0.45) * (Math.PI / 180);
+            const aimError = (Math.random() - 0.5) * settings.lineAccuracy * (Math.PI / 180) + naturalAimVar;
             const adjustedDir = Vec2.rotate(direction, aimError);
 
-            // Add RIGHT-hand side spin for snooker break 
-            const spin = { x: 0.7 + (Math.random() - 0.5) * 0.2, y: (Math.random() - 0.5) * 0.2 }; // Right side
+            // Side spin: skilled players cluster near optimal 0.7, weaker players vary more
+            const spinSpread = 0.04 + breakImprecision * 0.3; // Machine: ±0.02, Rick: ±0.17
+            const sideSpinBase = 0.7 + (Math.random() - 0.5) * spinSpread;
+            const topSpinSpread = 0.04 + breakImprecision * 0.3;
+            const topSpinVar = (Math.random() - 0.5) * topSpinSpread;
+            const spin = { x: sideSpinBase, y: topSpinVar };
             aiLog('Break shot params:', { power: power.toFixed(1), spin, aimError: (aimError * 180 / Math.PI).toFixed(2) + '°' });
             aiLogGroupEnd();
 
@@ -3383,12 +3413,13 @@ export class AI {
                 const settings = this.getCurrentPersona();
                 let aimError = (Math.random() - 0.5) * 2 * settings.lineAccuracy * (Math.PI / 180);
 
-                // Check if we fouled on the same escape attempt before
-                const targetId = escapeShot.target.id || escapeShot.target.number;
-                if (this.lastFoulShot && this.lastFoulShot.targetId === targetId && this.lastFoulShot.isSafetyShot) {
-                    const foulAvoidanceAngle = (Math.random() > 0.5 ? 1 : -1) * (5 + Math.random() * 10) * (Math.PI / 180);
+                // Scale foul avoidance based on how many consecutive fouls we've had
+                if (this.foulHistory.length > 0) {
+                    const foulCount = this.foulHistory.length;
+                    const baseAvoid = 5 + foulCount * 3;
+                    const foulAvoidanceAngle = (Math.random() > 0.5 ? 1 : -1) * (baseAvoid + Math.random() * 10) * (Math.PI / 180);
                     aimError += foulAvoidanceAngle;
-                    aiLog('Foul avoidance: adding', (foulAvoidanceAngle * 180 / Math.PI).toFixed(1) + '° to escape shot');
+                    aiLog(`Foul avoidance (${foulCount} fouls): adding ${(foulAvoidanceAngle * 180 / Math.PI).toFixed(1)}° to escape shot`);
                 }
 
                 const adjustedDir = Vec2.rotate(escapeShot.direction, aimError);
@@ -3439,12 +3470,13 @@ export class AI {
             // Apply aim error based on difficulty
             let aimError = (Math.random() - 0.5) * 2 * settings.lineAccuracy * (Math.PI / 180);
 
-            // Check if we fouled on a similar safety before
-            const targetId = safetyShot.target.id || safetyShot.target.number;
-            if (this.lastFoulShot && this.lastFoulShot.targetId === targetId && this.lastFoulShot.isSafetyShot) {
-                const foulAvoidanceAngle = (Math.random() > 0.5 ? 1 : -1) * (5 + Math.random() * 10) * (Math.PI / 180);
+            // Scale foul avoidance based on consecutive fouls
+            if (this.foulHistory.length > 0) {
+                const foulCount = this.foulHistory.length;
+                const baseAvoid = 5 + foulCount * 3;
+                const foulAvoidanceAngle = (Math.random() > 0.5 ? 1 : -1) * (baseAvoid + Math.random() * 10) * (Math.PI / 180);
                 aimError += foulAvoidanceAngle;
-                aiLog('Foul avoidance: adding', (foulAvoidanceAngle * 180 / Math.PI).toFixed(1) + '° to safety shot');
+                aiLog(`Foul avoidance (${foulCount} fouls): adding ${(foulAvoidanceAngle * 180 / Math.PI).toFixed(1)}° to safety shot`);
             }
 
             const adjustedDir = Vec2.rotate(safetyShot.direction, aimError);
@@ -3496,12 +3528,13 @@ export class AI {
                 const settings = this.getCurrentPersona();
                 let aimError = (Math.random() - 0.5) * 2 * settings.lineAccuracy * (Math.PI / 180);
 
-                // Check if we fouled on the same escape attempt before
-                const targetId = desperateEscape.target.id || desperateEscape.target.number;
-                if (this.lastFoulShot && this.lastFoulShot.targetId === targetId && this.lastFoulShot.isSafetyShot) {
-                    const foulAvoidanceAngle = (Math.random() > 0.5 ? 1 : -1) * (10 + Math.random() * 20) * (Math.PI / 180);
+                // Scale foul avoidance based on consecutive fouls - desperate gets even larger shifts
+                if (this.foulHistory.length > 0) {
+                    const foulCount = this.foulHistory.length;
+                    const baseAvoid = 10 + foulCount * 5;
+                    const foulAvoidanceAngle = (Math.random() > 0.5 ? 1 : -1) * (baseAvoid + Math.random() * 20) * (Math.PI / 180);
                     aimError += foulAvoidanceAngle;
-                    aiLog('Foul avoidance: adding', (foulAvoidanceAngle * 180 / Math.PI).toFixed(1) + '° to desperate escape');
+                    aiLog(`Desperate foul avoidance (${foulCount} fouls): adding ${(foulAvoidanceAngle * 180 / Math.PI).toFixed(1)}°`);
                 }
 
                 const adjustedDir = Vec2.rotate(desperateEscape.direction, aimError);
@@ -3550,14 +3583,13 @@ export class AI {
         const settings = this.getCurrentPersona();
         let aimError = (Math.random() - 0.5) * 2 * settings.lineAccuracy * (Math.PI / 180);
 
-        // Check if this is the same target we fouled on last time
-        const targetId = bestTarget.id || bestTarget.number;
-        if (this.lastFoulShot && this.lastFoulShot.targetId === targetId) {
-            // Add significant angle variation to try a different approach
-            // Try to come at the ball from a different angle (±15-30 degrees)
-            const foulAvoidanceAngle = (Math.random() > 0.5 ? 1 : -1) * (15 + Math.random() * 15) * (Math.PI / 180);
+        // Scale fallback foul avoidance based on consecutive fouls
+        if (this.foulHistory.length > 0) {
+            const foulCount = this.foulHistory.length;
+            const baseAvoid = 15 + foulCount * 5;
+            const foulAvoidanceAngle = (Math.random() > 0.5 ? 1 : -1) * (baseAvoid + Math.random() * 15) * (Math.PI / 180);
             aimError += foulAvoidanceAngle;
-            aiLog('Foul avoidance: adding', (foulAvoidanceAngle * 180 / Math.PI).toFixed(1) + '° to try different approach');
+            aiLog(`Fallback foul avoidance (${foulCount} fouls): adding ${(foulAvoidanceAngle * 180 / Math.PI).toFixed(1)}°`);
         }
 
         const adjustedDir = Vec2.rotate(direction, aimError);
@@ -3745,27 +3777,33 @@ export class AI {
         }
 
         // 3. PHASE THREE: Foul Memory Filtering
-        // Filter out shots that look exactly like the last foul
-        if (this.lastFoulShot && candidates.length > 0) {
-            const foulDir = this.lastFoulShot.direction;
-            
-            // Remove candidates that are within 1.5 degrees of the mistake
+        // Filter out shots too close to ANY recent foul direction (not just the last one)
+        if (this.foulHistory.length > 0 && candidates.length > 0) {
+            // Exclusion zone widens with more consecutive fouls
+            const baseExclusion = 3; // degrees
+            const perFoulExtra = 2; // extra degrees per foul in history
+            const exclusionAngle = baseExclusion + (this.foulHistory.length - 1) * perFoulExtra;
+
             const filtered = candidates.filter(c => {
-                const dot = Vec2.dot(c.direction, foulDir);
-                const diffAngle = Math.acos(Math.max(-1, Math.min(1, dot))) * 180 / Math.PI;
-                
-                // If it's practically the same shot that failed, skip it
-                if (diffAngle < 1.5 && this.isSameShotAsFoul({ target: c.target, pocket: {position: {x:0, y:0}} })) {
-                    aiLog(`Skipping candidate at ${c.angle.toFixed(1)}° - too close to previous foul`);
-                    return false;
+                for (const foul of this.foulHistory) {
+                    if (!foul.direction) continue;
+                    const dot = Vec2.dot(c.direction, foul.direction);
+                    const diffAngle = Math.acos(Math.max(-1, Math.min(1, dot))) * 180 / Math.PI;
+
+                    if (diffAngle < exclusionAngle) {
+                        aiLog(`Skipping candidate at ${c.angle.toFixed(1)}° - within ${exclusionAngle.toFixed(0)}° of foul #${this.foulHistory.indexOf(foul) + 1}`);
+                        return false;
+                    }
                 }
                 return true;
             });
-            
-            // If we have filtered options, use them. If we filtered everything, keep the original list (better to try than freeze)
+
+            // If we have filtered options, use them. If we filtered everything, keep the original list
             if (filtered.length > 0) {
                 candidates.length = 0;
                 candidates.push(...filtered);
+            } else {
+                aiLog(`All ${candidates.length} candidates filtered by foul history - keeping original list`);
             }
         }
 

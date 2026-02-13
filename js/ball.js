@@ -443,9 +443,12 @@ export function positionSnookerBalls(balls, tableCenter, ballRadius, spots) {
         const rowStartY = tableCenter.y - (rowWidth - 1) * spacing / 2;
         row.forEach((redIndex, colIndex) => {
             if (redBalls[redIndex]) {
+                // Micro jitter (±0.3px) for natural rack variation
+                const jitterX = (Math.random() - 0.5) * 0.6;
+                const jitterY = (Math.random() - 0.5) * 0.6;
                 redBalls[redIndex].setPosition(
-                    startX + rowIndex * spacing * Math.cos(Math.PI / 6),
-                    rowStartY + colIndex * spacing
+                    startX + rowIndex * spacing * Math.cos(Math.PI / 6) + jitterX,
+                    rowStartY + colIndex * spacing + jitterY
                 );
                 redBalls[redIndex].pocketed = false;
                 redBalls[redIndex].sinking = false;
@@ -545,9 +548,12 @@ export function positionFullSnookerBalls(balls, tableCenter, ballRadius, spots) 
         const rowStartY = tableCenter.y - (rowWidth - 1) * spacing / 2;
         row.forEach((redIndex, colIndex) => {
             if (redBalls[redIndex]) {
+                // Micro jitter (±0.3px) for natural rack variation
+                const jitterX = (Math.random() - 0.5) * 0.6;
+                const jitterY = (Math.random() - 0.5) * 0.6;
                 redBalls[redIndex].setPosition(
-                    startX + rowIndex * spacing * Math.cos(Math.PI / 6),
-                    rowStartY + colIndex * spacing
+                    startX + rowIndex * spacing * Math.cos(Math.PI / 6) + jitterX,
+                    rowStartY + colIndex * spacing + jitterY
                 );
                 redBalls[redIndex].pocketed = false;
                 redBalls[redIndex].sinking = false;

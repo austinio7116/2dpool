@@ -1336,8 +1336,57 @@ export class AI {
         aiLog(`🎱 PLAYING FOR POSITION ON: ${positionInfo} (Score: ${bestOption.positionScore.toFixed(0)})`);
         aiLog(`--- Selected: ${ballName}->${pocketNames(bestOption.pocket)} | pot:${bestOption.potScore.toFixed(0)} pos:${bestOption.positionScore.toFixed(0)} | power:${bestOption.power.toFixed(0)} spin:${bestOption.spin?.y?.toFixed(1) || '0'} | via ${persona.shotSelection} from ${pool.length} viable ---`);
 
-        // 6. Confidence check (safetyBias determines risk tolerance)
+        // 5b. Hard snooker gate: if we need snookers, don't clear colours that we
+        //     could use as snookering obstacles. A real player would stop potting and
+        //     play safe while there are still enough balls to hide behind.
         const snookerUrgency = this.getSnookerUrgency();
+        if (snookerUrgency > 0) {
+            const snookerInfo = this.game.getSnookersNeeded();
+            const { needed, redsLeft } = snookerInfo;
+
+            // In colours phase: must keep enough colours on table to have snooker chances
+            // Don't pot if we still need snookers AND there are colours worth keeping
+            if (this.game.colorsPhase) {
+                // Count unpocketed colours (these are our snookering obstacles)
+                const coloursLeft = this.game.balls.filter(b =>
+                    b.isColor && !b.pocketed
+                ).length;
+
+                // Need at least 2 colours to have a meaningful snooker attempt
+                // (one to snooker behind, one as the "ball on" to force the long pot)
+                // Exception: if only 1 snooker needed and we have a very easy pot, allow it
+                // Exception: if only pink+black left and 1 snooker of 6pts would be enough
+                const onlyOneSixPointSnookerNeeded = needed === 1 && snookerInfo.deficit - snookerInfo.remaining <= 6;
+
+                if (coloursLeft >= 3 && needed > 0 && !onlyOneSixPointSnookerNeeded) {
+                    aiLog(`🛑 SNOOKER GATE: Need ${needed} snooker(s), ${coloursLeft} colours left — MUST play safe, not clear`);
+                    aiLogGroupEnd();
+                    return null;
+                }
+                // With only 2 colours left (pink+black), only pot if a single snooker would suffice
+                if (coloursLeft === 2 && needed > 0 && !onlyOneSixPointSnookerNeeded) {
+                    aiLog(`🛑 SNOOKER GATE: Need ${needed} snooker(s), only pink+black left — playing safe`);
+                    aiLogGroupEnd();
+                    return null;
+                }
+            }
+
+            // Last red: if needing snookers, snookering on the last red is optimal
+            // (forces free ball opportunity). Only pot the last red if we don't need snookers
+            // or if a single 4-point snooker would no longer help (already too far behind)
+            if (redsLeft === 1 && needed > 1) {
+                // With 2+ snookers needed, the last red is gold for snookering
+                // (free ball + colour = up to 12 points). Force safety.
+                const targetIsRed = bestOption.target.isRed;
+                if (targetIsRed) {
+                    aiLog(`🛑 SNOOKER GATE: Last red — snookering here is optimal (need ${needed} snooker(s), free ball opportunity)`);
+                    aiLogGroupEnd();
+                    return null;
+                }
+            }
+        }
+
+        // 6. Confidence check (safetyBias determines risk tolerance)
         const baseThreshold = this.game.mode !== GameMode.SNOOKER ? 0 : 20;
         // When needing snookers, raise the bar for attempting pots
         // urgency 0 = no change, urgency 1 = +30 to threshold (very selective about potting)

@@ -51,6 +51,7 @@ class PoolGame {
 
         // Match persistence
         this.STORAGE_KEY = 'poolGame_savedMatch';
+        this.CAREER_STORAGE_KEY = 'poolGame_savedCareerMatch';
 
         // Bind callbacks
         this.bindCallbacks();
@@ -161,6 +162,20 @@ class PoolGame {
 
         // Career callbacks
         this.careerUI.onPlayMatch = (mode, opponentId, bestOf) => {
+            // Check if there's a saved career match already
+            const savedData = this.loadSavedMatch(true);
+            if (savedData?.careerMatch) {
+                const sc = savedData.careerMatch;
+                if (sc.mode === mode && sc.opponentId === opponentId) {
+                    // Same fixture — resume instead of starting fresh
+                    this.careerUI.hide();
+                    this.ui.mainMenu.classList.add('hidden');
+                    this.resumeMatch(true);
+                    return;
+                }
+                // Different fixture — shouldn't happen (buttons disabled), but guard
+                return;
+            }
             this.startCareerMatch(mode, opponentId, bestOf);
         };
         this.career.onLeagueAchievement = (id) => this.unlockAchievement(id);
@@ -480,10 +495,10 @@ class PoolGame {
     }
 
     returnToMenu() {
-        // Save match if it's a multi-frame match in progress
-        if (this.game.match.bestOf > 1 &&
-            this.game.state !== GameState.GAME_OVER &&
-            this.game.mode !== GameMode.FREE_PLAY) {
+        // Save match if it's a multi-frame match or career match in progress
+        if (this.game.state !== GameState.GAME_OVER &&
+            this.game.mode !== GameMode.FREE_PLAY &&
+            (this.game.match.bestOf > 1 || this.careerMatch)) {
             this.saveMatch();
         }
 
@@ -725,6 +740,11 @@ class PoolGame {
         if (state === GameState.BALL_IN_HAND) {
             this.ballInHandActive = true;
 
+            // Auto-save career matches on ball-in-hand too
+            if (this.careerMatch) {
+                this.saveMatch();
+            }
+
             // Determine placement mode based on game type
             // - Snooker: always D-zone
             // - UK 8-ball: always kitchen
@@ -827,6 +847,9 @@ class PoolGame {
         // Clear saved match if match is complete or single frame
         if (!match || match.matchComplete || match.bestOf === 1) {
             this.clearSavedMatch();
+            if (this.careerMatch) {
+                this.clearSavedMatch(true);
+            }
         }
 
         if (winner) {
@@ -1242,16 +1265,32 @@ class PoolGame {
             data.ballSetId = this.lastGameOptions?.ballSetId || 'american';
             data.tableStyle = this.ui.getSelectedTable();
 
-            localStorage.setItem(this.STORAGE_KEY, JSON.stringify(data));
+            // Save career metadata if this is a career match
+            if (this.careerMatch) {
+                data.careerMatch = this.careerMatch;
+                data.careerPlayerName = this.career.getState()?.playerName || 'Player';
+                // Save pre-career selections so they can be restored on resume
+                data.preCareer = {
+                    table: this._preCareerTable,
+                    ballSet: this._preCareerBallSet?.id || this._preCareerBallSet,
+                    personaId: this._preCareerPersonaId,
+                    aiEnabled: this._preCareerAIEnabled,
+                    trainingMode: this._preCareerTrainingMode
+                };
+            }
+
+            const key = this.careerMatch ? this.CAREER_STORAGE_KEY : this.STORAGE_KEY;
+            localStorage.setItem(key, JSON.stringify(data));
         } catch (e) {
             console.warn('Failed to save match:', e);
         }
     }
 
     // Load saved match from localStorage
-    loadSavedMatch() {
+    loadSavedMatch(career = false) {
         try {
-            const saved = localStorage.getItem(this.STORAGE_KEY);
+            const key = career ? this.CAREER_STORAGE_KEY : this.STORAGE_KEY;
+            const saved = localStorage.getItem(key);
             if (saved) {
                 return JSON.parse(saved);
             }
@@ -1262,17 +1301,18 @@ class PoolGame {
     }
 
     // Clear saved match from localStorage
-    clearSavedMatch() {
+    clearSavedMatch(career = false) {
         try {
-            localStorage.removeItem(this.STORAGE_KEY);
+            const key = career ? this.CAREER_STORAGE_KEY : this.STORAGE_KEY;
+            localStorage.removeItem(key);
         } catch (e) {
             console.warn('Failed to clear saved match:', e);
         }
     }
 
     // Resume a saved match
-    resumeMatch() {
-        const savedData = this.loadSavedMatch();
+    resumeMatch(career = false) {
+        const savedData = this.loadSavedMatch(career);
         if (!savedData) {
             console.warn('No saved match to resume');
             return;
@@ -1280,6 +1320,42 @@ class PoolGame {
 
         this.audio.init();
         this.physics.reset();
+
+        // Restore career context if this was a career match
+        const isCareerResume = !!savedData.careerMatch;
+        if (isCareerResume) {
+            this.careerMatch = savedData.careerMatch;
+
+            // Save pre-career selections so returnToMenu can restore them
+            if (savedData.preCareer) {
+                this._preCareerTable = savedData.preCareer.table;
+                const savedPreBallSet = savedData.preCareer.ballSet;
+                if (savedPreBallSet) {
+                    this._preCareerBallSet = this.ui.ballSetManager.getSet(savedPreBallSet) || savedPreBallSet;
+                }
+                this._preCareerPersonaId = savedData.preCareer.personaId;
+                this._preCareerAIEnabled = savedData.preCareer.aiEnabled;
+                this._preCareerTrainingMode = savedData.preCareer.trainingMode;
+            }
+
+            // Set up AI persona from career opponent
+            const persona = getPersonaById(savedData.careerMatch.opponentId);
+            this.ai.setEnabled(true);
+            this.ai.trainingMode = false;
+            this.ai.setPersona(persona);
+
+            // Set career player name in UI
+            this.ui.setCareerPlayerName(savedData.careerPlayerName || 'Player');
+
+            // Update UI state
+            this.ui.aiEnabled = true;
+            this.ui.aiTrainingMode = false;
+            this.ui.selectedPersonaId = savedData.careerMatch.opponentId;
+
+            // Set "Back to Career" button text
+            const mainMenuBtn = document.getElementById('btn-main-menu');
+            if (mainMenuBtn) mainMenuBtn.textContent = 'Back to Career';
+        }
 
         // Restore table style
         if (savedData.tableStyle) {
@@ -1320,15 +1396,17 @@ class PoolGame {
         this.lastGameOptions = options;
         this.lastGameMode = savedData.gameMode;
 
-        // Setup AI if enabled (not for Free Play mode)
-        const aiEnabled = this.ui.getAIEnabled() && savedData.gameMode !== GameMode.FREE_PLAY;
-        this.ai.setEnabled(aiEnabled);
-        this.ai.setPersona(this.ui.getSelectedPersona());
-        if (this.ui.isTrainingMode()) {
-            this.ai.trainingMode = true;
-            this.ai.setPersona2(this.ui.getSelectedPersona2());
-        } else {
-            this.ai.trainingMode = false;
+        // Setup AI — career matches override normal UI settings
+        if (!isCareerResume) {
+            const aiEnabled = this.ui.getAIEnabled() && savedData.gameMode !== GameMode.FREE_PLAY;
+            this.ai.setEnabled(aiEnabled);
+            this.ai.setPersona(this.ui.getSelectedPersona());
+            if (this.ui.isTrainingMode()) {
+                this.ai.trainingMode = true;
+                this.ai.setPersona2(this.ui.getSelectedPersona2());
+            } else {
+                this.ai.trainingMode = false;
+            }
         }
         this.ai.setGameReferences(this.game, this.table);
 

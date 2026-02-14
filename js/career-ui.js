@@ -18,6 +18,20 @@ export class CareerUI {
         this.bindEvents();
     }
 
+    // Check if there's a saved career match in progress
+    getSavedCareerMatch() {
+        try {
+            const saved = localStorage.getItem('poolGame_savedCareerMatch');
+            if (saved) {
+                const data = JSON.parse(saved);
+                if (data?.version === 1 && data.careerMatch) {
+                    return data.careerMatch;
+                }
+            }
+        } catch (e) { /* ignore */ }
+        return null;
+    }
+
     bindEvents() {
         // Open career modal
         if (this.btnCareer) {
@@ -177,10 +191,19 @@ export class CareerUI {
 
         // Next match
         const next = this.career.getNextFixtureAnyLeague();
+        const savedCareer = this.getSavedCareerMatch();
         if (next) {
             const oppId = this.career.getOpponentId(next.fixture);
             const persona = this.career.getPersonaInfo(oppId);
             const bestOf = this.career.getBestOf(next.mode);
+
+            // Check if saved career match matches this fixture
+            const isSavedMatch = savedCareer && savedCareer.mode === next.mode && savedCareer.opponentId === oppId;
+            const hasOtherSaved = savedCareer && !isSavedMatch;
+            const btnLabel = isSavedMatch ? 'Continue' : 'Play';
+            const btnDisabled = hasOtherSaved ? ' disabled' : '';
+            const btnClass = isSavedMatch ? 'career-play-btn career-continue-btn' : 'career-play-btn';
+
             html += `<div class="career-next-match">
                 <h4>Next Match</h4>
                 <div class="next-match-info">
@@ -191,7 +214,7 @@ export class CareerUI {
                         <span class="opponent-elo">(${persona?.elo || '?'})</span>
                     </div>
                     <div class="next-match-format">Best of ${bestOf}</div>
-                    <button class="career-play-btn" data-mode="${next.mode}" data-opponent="${oppId}" data-bestof="${bestOf}">Play</button>
+                    <button class="${btnClass}" data-mode="${next.mode}" data-opponent="${oppId}" data-bestof="${bestOf}"${btnDisabled}>${btnLabel}</button>
                 </div>
             </div>`;
         } else if (this.career.checkSeasonComplete()) {
@@ -286,6 +309,8 @@ export class CareerUI {
         const state = this.career.getState();
         if (!state) return;
 
+        const savedCareer = this.getSavedCareerMatch();
+
         let html = `<div class="career-fixtures">`;
 
         for (const mode of GAME_MODES) {
@@ -309,11 +334,18 @@ export class CareerUI {
                 let statusText = 'Upcoming';
                 let frameText = '';
 
+                // Check if this fixture has a saved match in progress
+                const isSavedMatch = savedCareer && savedCareer.mode === mode && savedCareer.opponentId === oppId;
+                const hasOtherSaved = savedCareer && !isSavedMatch;
+
                 if (f.played && f.result) {
                     const userWon = f.result.winner === 'player';
                     statusClass = userWon ? 'won' : 'lost';
                     statusText = userWon ? 'Won' : 'Lost';
                     frameText = `${f.result.frames[0]}-${f.result.frames[1]}`;
+                } else if (isSavedMatch) {
+                    statusClass = 'in-progress';
+                    statusText = 'In Progress';
                 }
 
                 html += `<div class="fixture-row ${statusClass}">
@@ -328,7 +360,13 @@ export class CareerUI {
                 if (!f.played) {
                     const isNext = this.career.getNextUserFixture(mode) === f;
                     if (isNext) {
-                        html += `<button class="career-play-btn fixture-play-btn" data-mode="${mode}" data-opponent="${oppId}" data-bestof="${bestOf}">Play</button>`;
+                        if (isSavedMatch) {
+                            html += `<button class="career-play-btn fixture-play-btn career-continue-btn" data-mode="${mode}" data-opponent="${oppId}" data-bestof="${bestOf}">Continue</button>`;
+                        } else if (!hasOtherSaved) {
+                            html += `<button class="career-play-btn fixture-play-btn" data-mode="${mode}" data-opponent="${oppId}" data-bestof="${bestOf}">Play</button>`;
+                        } else {
+                            html += `<button class="career-play-btn fixture-play-btn" data-mode="${mode}" data-opponent="${oppId}" data-bestof="${bestOf}" disabled>Play</button>`;
+                        }
                     }
                 }
 

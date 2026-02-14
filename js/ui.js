@@ -2891,9 +2891,10 @@ export class UI {
             if (saved) {
                 const data = JSON.parse(saved);
                 if (data && data.version === 1) {
-                    // Show resume button with match info
+                    // Show resume button with match info (normal matches only)
                     if (this.btnResumeMatch) {
                         this.btnResumeMatch.classList.remove('hidden');
+                        this.btnResumeMatch.classList.remove('career-resume');
                         const modeNames = {
                             '8ball': '8-Ball',
                             'uk8ball': 'UK 8-Ball',
@@ -2901,9 +2902,7 @@ export class UI {
                             'snooker': 'Snooker'
                         };
                         const modeName = modeNames[data.gameMode] || data.gameMode;
-                        if (this.resumeInfo) {
-                            this.resumeInfo.textContent = `(${modeName} ${data.player1Frames}-${data.player2Frames})`;
-                        }
+                        this.btnResumeMatch.innerHTML = `Resume <span class="resume-info">(${modeName} ${data.player1Frames}-${data.player2Frames})</span>`;
                     }
                     return data;
                 }
@@ -2915,6 +2914,7 @@ export class UI {
         // No valid saved match
         if (this.btnResumeMatch) {
             this.btnResumeMatch.classList.add('hidden');
+            this.btnResumeMatch.classList.remove('career-resume');
         }
         return null;
     }

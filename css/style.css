@@ -2393,6 +2393,17 @@ body {
     margin-left: 4px;
 }
 
+/* Career resume button - gold/yellow styling */
+.resume-btn.career-resume {
+    background: linear-gradient(135deg, #b8860b 0%, #8b6914 100%) !important;
+    border-color: #daa520 !important;
+    color: #fff;
+}
+
+.resume-btn.career-resume:hover {
+    background: linear-gradient(135deg, #daa520 0%, #b8860b 100%) !important;
+}
+
 /* ============================================
    AI OPPONENT OPTIONS
    ============================================ */
@@ -3759,10 +3770,25 @@ img.persona-avatar {
 .fixture-row.won { border-left: 3px solid #4CAF50; }
 .fixture-row.lost { border-left: 3px solid #F44336; }
 .fixture-row.upcoming { border-left: 3px solid #4a4a6a; }
+.fixture-row.in-progress { border-left: 3px solid #daa520; }
 
 .fixture-play-btn {
     padding: 4px 12px;
     font-size: 0.8rem;
+}
+
+.career-play-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    filter: grayscale(0.5);
+}
+
+.career-continue-btn {
+    background: linear-gradient(135deg, #b8860b 0%, #8b6914 100%);
+}
+
+.career-continue-btn:hover {
+    background: linear-gradient(135deg, #daa520 0%, #b8860b 100%);
 }
 
 /* ─── Achievements Tab ─── */

@@ -182,6 +182,57 @@ export class AI {
         return this.persona || getPersonaById('steady_sue');
     }
 
+    // Calculate how urgently the AI needs to play for snookers (0 = not needed, 0-1 = increasing urgency)
+    // Models how a snooker player thinks: don't panic early, but get serious as balls dwindle
+    getSnookerUrgency() {
+        if (!this.game || this.game.mode !== GameMode.SNOOKER) return 0;
+
+        const info = this.game.getSnookersNeeded();
+        if (info.needed <= 0) {
+            return 0; // No snookers needed — no impact on shot selection
+        }
+
+        // We definitely need snookers - urgency scales with how many and how few balls remain
+        const { needed, redsLeft } = info;
+
+        // Base urgency from number of snookers needed (1 snooker = moderate, 3+ = desperate)
+        const needUrgency = Math.min(1, needed / 4); // caps at 4 snookers needed
+
+        // Ball scarcity factor - fewer balls means fewer opportunities to snooker
+        // With 6+ reds: plenty of chances. With 1-2 reds: very few chances
+        let scarcityFactor;
+        if (this.game.colorsPhase) {
+            scarcityFactor = 1.0; // Colors phase - extremely urgent, almost no chances left
+        } else if (redsLeft <= 1) {
+            scarcityFactor = 0.95; // Last red - critical moment
+        } else if (redsLeft <= 3) {
+            scarcityFactor = 0.7 + (3 - redsLeft) * 0.1;
+        } else if (redsLeft <= 6) {
+            scarcityFactor = 0.4 + (6 - redsLeft) * 0.1;
+        } else {
+            scarcityFactor = 0.3; // Plenty of reds, moderate urgency
+        }
+
+        // Combine: need drives urgency, scarcity amplifies it
+        // Range: ~0.25 (1 snooker needed, lots of reds) to 1.0 (desperate, few balls)
+        const urgency = 0.25 + 0.75 * Math.max(needUrgency, scarcityFactor);
+        return Math.min(1, urgency);
+    }
+
+    // Check if snookering on the last red is especially valuable
+    // (free ball + color opportunity to catch up)
+    isLastRedSnookerValuable() {
+        if (!this.game || this.game.mode !== GameMode.SNOOKER) return false;
+        const redsLeft = this.game.getActualRedsRemaining();
+        if (redsLeft !== 1) return false;
+
+        // A snooker on the last red can yield: 4pt foul + free ball (1pt) + color (up to 7pt) = 12pts
+        // This is valuable when we're a few snookers behind (say 1-3 needed)
+        const info = this.game.getSnookersNeeded();
+        // Even if we only just barely need snookers or are getting tight, last red snooker is gold
+        return info.deficit > 0;
+    }
+
     setEnabled(enabled) {
         this.enabled = enabled;
     }
@@ -959,6 +1010,17 @@ export class AI {
         setTimeout(() => {
             aiLog('AI TURN - Persona:', settings.name, '| Mode:', this.game.mode);
 
+            // Log snooker situation awareness
+            if (this.game.mode === GameMode.SNOOKER) {
+                const snookerInfo = this.game.getSnookersNeeded();
+                const urgency = this.getSnookerUrgency();
+                if (snookerInfo.needed > 0) {
+                    aiLog(`🎯 NEEDS ${snookerInfo.needed} SNOOKER(S) — deficit: ${snookerInfo.deficit}, remaining: ${snookerInfo.remaining}, reds: ${snookerInfo.redsLeft}, urgency: ${(urgency * 100).toFixed(0)}%`);
+                } else if (urgency > 0) {
+                    aiLog(`⚠️ Score tight — deficit: ${snookerInfo.deficit}, remaining: ${snookerInfo.remaining}, reds: ${snookerInfo.redsLeft}, urgency: ${(urgency * 100).toFixed(0)}%`);
+                }
+            }
+
             // Special handling for break shot - just hit the rack hard
             if (this.game.isBreakShot) {
                 aiLog('Shot type: BREAK');
@@ -1275,14 +1337,23 @@ export class AI {
         aiLog(`--- Selected: ${ballName}->${pocketNames(bestOption.pocket)} | pot:${bestOption.potScore.toFixed(0)} pos:${bestOption.positionScore.toFixed(0)} | power:${bestOption.power.toFixed(0)} spin:${bestOption.spin?.y?.toFixed(1) || '0'} | via ${persona.shotSelection} from ${pool.length} viable ---`);
 
         // 6. Confidence check (safetyBias determines risk tolerance)
+        const snookerUrgency = this.getSnookerUrgency();
         const baseThreshold = this.game.mode !== GameMode.SNOOKER ? 0 : 20;
-        const minPotConfidence = baseThreshold + ((persona.safetyBias + 30) / 50) * 40;
+        // When needing snookers, raise the bar for attempting pots
+        // urgency 0 = no change, urgency 1 = +30 to threshold (very selective about potting)
+        const urgencyThresholdBoost = snookerUrgency * 30;
+        const minPotConfidence = baseThreshold + ((persona.safetyBias + 30) / 50) * 40 + urgencyThresholdBoost;
+
+        if (snookerUrgency > 0.2) {
+            aiLog(`🎯 SNOOKER URGENCY: ${(snookerUrgency * 100).toFixed(0)}% — threshold boosted by +${urgencyThresholdBoost.toFixed(0)}`);
+        }
 
         if (bestOption.potScore < minPotConfidence) {
             aiLog(`Low confidence: ${bestOption.potScore.toFixed(0)} < ${minPotConfidence.toFixed(0)} (safetyBias: ${persona.safetyBias})`);
 
             // Rescue: is there any variant across ALL groups with potScore well above threshold?
-            const rescueThreshold = minPotConfidence + 5;
+            // When needing snookers, only rescue with very high confidence pots
+            const rescueThreshold = minPotConfidence + 5 + (snookerUrgency * 15);
             const safePot = candidateShots.find(s => s.potScore > rescueThreshold);
             if (safePot) {
                 const safeName = safePot.target.colorName || safePot.target.number;
@@ -1298,19 +1369,34 @@ export class AI {
             const opponentTargets = this.getOpponentTargets();
             const bestSafety = this.findBestSafetyShot(validTargets, opponentTargets);
             const safetyQuality = bestSafety ? bestSafety.score : 0;
-            const aggressionBias = 25 - persona.safetyBias;
+            // When needing snookers, reduce aggression bias heavily (prefer safety/snooker)
+            // urgency 0 = normal, urgency 1 = aggression reduced by 30 (safety almost always wins)
+            const aggressionBias = Math.max(-10, (25 - persona.safetyBias) - (snookerUrgency * 30));
 
             if (safetyQuality < (bestOption.potScore + aggressionBias)) {
-                aiLog(`ATTACK: safety(${safetyQuality.toFixed(0)}) < pot(${bestOption.potScore.toFixed(0)}) + aggression(${aggressionBias}) — going for it`);
+                aiLog(`ATTACK: safety(${safetyQuality.toFixed(0)}) < pot(${bestOption.potScore.toFixed(0)}) + aggression(${aggressionBias.toFixed(0)}) — going for it`);
                 this.chosenShotEndPos = bestOption.cueBallEndPos ? { x: bestOption.cueBallEndPos.x, y: bestOption.cueBallEndPos.y } : null;
                 aiLogGroupEnd();
                 return bestOption;
             }
 
-            aiLog(`SAFETY: safety(${safetyQuality.toFixed(0)}) beats pot(${bestOption.potScore.toFixed(0)}) + aggression(${aggressionBias})`);
+            aiLog(`SAFETY: safety(${safetyQuality.toFixed(0)}) beats pot(${bestOption.potScore.toFixed(0)}) + aggression(${aggressionBias.toFixed(0)})`);
             this.chosenShotEndPos = null;
             aiLogGroupEnd();
             return null;
+        }
+
+        // Even above threshold, when urgency is very high (0.7+) and a great snooker exists,
+        // prefer safety over a medium pot — a snooker player wouldn't pot when desperate for snookers
+        if (snookerUrgency >= 0.7 && bestOption.potScore < minPotConfidence + 20) {
+            const opponentTargets = this.getOpponentTargets();
+            const bestSafety = this.findBestSafetyShot(validTargets, opponentTargets);
+            if (bestSafety && bestSafety.score > 80 && bestSafety.snookerBall) {
+                aiLog(`🎯 SNOOKER OVERRIDE: Excellent snooker available (${bestSafety.score.toFixed(0)}) — prioritising over pot (${bestOption.potScore.toFixed(0)}) at urgency ${(snookerUrgency * 100).toFixed(0)}%`);
+                this.chosenShotEndPos = null;
+                aiLogGroupEnd();
+                return null;
+            }
         }
 
         aiLog(`ACCEPTED (pot:${bestOption.potScore.toFixed(0)} >= threshold:${minPotConfidence.toFixed(0)})`);
@@ -4752,6 +4838,30 @@ export class AI {
             if (targetTrajectory.nearPocket) safetyScore -= 10;
             if (targetTrajectory.hitsOtherBall) safetyScore -= 8;
             if (targetTrajectory.travelDist < 30) safetyScore += 5;
+        }
+
+        // Snooker urgency: massive bonus for achieving an actual snooker when we need one
+        if (this.game.mode === GameMode.SNOOKER) {
+            const snookerUrgency = this.getSnookerUrgency();
+            if (snookerUrgency > 0 && visibleBalls === 0 && opponentBalls.length > 0) {
+                // Full snooker achieved! Bonus scales with urgency
+                // urgency 0.2 = +20, urgency 0.5 = +50, urgency 1.0 = +100
+                const snookerBonus = Math.round(snookerUrgency * 100);
+                safetyScore += snookerBonus;
+
+                // Extra bonus for snookering on last red (free ball opportunity)
+                if (this.isLastRedSnookerValuable()) {
+                    safetyScore += 40;
+                }
+            } else if (snookerUrgency > 0.3) {
+                // Partial snooker (some balls hidden) — still useful when needing snookers
+                if (opponentBalls.length > 0) {
+                    const hiddenRatio = 1 - (visibleBalls / opponentBalls.length);
+                    if (hiddenRatio > 0.5) {
+                        safetyScore += Math.round(snookerUrgency * hiddenRatio * 40);
+                    }
+                }
+            }
         }
 
         return { score: safetyScore, snookerBall: bestSnookerBall };

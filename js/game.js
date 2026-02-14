@@ -2163,6 +2163,25 @@ export class Game {
         }
     }
 
+    // Calculate how many snookers the current player needs to win
+    // Returns { needed: number, deficit: number, remaining: number, redsLeft: number }
+    getSnookersNeeded() {
+        const deficit = this.getSnookerPointsDeficit();
+        const remaining = this.getSnookerRemainingPoints();
+        const redsLeft = this.getActualRedsRemaining();
+
+        if (deficit <= remaining) {
+            return { needed: 0, deficit, remaining, redsLeft };
+        }
+
+        // Points that must come from snookers (opponent fouls)
+        // Minimum foul value is 4 points
+        const shortfall = deficit - remaining;
+        const needed = Math.ceil(shortfall / 4);
+
+        return { needed, deficit, remaining, redsLeft };
+    }
+
     // Get snooker game info for UI
     getSnookerInfo() {
         return {

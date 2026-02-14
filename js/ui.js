@@ -3865,7 +3865,9 @@ export class UI {
         // Update info text
         if (this.decisionInfoText) {
             let infoText = '';
-            if (foulInfo.wasScratched) {
+            if (foulInfo.wasScratched && foulInfo.wasSnookered) {
+                infoText = 'Cue ball pocketed while snookered.';
+            } else if (foulInfo.wasScratched) {
                 infoText = 'Cue ball was pocketed.';
             } else if (foulInfo.isMiss) {
                 infoText = 'Miss called - no legal ball was hit.';

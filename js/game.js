@@ -1459,17 +1459,26 @@ export class Game {
             // Check if incoming player is snookered (for free ball)
             // Note: We need to temporarily switch perspective to check from incoming player's view
             // The cue ball position after foul determines if free ball applies
-            const isSnookeredAfterFoul = this.isPlayerSnookered();
+            const isSnookeredAfterFoul = cueBallPocketed
+                ? this.isSnookeredFromAllDPositions()  // On scratch, check all D positions
+                : this.isPlayerSnookered();
+
+            // Determine if restore is available:
+            // - Always available on a miss (standard foul and a miss rule)
+            // - Also available when player was snookered and scratched (opponent's choice)
+            const wasSnookeredScratch = cueBallPocketed && this.wasSnookeredBeforeShot;
+            const canRestore = (isMiss || wasSnookeredScratch) && this.preShotState !== null;
 
             // Store foul info for decision
             this.pendingFoulDecision = {
                 penalty: foulValue,
                 isMiss: isMiss,
                 wasScratched: cueBallPocketed,
+                wasSnookered: this.wasSnookeredBeforeShot,
                 foulReason: this.foulReason,
                 offendingPlayer: this.currentPlayer,
-                canRestore: isMiss && this.preShotState !== null,
-                isFreeBall: isSnookeredAfterFoul && !cueBallPocketed  // Free ball if snookered (not on scratch)
+                canRestore: canRestore,
+                isFreeBall: isSnookeredAfterFoul  // Free ball if snookered (including from D on scratch)
             };
 
             // Award penalty points to opponent
@@ -1890,6 +1899,59 @@ export class Game {
         }
 
         return true;
+    }
+
+    // --- Helper: Check if player would be snookered from every valid position in the D ---
+    // Used to determine free ball eligibility after a scratch (cue ball pocketed)
+    // In real snooker, free ball is awarded if no position in the D allows a clear path
+    // to both extreme edges of any ball-on
+    isSnookeredFromAllDPositions() {
+        const dGeometry = this.table.getDGeometry();
+        if (!dGeometry) return false;
+
+        const { baulkX, centerY, radius } = dGeometry;
+        const cueBallRadius = this.cueBall ? this.cueBall.radius : this.table.getBallRadius();
+
+        const targetBalls = this.getValidTargetBalls();
+        if (targetBalls.length === 0) return false;
+
+        const blockerBalls = this.balls.filter(b =>
+            !b.pocketed && !b.isCueBall && !targetBalls.includes(b)
+        );
+
+        // Sample positions across the D in a grid pattern
+        const steps = 12;
+        for (let xi = 0; xi <= steps; xi++) {
+            for (let yi = 0; yi <= steps * 2; yi++) {
+                const x = (baulkX - radius) + (radius * xi / steps);
+                const y = (centerY - radius) + (radius * 2 * yi / (steps * 2));
+
+                // Must be inside the D
+                if (!this.table.isInD(x, y)) continue;
+
+                // Must not overlap any ball
+                let overlaps = false;
+                for (const ball of this.balls) {
+                    if (ball.isCueBall || ball.pocketed) continue;
+                    const dist = Math.sqrt((x - ball.position.x) ** 2 + (y - ball.position.y) ** 2);
+                    if (dist < cueBallRadius + ball.radius + 1) {
+                        overlaps = true;
+                        break;
+                    }
+                }
+                if (overlaps) continue;
+
+                // Check if ANY target ball has a clear path from this D position
+                const testPos = { x, y };
+                for (const target of targetBalls) {
+                    if (this.hasClearPath(testPos, target.position, cueBallRadius, target.radius, blockerBalls)) {
+                        return false; // Found a position in D that can see a target - not snookered
+                    }
+                }
+            }
+        }
+
+        return true; // No valid D position can see any target ball
     }
 
     // --- Helper: Respotting Logic ---

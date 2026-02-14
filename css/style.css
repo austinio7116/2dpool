@@ -3974,6 +3974,27 @@ img.persona-avatar {
     background: linear-gradient(135deg, #daa520 0%, #b8860b 50%, #daa520 100%);
 }
 
+.career-restore-section {
+    text-align: center;
+}
+
+.career-restore-btn {
+    background: rgba(255, 255, 255, 0.1);
+    color: #ccc;
+    border: 1px solid #555;
+    padding: 6px 20px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    transition: background 0.2s, border-color 0.2s;
+}
+
+.career-restore-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+    border-color: #888;
+    color: #fff;
+}
+
 /* ─── Career ELO Display (Game Over Screen) ─── */
 .career-elo-display {
     text-align: center;

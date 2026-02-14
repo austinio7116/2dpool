@@ -16,9 +16,6 @@ export class CareerUI {
         this.activeLeagueMode = '8ball';
 
         this.bindEvents();
-
-        // Achievement notification callback
-        this.career.onAchievementUnlocked = (def) => this.showAchievementNotification(def);
     }
 
     bindEvents() {
@@ -60,7 +57,6 @@ export class CareerUI {
     show() {
         if (!this.modal) return;
         this.modal.classList.remove('hidden');
-        this.syncStandaloneAchievements();
         this.preloadTrophyImages();
         this.renderActiveTab();
     }
@@ -363,17 +359,9 @@ export class CareerUI {
     renderAchievements() {
         const panel = document.getElementById('career-achievements');
         if (!panel) return;
-        const state = this.career.getState();
-        if (!state) return;
 
-        // Merge standalone achievements into display
-        const standaloneAchievements = this._getStandaloneAchievements();
-        const allUnlocked = [...state.achievements];
-        for (const sa of standaloneAchievements) {
-            if (!allUnlocked.some(a => a.id === sa.id)) {
-                allUnlocked.push(sa);
-            }
-        }
+        // Read from single achievement store
+        const allUnlocked = this._loadAchievements();
 
         let html = `<div class="career-achievements-grid">`;
 
@@ -428,7 +416,7 @@ export class CareerUI {
         const state = this.career.getState();
         if (!state) return;
 
-        const achieveCount = state.achievements.length;
+        const achieveCount = this._loadAchievements().length;
         const totalAchieve = ACHIEVEMENTS.length;
 
         let html = `<div class="career-profile">
@@ -544,6 +532,17 @@ export class CareerUI {
         const tabs = this.modal.querySelector('.career-tabs');
         if (tabs) tabs.style.display = 'none';
 
+        const restoreCareer = () => {
+            if (tabs) tabs.style.display = '';
+            tabPanels.innerHTML = `
+                <div class="career-tab-panel active" data-career-panel="dashboard" id="career-dashboard"></div>
+                <div class="career-tab-panel" data-career-panel="leagues" id="career-leagues"></div>
+                <div class="career-tab-panel" data-career-panel="fixtures" id="career-fixtures"></div>
+                <div class="career-tab-panel" data-career-panel="achievements" id="career-achievements"></div>
+                <div class="career-tab-panel" data-career-panel="profile" id="career-profile"></div>`;
+            this.switchTab('dashboard');
+        };
+
         if (tabPanels) {
             tabPanels.innerHTML = `
                 <div class="career-new-dialog">
@@ -558,6 +557,11 @@ export class CareerUI {
                         <p>Win your league to get promoted to the upper division!</p>
                     </div>
                     <button class="career-start-btn" id="career-start-btn">Start Career</button>
+                    <div class="career-restore-section">
+                        <p style="color:#888; margin:12px 0 6px; font-size:0.85rem;">Have a save file?</p>
+                        <button class="career-restore-btn" id="career-restore-btn">Restore Save</button>
+                        <input type="file" id="career-restore-input" accept=".json" style="display:none">
+                    </div>
                 </div>`;
 
             const startBtn = document.getElementById('career-start-btn');
@@ -567,15 +571,7 @@ export class CareerUI {
                 startBtn.addEventListener('click', () => {
                     const name = nameInput?.value.trim() || 'Player';
                     this.career.newCareer(name);
-                    // Restore tabs and rebuild panel divs (destroyed by innerHTML override)
-                    if (tabs) tabs.style.display = '';
-                    tabPanels.innerHTML = `
-                        <div class="career-tab-panel active" data-career-panel="dashboard" id="career-dashboard"></div>
-                        <div class="career-tab-panel" data-career-panel="leagues" id="career-leagues"></div>
-                        <div class="career-tab-panel" data-career-panel="fixtures" id="career-fixtures"></div>
-                        <div class="career-tab-panel" data-career-panel="achievements" id="career-achievements"></div>
-                        <div class="career-tab-panel" data-career-panel="profile" id="career-profile"></div>`;
-                    this.switchTab('dashboard');
+                    restoreCareer();
                 });
             }
 
@@ -583,6 +579,26 @@ export class CareerUI {
             if (nameInput) {
                 nameInput.addEventListener('keydown', (e) => {
                     if (e.key === 'Enter') startBtn?.click();
+                });
+            }
+
+            // Restore save button
+            const restoreBtn = document.getElementById('career-restore-btn');
+            const restoreInput = document.getElementById('career-restore-input');
+            if (restoreBtn && restoreInput) {
+                restoreBtn.addEventListener('click', () => restoreInput.click());
+                restoreInput.addEventListener('change', (e) => {
+                    const file = e.target.files[0];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = (ev) => {
+                        if (this.career.importFromFile(ev.target.result)) {
+                            restoreCareer();
+                        } else {
+                            alert('Invalid save file.');
+                        }
+                    };
+                    reader.readAsText(file);
                 });
             }
         }
@@ -638,26 +654,14 @@ export class CareerUI {
 
     // ─── Helpers ────────────────────────────────────────────────────
 
-    _getStandaloneAchievements() {
+    // Load achievements from the single localStorage store
+    _loadAchievements() {
         try {
             const data = localStorage.getItem('poolGame_achievements');
             return data ? JSON.parse(data) : [];
         } catch (e) {
             return [];
         }
-    }
-
-    // Sync standalone achievements into career state (call on career load)
-    syncStandaloneAchievements() {
-        const state = this.career.getState();
-        if (!state) return;
-        const standalone = this._getStandaloneAchievements();
-        for (const sa of standalone) {
-            if (!state.achievements.some(a => a.id === sa.id)) {
-                state.achievements.push(sa);
-            }
-        }
-        this.career.save();
     }
 
     escapeHtml(str) {

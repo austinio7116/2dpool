@@ -163,6 +163,7 @@ class PoolGame {
         this.careerUI.onPlayMatch = (mode, opponentId, bestOf) => {
             this.startCareerMatch(mode, opponentId, bestOf);
         };
+        this.career.onLeagueAchievement = (id) => this.unlockAchievement(id);
 
         // AI callbacks
         this.ai.onShot = (direction, power, spin) => this.executeShot(direction, power, spin);
@@ -852,6 +853,7 @@ class PoolGame {
             const newElo = this.career.getState().playerElo;
             const eloChange = newElo - oldElo;
             this.showCareerMatchResult(eloChange, newElo);
+
             this.careerMatch = null;
             this.wasCareerGame = true;
         }
@@ -897,25 +899,18 @@ class PoolGame {
         localStorage.setItem('poolGame_achievements', JSON.stringify(achievements));
     }
 
-    // Unlock an achievement (standalone + career)
+    // Unlock an achievement (single store in poolGame_achievements)
     unlockAchievement(id) {
-        // Standalone storage
         const achievements = this.loadAchievements();
         if (achievements.some(a => a.id === id)) return; // Already unlocked
 
         achievements.push({ id, unlockedAt: Date.now() });
         this.saveAchievements(achievements);
 
-        // Also unlock in career if active (career's callback shows its own notification)
-        if (this.career.getState()) {
-            this.career.unlockAchievement(id);
-        } else {
-            // Only show notification directly when career is not active
-            // (career mode has its own onAchievementUnlocked callback)
-            const def = ACHIEVEMENTS.find(a => a.id === id);
-            if (def) {
-                this.careerUI.showAchievementNotification(def);
-            }
+        // Always show notification
+        const def = ACHIEVEMENTS.find(a => a.id === id);
+        if (def) {
+            this.careerUI.showAchievementNotification(def);
         }
     }
 
@@ -1019,6 +1014,31 @@ class PoolGame {
             if (breakCount >= 2) this.unlockAchievement('pool_break_2');
             if (breakCount >= 3) this.unlockAchievement('pool_break_3');
             if (breakCount >= 5) this.unlockAchievement('pool_break_5');
+        }
+
+        // Win mode achievements (any AI match)
+        if (this.ai.enabled && !this.ai.trainingMode) {
+            const modeAchievements = {
+                '8ball': 'win_8ball',
+                'uk8ball': 'win_uk8ball',
+                '9ball': 'win_9ball',
+                'snooker': 'win_snooker'
+            };
+            if (modeAchievements[mode]) {
+                this.unlockAchievement(modeAchievements[mode]);
+            }
+
+            // Beat persona
+            const persona = this.ai.getCurrentPersona();
+            if (persona?.id) {
+                this.unlockAchievement(`beat_${persona.id}`);
+            }
+
+            // Clean sweep (match win without losing a frame)
+            const match = gameInfo.match;
+            if (match?.matchComplete && match.matchWinner === 1 && match.player2Frames === 0) {
+                this.unlockAchievement('clean_sweep');
+            }
         }
     }
 

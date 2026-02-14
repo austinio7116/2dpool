@@ -115,7 +115,7 @@ function generateRoundRobinFixtures(players) {
 export class Career {
     constructor() {
         this.state = null;
-        this.onAchievementUnlocked = null;
+        this.onLeagueAchievement = null; // callback: (achievementId) => void
         this.load();
     }
 
@@ -141,7 +141,6 @@ export class Career {
             season: 1,
             leagues: {},
             aiElo,
-            achievements: [],
             matchHistory: [],
             stats: {
                 totalWins: 0,
@@ -308,11 +307,6 @@ export class Career {
         // Simulate one AI vs AI match in this league
         this.simulateNextAIMatch(mode);
 
-        // Check achievements
-        this.checkAchievements({
-            mode, opponentId, userWon, userFrames, opponentFrames, gameInfo
-        });
-
         // Check if this league is complete
         this.checkLeagueComplete(mode);
 
@@ -422,15 +416,19 @@ export class Career {
                 const division = this.state.leagues[mode].division;
                 this.state.stats.leaguesWon++;
 
-                // Unlock league champion achievement
-                this.unlockAchievement(`league_${division}_${mode}`);
+                // Fire league champion achievement via callback
+                if (this.onLeagueAchievement) {
+                    this.onLeagueAchievement(`league_${division}_${mode}`);
+                }
 
                 // If lower division, promote
                 if (division === 'lower') {
                     this.state.leagues[mode].division = 'upper';
 
-                    // Check first promotion achievement
-                    this.unlockAchievement('promotion_first');
+                    // Fire first promotion achievement via callback
+                    if (this.onLeagueAchievement) {
+                        this.onLeagueAchievement('promotion_first');
+                    }
                 }
             }
         }
@@ -446,77 +444,29 @@ export class Career {
     advanceSeason() {
         this.state.season++;
 
-        // Unlock season complete achievement
-        this.unlockAchievement('season_complete');
+        // Fire season complete achievement via callback
+        if (this.onLeagueAchievement) {
+            this.onLeagueAchievement('season_complete');
 
-        // Check if all leagues are upper
-        const allUpper = GAME_MODES.every(m => this.state.leagues[m].division === 'upper');
-        if (allUpper) {
-            this.unlockAchievement('all_upper');
-        }
+            // Check if all leagues are upper
+            const allUpper = GAME_MODES.every(m => this.state.leagues[m].division === 'upper');
+            if (allUpper) {
+                this.onLeagueAchievement('all_upper');
+            }
 
-        // Check grand champion (all 4 upper leagues won)
-        const allUpperWon = GAME_MODES.every(m => {
-            return this.state.achievements.some(a => a.id === `league_upper_${m}`);
-        });
-        if (allUpperWon) {
-            this.unlockAchievement('grand_champion');
+            // Check grand champion (all 4 upper leagues won)
+            const achievements = this._loadAchievements();
+            const allUpperWon = GAME_MODES.every(m => {
+                return achievements.some(a => a.id === `league_upper_${m}`);
+            });
+            if (allUpperWon) {
+                this.onLeagueAchievement('grand_champion');
+            }
         }
 
         // Generate new season fixtures
         this.generateSeason();
         this.save();
-    }
-
-    checkAchievements(matchResult) {
-        const { mode, opponentId, userWon, userFrames, opponentFrames, gameInfo } = matchResult;
-
-        if (!userWon) return;
-
-        // Beat persona
-        this.unlockAchievement(`beat_${opponentId}`);
-
-        // Win in mode
-        const modeAchievements = {
-            '8ball': 'win_8ball',
-            'uk8ball': 'win_uk8ball',
-            '9ball': 'win_9ball',
-            'snooker': 'win_snooker'
-        };
-        if (modeAchievements[mode]) {
-            this.unlockAchievement(modeAchievements[mode]);
-        }
-
-        // Clean sweep (no frames lost)
-        if (opponentFrames === 0) {
-            this.unlockAchievement('clean_sweep');
-        }
-
-        // Snooker break achievements
-        if (mode === 'snooker' && gameInfo) {
-            const highBreak = gameInfo.highestBreak || 0;
-            if (highBreak >= 30) this.unlockAchievement('snooker_break_30');
-            if (highBreak >= 50) this.unlockAchievement('snooker_break_50');
-            if (highBreak >= 100) this.unlockAchievement('snooker_century');
-        }
-    }
-
-    unlockAchievement(id) {
-        if (!this.state) return;
-        if (this.state.achievements.some(a => a.id === id)) return; // Already unlocked
-
-        const def = ACHIEVEMENTS.find(a => a.id === id);
-        if (!def) return;
-
-        const achievement = {
-            id,
-            unlockedAt: Date.now()
-        };
-        this.state.achievements.push(achievement);
-
-        if (this.onAchievementUnlocked) {
-            this.onAchievementUnlocked(def);
-        }
     }
 
     // Get persona display name
@@ -566,6 +516,12 @@ export class Career {
             if (saved) {
                 const data = JSON.parse(saved);
                 if (data && data.version === 1) {
+                    // Migrate: move any legacy achievements from career state to single store
+                    if (data.achievements && Array.isArray(data.achievements) && data.achievements.length > 0) {
+                        this._mergeAchievements(data.achievements);
+                        delete data.achievements;
+                        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+                    }
                     this.state = data;
                     return true;
                 }
@@ -577,10 +533,17 @@ export class Career {
         return false;
     }
 
-    // Export to JSON file
+    // Export to JSON file (includes achievements, custom balls & tables)
     exportToFile() {
         if (!this.state) return;
-        const json = JSON.stringify(this.state, null, 2);
+        const exportData = {
+            career: this.state,
+            achievements: this._loadAchievements(),
+            customBallSets: this._loadJSON('poolGame_customBallSets'),
+            deletedDefaultBallSets: this._loadJSON('poolGame_deletedDefaultBallSets'),
+            customTables: this._loadJSON('poolGame_customTables')
+        };
+        const json = JSON.stringify(exportData, null, 2);
         const blob = new Blob([json], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -591,19 +554,91 @@ export class Career {
         URL.revokeObjectURL(url);
     }
 
-    // Import from JSON
+    // Import from JSON (supports old and new formats)
     importFromFile(json) {
         try {
             const data = JSON.parse(json);
-            if (!data || data.version !== 1) {
-                throw new Error('Invalid career save file');
+
+            // New format: { career: {...}, achievements: [...] }
+            if (data.career && data.career.version === 1) {
+                this.state = data.career;
+                // Remove legacy achievements array from career state if present
+                delete this.state.achievements;
+                this.save();
+                // Restore achievements to single store, merging with existing
+                if (data.achievements || data.standaloneAchievements) {
+                    const imported = data.achievements || data.standaloneAchievements;
+                    this._mergeAchievements(imported);
+                }
+                // Migrate any achievements from old career state format
+                if (data.career.achievements && Array.isArray(data.career.achievements)) {
+                    this._mergeAchievements(data.career.achievements);
+                }
+                // Restore custom ball sets and tables
+                this._restoreCustomData(data);
+                return true;
             }
-            this.state = data;
-            this.save();
-            return true;
+
+            // Old format: direct career state object
+            if (data && data.version === 1) {
+                // Migrate achievements from career state to single store
+                const careerAchievements = data.achievements || [];
+                delete data.achievements;
+                this.state = data;
+                this.save();
+                if (careerAchievements.length > 0) {
+                    this._mergeAchievements(careerAchievements);
+                }
+                return true;
+            }
+
+            throw new Error('Invalid career save file');
         } catch (e) {
             console.warn('Failed to import career:', e);
             return false;
+        }
+    }
+
+    // Load achievements from the single localStorage store
+    _loadAchievements() {
+        return this._loadJSON('poolGame_achievements');
+    }
+
+    // Load a JSON array from localStorage (returns [] on failure)
+    _loadJSON(key) {
+        try {
+            const data = localStorage.getItem(key);
+            return data ? JSON.parse(data) : [];
+        } catch (e) {
+            return [];
+        }
+    }
+
+    // Restore custom ball sets and tables from import data
+    _restoreCustomData(data) {
+        if (data.customBallSets) {
+            localStorage.setItem('poolGame_customBallSets', JSON.stringify(data.customBallSets));
+        }
+        if (data.deletedDefaultBallSets) {
+            localStorage.setItem('poolGame_deletedDefaultBallSets', JSON.stringify(data.deletedDefaultBallSets));
+        }
+        if (data.customTables) {
+            localStorage.setItem('poolGame_customTables', JSON.stringify(data.customTables));
+        }
+    }
+
+    // Merge imported achievements into the single store (no duplicates)
+    _mergeAchievements(imported) {
+        try {
+            const existing = this._loadAchievements();
+            for (const a of imported) {
+                if (!existing.some(e => e.id === a.id)) {
+                    existing.push(a);
+                }
+            }
+            localStorage.setItem('poolGame_achievements', JSON.stringify(existing));
+        } catch (e) {
+            console.warn('Failed to merge achievements:', e);
         }
     }
 

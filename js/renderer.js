@@ -282,6 +282,11 @@ export class Renderer {
         // Use pocket radius from table pockets (which already uses table-specific config)
         const pocketRadius = t.pockets[0]?.radius || Constants.POCKET_RADIUS;
 
+        // Read rail chain points from physics if available
+        // Chains: 0=top-left→top-mid-L, 1=top-mid-R→top-right, 2=right side,
+        //         3=bottom-right→bottom-mid-R, 4=bottom-mid-L→bottom-left, 5=left side
+        const chains = this.physics?.railChainPoints;
+
         // Cushion color with gradient for 3D effect
         const cushionColor = '#1a8a4a';
         const cushionDark = '#0f5c2e';
@@ -289,8 +294,9 @@ export class Renderer {
 
         // Corner pocket mouth size
         const cornerMouth = pocketRadius * 1.4;
-        // Side pocket mouth size
-        const sideMouth = pocketRadius * 1.1;
+        // Side pocket mouth size - read from physics rail chains for straight-pocket tables
+        const isStraightPocket = this.physics && this.physics.tableStyle < 7;
+        const sideMouth = (isStraightPocket && chains) ? Math.abs(t.center.x - chains[0][2].x) : pocketRadius * 1.1;
 
         // Draw each cushion segment with angled pocket entries
 
@@ -459,13 +465,18 @@ export class Renderer {
         }
 
         // Side pockets - draw curved jaws
+        // Read side pocket gap from physics rail chains for straight-pocket tables
+        const chains = this.physics?.railChainPoints;
+        const isStraightPocket = this.physics && this.physics.tableStyle < 7;
+        const sideGapFromPhysics = (isStraightPocket && chains) ? Math.abs(t.center.x - chains[0][2].x) : null;
+
         const sidePockets = [
             { x: t.center.x, y: b.top, ay: 1 },
             { x: t.center.x, y: b.bottom, ay: -1 }
         ];
 
         for (const side of sidePockets) {
-            const sideRadius = pocketRadius * 0.9;
+            const sideRadius = sideGapFromPhysics || pocketRadius * 0.9;
 
             // Left jaw
             ctx.fillStyle = '#1a8a4a';

@@ -403,6 +403,11 @@ export class AI {
             return;
         }
 
+        // Don't take a turn if the game is already over
+        if (this.game.state === GameState.GAME_OVER) {
+            return;
+        }
+
         // NEW: Detect Turn Shift
         // If the current player is different from the last time we actively played,
         // it means the opponent took a turn in between.

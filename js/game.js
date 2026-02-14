@@ -2317,7 +2317,10 @@ export class Game {
             nextColorInSequence: this.nextColorInSequence,
             currentBreak: this.currentBreak,
             highestBreak: this.highestBreak,
-            snookerStats: this.matchStats
+            snookerStats: this.matchStats,
+
+            // Game state for proper resume
+            state: this.state
         };
     }
 
@@ -2382,7 +2385,13 @@ export class Game {
         this.foulReason = '';
         this.winner = null;
         this.gameOverReason = '';
-        this.state = GameState.PLAYING;
+
+        // Restore saved state (only resumable states; default to PLAYING)
+        if (data.state === GameState.BALL_IN_HAND) {
+            this.state = GameState.BALL_IN_HAND;
+        } else {
+            this.state = GameState.PLAYING;
+        }
 
         return true;
     }

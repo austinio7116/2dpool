@@ -1335,20 +1335,12 @@ class PoolGame {
         this.input.setCueBall(this.game.cueBall);
         this.input.resetSpin();
 
-        // Check if it's AI's turn after resume (training mode = both players)
-        if (this.isCurrentPlayerAI()) {
-            this.input.setCanShoot(false);
-        } else {
-            this.input.setCanShoot(true);
-        }
-
         this.ui.showGameHUD(savedData.gameMode, this.game.getMatchInfo());
         this.ui.updateFromGameInfo(this.game.getGameInfo());
 
-        // Trigger AI turn if needed
-        if (this.isCurrentPlayerAI()) {
-            setTimeout(() => this.ai.takeTurn(), 500);
-        }
+        // Trigger proper state handling for the restored state
+        // This ensures input mode (ball-in-hand vs shooting) matches the game state
+        this.handleStateChange(this.game.state);
     }
 
     gameLoop(currentTime) {

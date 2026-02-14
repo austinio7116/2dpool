@@ -42,6 +42,7 @@ export class PlanckPhysics {
         this.ballToBody = new Map();
         this.bodyToBall = new Map();
         this.railBodies = []; // Track rail bodies for recreation
+        this.railChainPoints = []; // Store pixel-space points for renderer
 
         this.setupContactListener();
         this.createTableBoundaries();
@@ -92,6 +93,7 @@ export class PlanckPhysics {
             this.world.destroyBody(body);
         }
         this.railBodies = [];
+        this.railChainPoints = [];
 
         // Recreate with new style
         this.createTableBoundaries();
@@ -208,6 +210,7 @@ export class PlanckPhysics {
 
         body.setUserData({ type: 'rail', railType: 'chain' });
         this.railBodies.push(body);
+        this.railChainPoints.push(points);
     }
 
     createStraightRailChains() {
@@ -215,6 +218,7 @@ export class PlanckPhysics {
         const pocketRadius = this.getTablePocketRadius();
         const ballRadius = this.getTableBallRadius();
         const gap = pocketRadius + ballRadius * 0.5;
+        const sideGap = gap - 2; // Middle pocket jaws 3px tighter
         const segmentLength = 20;
 
         const sidePocketAngle = 70;
@@ -226,14 +230,14 @@ export class PlanckPhysics {
         this.createRailChain([
             { x: b.left + gap - Math.cos(cornerRad) * segmentLength, y: b.top - Math.sin(cornerRad) * segmentLength },
             { x: b.left + gap, y: b.top },
-            { x: this.table.center.x - gap, y: b.top },
-            { x: this.table.center.x - gap + Math.cos(sideRad) * segmentLength, y: b.top - Math.sin(sideRad) * segmentLength }
+            { x: this.table.center.x - sideGap, y: b.top },
+            { x: this.table.center.x - sideGap + Math.cos(sideRad) * segmentLength, y: b.top - Math.sin(sideRad) * segmentLength }
         ]);
 
         // Chain 2: Top middle pocket right → Top rail right → Top-right corner (horizontal)
         this.createRailChain([
-            { x: this.table.center.x + gap - Math.cos(sideRad) * segmentLength, y: b.top - Math.sin(sideRad) * segmentLength },
-            { x: this.table.center.x + gap, y: b.top },
+            { x: this.table.center.x + sideGap - Math.cos(sideRad) * segmentLength, y: b.top - Math.sin(sideRad) * segmentLength },
+            { x: this.table.center.x + sideGap, y: b.top },
             { x: b.right - gap, y: b.top },
             { x: b.right - gap + Math.cos(cornerRad) * segmentLength, y: b.top - Math.sin(cornerRad) * segmentLength }
         ]);
@@ -250,14 +254,14 @@ export class PlanckPhysics {
         this.createRailChain([
             { x: b.right - gap + Math.cos(cornerRad) * segmentLength, y: b.bottom + Math.sin(cornerRad) * segmentLength },
             { x: b.right - gap, y: b.bottom },
-            { x: this.table.center.x + gap, y: b.bottom },
-            { x: this.table.center.x + gap - Math.cos(sideRad) * segmentLength, y: b.bottom + Math.sin(sideRad) * segmentLength }
+            { x: this.table.center.x + sideGap, y: b.bottom },
+            { x: this.table.center.x + sideGap - Math.cos(sideRad) * segmentLength, y: b.bottom + Math.sin(sideRad) * segmentLength }
         ]);
 
         // Chain 5: Bottom middle pocket left → Bottom rail left → Bottom-left corner (horizontal)
         this.createRailChain([
-            { x: this.table.center.x - gap + Math.cos(sideRad) * segmentLength, y: b.bottom + Math.sin(sideRad) * segmentLength },
-            { x: this.table.center.x - gap, y: b.bottom },
+            { x: this.table.center.x - sideGap + Math.cos(sideRad) * segmentLength, y: b.bottom + Math.sin(sideRad) * segmentLength },
+            { x: this.table.center.x - sideGap, y: b.bottom },
             { x: b.left + gap, y: b.bottom },
             { x: b.left + gap - Math.cos(cornerRad) * segmentLength, y: b.bottom + Math.sin(cornerRad) * segmentLength }
         ]);

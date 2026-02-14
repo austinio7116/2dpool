@@ -3139,16 +3139,16 @@ export class UI {
             }
         }
 
-        // Show snooker match stats
-        if (gameInfo && gameInfo.snookerStats && gameInfo.mode === 'snooker') {
-            this.showSnookerStats(gameInfo.snookerStats, gameInfo);
+        // Show match stats for all modes
+        if (gameInfo && gameInfo.matchStats && gameInfo.mode !== 'freeplay') {
+            this.showMatchStats(gameInfo.matchStats, gameInfo);
         } else {
-            this.hideSnookerStats();
+            this.hideMatchStats();
         }
     }
 
-    // Display snooker match statistics on the game-over screen
-    showSnookerStats(stats, gameInfo) {
+    // Display match statistics on the game-over screen (all modes)
+    showMatchStats(stats, gameInfo) {
         let statsEl = document.getElementById('snooker-stats-display');
         if (!statsEl) return;
 
@@ -3163,8 +3163,52 @@ export class UI {
         const potPct1 = p1.totalShots > 0 ? Math.round((p1.potShots / p1.totalShots) * 100) : 0;
         const potPct2 = p2.totalShots > 0 ? Math.round((p2.potShots / p2.totalShots) * 100) : 0;
 
-        const longPotPct1 = p1.longPotAttempts > 0 ? Math.round((p1.longPots / p1.longPotAttempts) * 100) : 0;
-        const longPotPct2 = p2.longPotAttempts > 0 ? Math.round((p2.longPots / p2.longPotAttempts) * 100) : 0;
+        const isSnooker = gameInfo.mode === 'snooker';
+
+        let rows = '';
+
+        if (isSnooker) {
+            // Snooker: show break in points
+            rows += `
+                <tr>
+                    <td>High Break</td>
+                    <td>${p1.highBreak}</td>
+                    <td>${p2.highBreak}</td>
+                </tr>`;
+        } else {
+            // Pool: show longest break as consecutive balls potted
+            rows += `
+                <tr>
+                    <td>Longest Break</td>
+                    <td>${p1.highBreak || '-'}</td>
+                    <td>${p2.highBreak || '-'}</td>
+                </tr>`;
+        }
+
+        rows += `
+            <tr>
+                <td>Pot Success</td>
+                <td>${potPct1}%</td>
+                <td>${potPct2}%</td>
+            </tr>`;
+
+        if (isSnooker) {
+            const longPotPct1 = p1.longPotAttempts > 0 ? Math.round((p1.longPots / p1.longPotAttempts) * 100) : 0;
+            const longPotPct2 = p2.longPotAttempts > 0 ? Math.round((p2.longPots / p2.longPotAttempts) * 100) : 0;
+            rows += `
+                <tr>
+                    <td>Long Pots</td>
+                    <td>${p1.longPotAttempts > 0 ? p1.longPots + '/' + p1.longPotAttempts + ' (' + longPotPct1 + '%)' : '-'}</td>
+                    <td>${p2.longPotAttempts > 0 ? p2.longPots + '/' + p2.longPotAttempts + ' (' + longPotPct2 + '%)' : '-'}</td>
+                </tr>`;
+        }
+
+        rows += `
+            <tr>
+                <td>Fouls</td>
+                <td>${p1.fouls}</td>
+                <td>${p2.fouls}</td>
+            </tr>`;
 
         statsEl.innerHTML = `
             <div class="snooker-stats-header">Match Statistics</div>
@@ -3176,34 +3220,13 @@ export class UI {
                         <th>${p2Name}</th>
                     </tr>
                 </thead>
-                <tbody>
-                    <tr>
-                        <td>High Break</td>
-                        <td>${p1.highBreak}</td>
-                        <td>${p2.highBreak}</td>
-                    </tr>
-                    <tr>
-                        <td>Pot Success</td>
-                        <td>${potPct1}%</td>
-                        <td>${potPct2}%</td>
-                    </tr>
-                    <tr>
-                        <td>Long Pots</td>
-                        <td>${p1.longPotAttempts > 0 ? p1.longPots + '/' + p1.longPotAttempts + ' (' + longPotPct1 + '%)' : '-'}</td>
-                        <td>${p2.longPotAttempts > 0 ? p2.longPots + '/' + p2.longPotAttempts + ' (' + longPotPct2 + '%)' : '-'}</td>
-                    </tr>
-                    <tr>
-                        <td>Fouls</td>
-                        <td>${p1.fouls}</td>
-                        <td>${p2.fouls}</td>
-                    </tr>
-                </tbody>
+                <tbody>${rows}</tbody>
             </table>
         `;
     }
 
-    // Hide snooker stats display
-    hideSnookerStats() {
+    // Hide match stats display
+    hideMatchStats() {
         const statsEl = document.getElementById('snooker-stats-display');
         if (statsEl) {
             statsEl.classList.add('hidden');

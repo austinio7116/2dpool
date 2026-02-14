@@ -50,7 +50,25 @@ const ACHIEVEMENTS = [
     { id: 'clean_sweep', name: 'Clean Sweep', description: 'Win a match without losing a frame', icon: '!', color: '#E91E63' },
     { id: 'season_complete', name: 'Season Veteran', description: 'Complete an entire season', icon: 'SV', color: '#9C27B0' },
     { id: 'all_upper', name: 'Top Flight', description: 'All 4 leagues in pro division', icon: 'TF', color: '#FFD700' },
-    { id: 'grand_champion', name: 'Grand Champion', description: 'Win all 4 pro leagues', icon: 'GC', color: '#FFD700' }
+    { id: 'grand_champion', name: 'Grand Champion', description: 'Win all 4 pro leagues', icon: 'GC', color: '#FFD700' },
+    // Pool break achievements
+    { id: 'pool_break_2', name: 'Double Pot', description: 'Pot 2 balls in one visit', icon: '2', color: '#8BC34A' },
+    { id: 'pool_break_3', name: 'Hat Trick', description: 'Pot 3 balls in one visit', icon: '3', color: '#4CAF50' },
+    { id: 'pool_break_5', name: 'On Fire', description: 'Pot 5 balls in one visit', icon: '5', color: '#FF5722' },
+    // Clearance achievements
+    { id: 'clearance_8ball', name: '8-Ball Clearance', description: 'Clear all your balls and pot the 8-ball', icon: '8C', color: '#2196F3' },
+    { id: 'clearance_9ball', name: '9-Ball Run Out', description: 'Run the table in 9-ball', icon: '9C', color: '#FF9800' },
+    { id: 'clearance_8ball_break', name: '8-Ball Perfect Game', description: 'Clear from the break in 8-ball', icon: '8P', color: '#1565C0' },
+    { id: 'clearance_9ball_break', name: '9-Ball Perfect Game', description: 'Clear from the break in 9-ball', icon: '9P', color: '#E65100' },
+    // Special shot achievements
+    { id: 'bank_shot', name: 'Off the Cushion', description: 'Pot a ball via a cushion', icon: 'BK', color: '#00BCD4' },
+    { id: 'combo_shot', name: 'Plant Master', description: 'Pot a ball via another ball', icon: 'PL', color: '#9C27B0' },
+    // Snooker clearance achievements
+    { id: 'snooker_clear_colours', name: 'Colour Clearance', description: 'Pot yellow to black consecutively', icon: 'CC', color: '#E91E63' },
+    { id: 'clearance_mini_snooker', name: 'Mini Maximum', description: 'Full clearance in mini snooker', icon: 'MM', color: '#4CAF50' },
+    { id: 'clearance_full_snooker', name: 'Full Clearance', description: 'Full clearance in full snooker', icon: 'FC', color: '#F44336' },
+    { id: 'snooker_75_break', name: 'Mini Max Break', description: '75 break in mini snooker', icon: '75', color: '#FF9800' },
+    { id: 'snooker_147', name: 'Maximum Break', description: '147 in full snooker', icon: '147', color: '#FFD700' }
 ];
 
 function calculateElo(playerElo, opponentElo, won) {

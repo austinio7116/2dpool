@@ -60,6 +60,7 @@ export class CareerUI {
     show() {
         if (!this.modal) return;
         this.modal.classList.remove('hidden');
+        this.syncStandaloneAchievements();
         this.preloadTrophyImages();
         this.renderActiveTab();
     }
@@ -68,15 +69,15 @@ export class CareerUI {
         if (this._trophiesPreloaded) return;
         this._trophiesPreloaded = true;
 
-        const trophyFiles = [
-            ...AI_PERSONAS.map(p => `beat_${p.id}`),
-            'win_8ball', 'win_uk8ball', 'win_9ball', 'win_snooker',
-            'league_lower', 'league_upper',
-            'promotion_first', 'snooker_break_30', 'snooker_break_50',
-            'snooker_century', 'clean_sweep', 'season_complete',
-            'all_upper', 'grand_champion'
-        ];
-        for (const name of trophyFiles) {
+        // Derive filenames from ACHIEVEMENTS using same logic as renderAchievements
+        const filenames = new Set();
+        for (const def of ACHIEVEMENTS) {
+            let name = def.id;
+            if (name.startsWith('league_lower')) name = 'league_lower';
+            else if (name.startsWith('league_upper')) name = 'league_upper';
+            filenames.add(name);
+        }
+        for (const name of filenames) {
             const img = new Image();
             img.src = `assets/trophies/${name}.png`;
         }
@@ -365,10 +366,19 @@ export class CareerUI {
         const state = this.career.getState();
         if (!state) return;
 
+        // Merge standalone achievements into display
+        const standaloneAchievements = this._getStandaloneAchievements();
+        const allUnlocked = [...state.achievements];
+        for (const sa of standaloneAchievements) {
+            if (!allUnlocked.some(a => a.id === sa.id)) {
+                allUnlocked.push(sa);
+            }
+        }
+
         let html = `<div class="career-achievements-grid">`;
 
         for (const def of ACHIEVEMENTS) {
-            const unlocked = state.achievements.find(a => a.id === def.id);
+            const unlocked = allUnlocked.find(a => a.id === def.id);
             const lockedClass = unlocked ? 'unlocked' : 'locked';
             const date = unlocked ? new Date(unlocked.unlockedAt).toLocaleDateString() : '';
 
@@ -581,6 +591,28 @@ export class CareerUI {
     // ─── Achievement Notification ───────────────────────────────────
 
     showAchievementNotification(def) {
+        // Queue achievements so multiple ones appear sequentially
+        if (!this._achievementQueue) {
+            this._achievementQueue = [];
+            this._achievementShowing = false;
+        }
+
+        this._achievementQueue.push(def);
+
+        if (!this._achievementShowing) {
+            this._showNextAchievement();
+        }
+    }
+
+    _showNextAchievement() {
+        if (!this._achievementQueue || this._achievementQueue.length === 0) {
+            this._achievementShowing = false;
+            return;
+        }
+
+        this._achievementShowing = true;
+        const def = this._achievementQueue.shift();
+
         const notif = document.createElement('div');
         notif.className = 'career-achievement-notif';
         notif.innerHTML = `
@@ -594,14 +626,39 @@ export class CareerUI {
         // Animate in
         requestAnimationFrame(() => notif.classList.add('show'));
 
-        // Remove after 4s
+        // Remove after 3s, then show next
         setTimeout(() => {
             notif.classList.remove('show');
-            setTimeout(() => notif.remove(), 500);
-        }, 4000);
+            setTimeout(() => {
+                notif.remove();
+                this._showNextAchievement();
+            }, 500);
+        }, 3000);
     }
 
     // ─── Helpers ────────────────────────────────────────────────────
+
+    _getStandaloneAchievements() {
+        try {
+            const data = localStorage.getItem('poolGame_achievements');
+            return data ? JSON.parse(data) : [];
+        } catch (e) {
+            return [];
+        }
+    }
+
+    // Sync standalone achievements into career state (call on career load)
+    syncStandaloneAchievements() {
+        const state = this.career.getState();
+        if (!state) return;
+        const standalone = this._getStandaloneAchievements();
+        for (const sa of standalone) {
+            if (!state.achievements.some(a => a.id === sa.id)) {
+                state.achievements.push(sa);
+            }
+        }
+        this.career.save();
+    }
 
     escapeHtml(str) {
         const div = document.createElement('div');

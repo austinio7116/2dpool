@@ -9,8 +9,8 @@ import { Game, GameMode, GameState } from './game.js';
 import { UI } from './ui.js';
 import { Audio } from './audio.js';
 import { AI } from './ai.js';
-import { Vec2 } from './utils.js';
-import { Career } from './career.js';
+import { Vec2, Constants } from './utils.js';
+import { Career, ACHIEVEMENTS } from './career.js';
 import { CareerUI } from './career-ui.js';
 import { getPersonaById } from './ai-personas.js';
 
@@ -819,7 +819,8 @@ class PoolGame {
     }
 
     handleGameOver(winner, reason, match) {
-        this.ui.showGameOverWithMatch(winner, reason, match, this.game.getGameInfo());
+        const gameInfo = this.game.getGameInfo();
+        this.ui.showGameOverWithMatch(winner, reason, match, gameInfo);
         this.input.setCanShoot(false);
 
         // Clear saved match if match is complete or single frame
@@ -830,6 +831,9 @@ class PoolGame {
         if (winner) {
             this.audio.playWin();
         }
+
+        // Check achievements for all games (not just career)
+        this.checkGameOverAchievements(gameInfo);
 
         // Career mode: record result when match is complete
         if (this.careerMatch && match?.matchComplete) {
@@ -872,6 +876,150 @@ class PoolGame {
 
     handleBallPocketed(_ball) {
         // Additional handling if needed
+    }
+
+    // ==========================================
+    // ACHIEVEMENT SYSTEM (works in all games)
+    // ==========================================
+
+    // Load standalone achievements from localStorage
+    loadAchievements() {
+        try {
+            const data = localStorage.getItem('poolGame_achievements');
+            return data ? JSON.parse(data) : [];
+        } catch (e) {
+            return [];
+        }
+    }
+
+    // Save standalone achievements to localStorage
+    saveAchievements(achievements) {
+        localStorage.setItem('poolGame_achievements', JSON.stringify(achievements));
+    }
+
+    // Unlock an achievement (standalone + career)
+    unlockAchievement(id) {
+        // Standalone storage
+        const achievements = this.loadAchievements();
+        if (achievements.some(a => a.id === id)) return; // Already unlocked
+
+        achievements.push({ id, unlockedAt: Date.now() });
+        this.saveAchievements(achievements);
+
+        // Also unlock in career if active (career's callback shows its own notification)
+        if (this.career.getState()) {
+            this.career.unlockAchievement(id);
+        } else {
+            // Only show notification directly when career is not active
+            // (career mode has its own onAchievementUnlocked callback)
+            const def = ACHIEVEMENTS.find(a => a.id === id);
+            if (def) {
+                this.careerUI.showAchievementNotification(def);
+            }
+        }
+    }
+
+    // Check achievements after each shot (bank, combo, pool breaks)
+    checkShotAchievements() {
+        if (this.game.mode === GameMode.FREE_PLAY) return;
+        if (this.ai.trainingMode) return;
+
+        // lastShotPlayer tracks who actually took the shot (set before any switches)
+        const isHuman = this.game.lastShotPlayer === 1;
+        if (!isHuman) return;
+
+        // Bank shot achievement
+        if (this.game.bankShotThisShot && !this.game.foul) {
+            this.unlockAchievement('bank_shot');
+        }
+
+        // Combo/plant achievement
+        if (this.game.comboShotThisShot && !this.game.foul) {
+            this.unlockAchievement('combo_shot');
+        }
+
+        // Pool break achievements (check player 1 high break from accumulated stats)
+        if (this.game.mode !== GameMode.SNOOKER) {
+            const breakCount = this.game.matchStats.player1.highBreak;
+            if (breakCount >= 2) this.unlockAchievement('pool_break_2');
+            if (breakCount >= 3) this.unlockAchievement('pool_break_3');
+            if (breakCount >= 5) this.unlockAchievement('pool_break_5');
+        }
+    }
+
+    // Check achievements at game over (clearances, snooker breaks)
+    checkGameOverAchievements(gameInfo) {
+        if (!gameInfo || !gameInfo.winner) return;
+        if (this.ai.trainingMode) return;
+
+        // Only check for human player (player 1) wins
+        if (gameInfo.winner !== 1) return;
+
+        const mode = gameInfo.mode;
+        const stats = gameInfo.matchStats;
+
+        // 8-ball clearance: winner potted all balls without opponent getting a turn
+        if (mode === '8ball') {
+            // Check if opponent (player 2) never had a turn
+            if (!gameInfo.playerHasHadTurn[2]) {
+                if (gameInfo.breakShotPlayer === 1) {
+                    this.unlockAchievement('clearance_8ball_break');
+                }
+                this.unlockAchievement('clearance_8ball');
+            }
+        }
+
+        // 9-ball clearance
+        if (mode === '9ball') {
+            if (!gameInfo.playerHasHadTurn[2]) {
+                if (gameInfo.breakShotPlayer === 1) {
+                    this.unlockAchievement('clearance_9ball_break');
+                }
+                this.unlockAchievement('clearance_9ball');
+            }
+        }
+
+        // Snooker achievements
+        if (mode === 'snooker') {
+            const highBreak = stats.player1.highBreak;
+            const tableConfig = Constants.TABLE_CONFIGS ? Constants.TABLE_CONFIGS[gameInfo.tableStyle] : null;
+            const isFullSnooker = tableConfig && tableConfig.isSnooker && tableConfig.redCount === 15;
+
+            // Snooker break achievements
+            if (highBreak >= 30) this.unlockAchievement('snooker_break_30');
+            if (highBreak >= 50) this.unlockAchievement('snooker_break_50');
+            if (highBreak >= 100) this.unlockAchievement('snooker_century');
+
+            // Clear the colours: player potted all 6 colours consecutively
+            if (gameInfo.coloursClearancePlayer === 1) {
+                this.unlockAchievement('snooker_clear_colours');
+            }
+
+            // Full clearance: player 1 never lost turn for entire frame
+            if (!gameInfo.playerHasHadTurn[2]) {
+                if (isFullSnooker) {
+                    this.unlockAchievement('clearance_full_snooker');
+                } else {
+                    this.unlockAchievement('clearance_mini_snooker');
+                }
+            }
+
+            // Maximum breaks
+            if (isFullSnooker && highBreak >= 147) {
+                this.unlockAchievement('snooker_147');
+            }
+            if (!isFullSnooker && highBreak >= 75) {
+                this.unlockAchievement('snooker_75_break');
+            }
+        }
+
+        // Pool break achievements from final stats
+        if (mode === '8ball' || mode === '9ball' || mode === 'uk8ball') {
+            const breakCount = stats.player1.highBreak;
+            if (breakCount >= 2) this.unlockAchievement('pool_break_2');
+            if (breakCount >= 3) this.unlockAchievement('pool_break_3');
+            if (breakCount >= 5) this.unlockAchievement('pool_break_5');
+        }
     }
 
     // Handle snooker foul decision request
@@ -1231,7 +1379,7 @@ class PoolGame {
                 } else if (event.type === 'pocket') {
                     this.game.onBallPocket(event.ball);
                 } else if (event.type === 'rail') {
-                    this.game.onRailContact(event.ball);
+                    this.game.onRailContact(event.ball, event.railType);
                 }
             }
 
@@ -1239,6 +1387,8 @@ class PoolGame {
                 this.game.onBallsStopped();
                 this.input.resetSpin();
                 this.ai.clearVisualization(); // Clear AI overlay when shot completes
+                // Check per-shot achievements (bank shot, combo, breaks)
+                this.checkShotAchievements();
             }
         }
 

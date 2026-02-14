@@ -50,6 +50,16 @@ export class Game {
         this.railContactAfterHit = false;
         this.ballPottedThisShot = false;
 
+        // Per-shot special shot detection
+        this.ballsHitCushion = new Set();       // balls that hit a cushion this shot
+        this.ballsHitByObjectBall = new Set();  // balls hit by another object ball (not cue)
+        this.bankShotThisShot = false;
+        this.comboShotThisShot = false;
+
+        // Pool break tracking (consecutive pots in a visit)
+        this.poolCurrentBreak = 0;              // balls potted consecutively this visit
+        this.playerHasHadTurn = { 1: false, 2: false }; // track if player ever had a turn
+
         // 9-ball specific
         this.lowestBall = 1;
         this.pushOutAvailable = false;
@@ -86,8 +96,9 @@ export class Game {
         this.isFreeBall = false;            // True when free ball is in effect
         this.freeBallNomination = null;     // The ball nominated as free ball
 
-        // Snooker match stats (persist across frames)
-        this.snookerStats = this.createEmptyStats();
+        // Match stats - persist across frames (all modes)
+        this.matchStats = this.createEmptyStats();
+        this.snookerStats = this.matchStats; // backward compat alias
 
         // Match state (frame scoring)
         this.match = {
@@ -167,8 +178,14 @@ export class Game {
         this.consecutiveMisses = 0;
         this.wasSnookeredBeforeShot = false;
 
-        // Reset match stats for new match
-        this.snookerStats = this.createEmptyStats();
+        // Reset match stats for new match (all modes)
+        this.matchStats = this.createEmptyStats();
+        this.snookerStats = this.matchStats; // alias for backward compat
+
+        // Clearance tracking
+        this.playerHasHadTurn = { 1: false, 2: false };
+        this.breakShotPlayer = this.currentPlayer;
+        this.coloursClearancePlayer = null; // snooker: who started clearing colours
 
         // Initialize match if bestOf provided in options
         if (options.bestOf !== undefined) {
@@ -308,14 +325,15 @@ export class Game {
         // Capture state BEFORE shot for Miss rule (snooker only)
         if (this.mode === GameMode.SNOOKER) {
             this.preShotState = this.serializeState();
-            // Track if player was snookered before shot (for 3 miss rule)
-            // Miss rule only applies if player had a clear shot available
             this.wasSnookeredBeforeShot = this.isPlayerSnookered();
-
-            // Track shot count for stats
-            const playerKey = this.currentPlayer === 1 ? 'player1' : 'player2';
-            this.snookerStats[playerKey].totalShots++;
         }
+
+        // Track who is taking this shot (before any switches happen)
+        this.lastShotPlayer = this.currentPlayer;
+
+        // Track shot count for stats (all modes)
+        const playerKey = this.currentPlayer === 1 ? 'player1' : 'player2';
+        this.matchStats[playerKey].totalShots++;
 
         this.state = GameState.BALLS_MOVING;
         this.firstBallHit = null;
@@ -325,6 +343,12 @@ export class Game {
         this.turnContinues = false;
         this.railContactAfterHit = false;
         this.ballPottedThisShot = false;
+
+        // Reset per-shot special shot detection
+        this.ballsHitCushion = new Set();
+        this.ballsHitByObjectBall = new Set();
+        this.bankShotThisShot = false;
+        this.comboShotThisShot = false;
     }
 
     // Called when a ball collision occurs
@@ -337,13 +361,25 @@ export class Game {
                 this.firstBallHit = ballA;
             }
         }
+
+        // Track object-ball-to-object-ball collisions (for combo/plant detection)
+        if (!ballA.isCueBall && !ballB.isCueBall) {
+            this.ballsHitByObjectBall.add(ballA);
+            this.ballsHitByObjectBall.add(ballB);
+        }
     }
 
     // Called when a ball hits a rail cushion
-    onRailContact(ball) {
+    onRailContact(ball, railType) {
         // Only counts after cue ball has hit an object ball
         if (this.firstBallHit !== null) {
             this.railContactAfterHit = true;
+        }
+
+        // Track per-ball cushion contact for bank shot detection
+        // Only count real cushion bounces, not pocket liner contacts
+        if (railType !== 'pocket-liner' && !ball.isCueBall) {
+            this.ballsHitCushion.add(ball);
         }
     }
 
@@ -351,6 +387,16 @@ export class Game {
     onBallPocket(ball) {
         this.ballsPocketed.push(ball);
         this.ballPottedThisShot = true;
+
+        // Detect bank shot: ball hit cushion before being pocketed
+        if (!ball.isCueBall && this.ballsHitCushion.has(ball)) {
+            this.bankShotThisShot = true;
+        }
+
+        // Detect combo/plant: ball was hit by another object ball (not directly by cue ball)
+        if (!ball.isCueBall && this.ballsHitByObjectBall.has(ball) && ball !== this.firstBallHit) {
+            this.comboShotThisShot = true;
+        }
 
         if (this.onBallPocketed) {
             this.onBallPocketed(ball);
@@ -393,6 +439,9 @@ export class Game {
             this.evaluateSnookerShot();
             return; // Snooker handles its own state changes
         }
+
+        // Track pool stats after shot evaluation
+        this.updatePoolStats();
 
         // 9-ball push-out: if a push-out response is pending, pause for decision
         if (this.pushOutPending === 'response') {
@@ -939,10 +988,26 @@ export class Game {
 
     // Switch to other player
     switchPlayer() {
+        // Finalize pool break (consecutive pots) before switching
+        if (this.mode !== GameMode.SNOOKER && this.mode !== GameMode.FREE_PLAY) {
+            this.finalizePoolBreak();
+        }
+
+        // Mark that both players have had turns (for clearance tracking)
+        this.playerHasHadTurn[this.currentPlayer] = true;
+
         this.currentPlayer = this.currentPlayer === 1 ? 2 : 1;
 
         // Reset consecutive misses when player changes (3 miss rule is per-player)
         this.consecutiveMisses = 0;
+
+        // Reset pool break counter for new player
+        this.poolCurrentBreak = 0;
+
+        // Snooker: if colours phase started and player switches, clearance is broken
+        if (this.mode === GameMode.SNOOKER && this.colorsPhase) {
+            this.coloursClearancePlayer = null;
+        }
 
         if (this.onTurnChange) {
             this.onTurnChange(this.currentPlayer);
@@ -1066,6 +1131,12 @@ export class Game {
         this.colorsPhase = false;
         this.nextColorInSequence = 'yellow';
 
+        // Reset per-frame tracking (matchStats persists across frames)
+        this.poolCurrentBreak = 0;
+        this.playerHasHadTurn = { 1: false, 2: false };
+        this.breakShotPlayer = this.currentPlayer;
+        this.coloursClearancePlayer = null;
+
         // Recreate balls based on game mode
         const tableConfig = Constants.TABLE_CONFIGS ? Constants.TABLE_CONFIGS[this.tableStyle] : null;
         const tableBallRadius = (tableConfig && tableConfig.ballRadius) ? tableConfig.ballRadius : null;
@@ -1101,6 +1172,11 @@ export class Game {
     // End the game
     endGame() {
         this.state = GameState.GAME_OVER;
+
+        // Finalize any in-progress break
+        if (this.mode !== GameMode.SNOOKER && this.mode !== GameMode.FREE_PLAY) {
+            this.finalizePoolBreak();
+        }
 
         // Award frame to winner in match play
         if (this.winner && this.match.bestOf > 1) {
@@ -1202,6 +1278,20 @@ export class Game {
             match: this.getMatchInfo()
         };
 
+        // Match stats for all modes
+        info.matchStats = this.matchStats;
+
+        // Special shot flags (for achievement checking)
+        info.bankShotThisShot = this.bankShotThisShot;
+        info.comboShotThisShot = this.comboShotThisShot;
+
+        // Clearance tracking
+        info.playerHasHadTurn = { ...this.playerHasHadTurn };
+        info.breakShotPlayer = this.breakShotPlayer;
+
+        // Table style for snooker variant detection
+        info.tableStyle = this.tableStyle;
+
         // Add snooker info if in snooker mode
         if (this.mode === GameMode.SNOOKER) {
             info.player1Score = this.player1Score;
@@ -1216,7 +1306,8 @@ export class Game {
             info.pendingFoulDecision = this.pendingFoulDecision;
             info.isFreeBall = this.isFreeBall;
             info.freeBallNomination = this.freeBallNomination;
-            info.snookerStats = this.snookerStats;
+            info.snookerStats = this.matchStats;
+            info.coloursClearancePlayer = this.coloursClearancePlayer;
         }
 
         return info;
@@ -1348,7 +1439,7 @@ export class Game {
         // Track long pot attempt for current player
         if (isLongPotAttempt) {
             const playerKey = this.currentPlayer === 1 ? 'player1' : 'player2';
-            this.snookerStats[playerKey].longPotAttempts++;
+            this.matchStats[playerKey].longPotAttempts++;
         }
 
         // 6. Execute Game Logic
@@ -1357,7 +1448,7 @@ export class Game {
         if (isFoul) {
             // Track foul stats
             const foulPlayerKey = this.currentPlayer === 1 ? 'player1' : 'player2';
-            this.snookerStats[foulPlayerKey].fouls++;
+            this.matchStats[foulPlayerKey].fouls++;
 
             this.finalizeCurrentBreak();
             this.currentBreak = 0; // Reset break
@@ -1437,12 +1528,12 @@ export class Game {
 
             // Track pot stats
             const potPlayerKey = this.currentPlayer === 1 ? 'player1' : 'player2';
-            this.snookerStats[potPlayerKey].potShots++;
-            this.snookerStats[potPlayerKey].totalPoints += turnScore;
+            this.matchStats[potPlayerKey].potShots++;
+            this.matchStats[potPlayerKey].totalPoints += turnScore;
 
             // Track successful long pot (attempt already counted above)
             if (isLongPotAttempt) {
-                this.snookerStats[potPlayerKey].longPots++;
+                this.matchStats[potPlayerKey].longPots++;
             }
 
             // Respotting on Valid Pot:
@@ -1600,6 +1691,7 @@ export class Game {
                 // No reds left, start colors phase
                 this.colorsPhase = true;
                 this.snookerTarget = 'yellow';
+                this.coloursClearancePlayer = this.currentPlayer;
             }
         }
     }
@@ -1933,6 +2025,7 @@ export class Game {
                 // Potted last Color after last Red? Begin Clearance
                 this.colorsPhase = true;
                 this.snookerTarget = 'yellow';
+                this.coloursClearancePlayer = this.currentPlayer;
             }
         }
     }
@@ -1954,6 +2047,7 @@ export class Game {
                 // No reds left - start clearance phase
                 this.colorsPhase = true;
                 this.snookerTarget = 'yellow';
+                this.coloursClearancePlayer = this.currentPlayer;
             }
         }
     }
@@ -2108,13 +2202,62 @@ export class Game {
         };
     }
 
-    // Finalize the current break into per-player stats
+    // Finalize the current snooker break into per-player stats
     finalizeCurrentBreak() {
         if (this.currentBreak > 0) {
             const playerKey = this.currentPlayer === 1 ? 'player1' : 'player2';
-            this.snookerStats[playerKey].highBreak = Math.max(
-                this.snookerStats[playerKey].highBreak,
+            this.matchStats[playerKey].highBreak = Math.max(
+                this.matchStats[playerKey].highBreak,
                 this.currentBreak
+            );
+        }
+    }
+
+    // Track pool stats after each shot evaluation (8-ball, 9-ball, UK 8-ball)
+    updatePoolStats() {
+        if (this.mode === GameMode.FREE_PLAY || this.mode === GameMode.SNOOKER) return;
+
+        const playerKey = this.currentPlayer === 1 ? 'player1' : 'player2';
+
+        // Count non-cue balls legally potted
+        const legalPots = this.ballsPocketed.filter(b => !b.isCueBall).length;
+
+        if (this.foul) {
+            this.matchStats[playerKey].fouls++;
+            // Foul ends the break
+            this.finalizePoolBreak();
+            this.poolCurrentBreak = 0;
+        } else if (legalPots > 0 && this.turnContinues) {
+            // Legal pot - increment break and pot stats
+            this.matchStats[playerKey].potShots++;
+            this.poolCurrentBreak += legalPots;
+            // Update high break immediately
+            this.matchStats[playerKey].highBreak = Math.max(
+                this.matchStats[playerKey].highBreak,
+                this.poolCurrentBreak
+            );
+        } else {
+            // No pot, no foul - break ends
+            this.finalizePoolBreak();
+            this.poolCurrentBreak = 0;
+        }
+
+        // Track special shots
+        if (this.bankShotThisShot && !this.foul) {
+            this.matchStats[playerKey].bankShots = (this.matchStats[playerKey].bankShots || 0) + 1;
+        }
+        if (this.comboShotThisShot && !this.foul) {
+            this.matchStats[playerKey].comboShots = (this.matchStats[playerKey].comboShots || 0) + 1;
+        }
+    }
+
+    // Finalize pool break (consecutive pots) into stats
+    finalizePoolBreak() {
+        if (this.poolCurrentBreak > 0) {
+            const playerKey = this.currentPlayer === 1 ? 'player1' : 'player2';
+            this.matchStats[playerKey].highBreak = Math.max(
+                this.matchStats[playerKey].highBreak,
+                this.poolCurrentBreak
             );
         }
     }
@@ -2174,7 +2317,7 @@ export class Game {
             nextColorInSequence: this.nextColorInSequence,
             currentBreak: this.currentBreak,
             highestBreak: this.highestBreak,
-            snookerStats: this.snookerStats
+            snookerStats: this.matchStats
         };
     }
 
@@ -2216,7 +2359,8 @@ export class Game {
         this.nextColorInSequence = data.nextColorInSequence || 'yellow';
         this.currentBreak = data.currentBreak || 0;
         this.highestBreak = data.highestBreak || 0;
-        this.snookerStats = data.snookerStats || this.createEmptyStats();
+        this.matchStats = data.snookerStats || this.createEmptyStats();
+        this.snookerStats = this.matchStats; // backward compat alias
 
         // Restore ball positions - must be done after balls are created
         if (data.balls && this.balls.length > 0) {

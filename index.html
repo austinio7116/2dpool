@@ -160,11 +160,11 @@
                     <div class="table-grid" id="table-grid">
                         <!-- Table thumbnails will be populated by JS -->
                     </div>
-                    <div class="import-export-buttons">
-                        <button class="import-export-btn" id="btn-import-tables">Import Table</button>
+                    <div class="ball-modal-footer">
+                        <button class="import-export-btn" id="btn-import-tables">Import</button>
                         <input type="file" id="import-tables-input" accept=".json" style="display: none;">
+                        <button class="create-custom-btn" id="btn-create-custom-table">+ Create Custom</button>
                     </div>
-                    <button class="create-custom-btn" id="btn-create-custom-table">+ Create Custom Table</button>
                 </div>
             </div>
 
@@ -594,52 +594,58 @@
                         <h2>Create Custom Table</h2>
                     </div>
                     <div class="table-creator-layout">
-                        <div class="creator-field name-field">
-                            <label for="custom-table-name">Table Name</label>
-                            <input type="text" id="custom-table-name" placeholder="My Custom Table" maxlength="30">
-                        </div>
+                        <div class="table-creator-left">
+                            <div class="table-creator-top-fields">
+                                <div class="creator-field name-field">
+                                    <label for="custom-table-name">Table Name</label>
+                                    <input type="text" id="custom-table-name" placeholder="My Custom Table" maxlength="30">
+                                </div>
 
-                        <div class="creator-field">
-                            <label for="base-table-select">Base Table</label>
-                            <select id="base-table-select" class="base-table-select">
-                                <option value="1">Classic Green</option>
-                                <option value="2">Blue Felt</option>
-                                <option value="3">Red Felt</option>
-                                <option value="4">Tournament</option>
-                                <option value="7">UK Pub</option>
-                                <option value="8">Mini Snooker</option>
-                                <option value="9">Full-Size Snooker</option>
-                            </select>
-                        </div>
-
-                        <div class="table-preview-container">
-                            <label>Preview</label>
-                            <canvas id="table-creator-preview" width="400" height="200"></canvas>
-                        </div>
-
-                        <div class="hsb-controls">
-                            <div class="hsb-slider-group">
-                                <label for="table-hue">
-                                    Hue
-                                    <span class="slider-value" id="table-hue-value">0°</span>
-                                </label>
-                                <input type="range" id="table-hue" min="0" max="360" value="0" step="1">
+                                <div class="creator-field">
+                                    <label for="base-table-select">Base Table</label>
+                                    <select id="base-table-select" class="base-table-select">
+                                        <option value="1">Classic Green</option>
+                                        <option value="2">Blue Felt</option>
+                                        <option value="3">Red Felt</option>
+                                        <option value="4">Tournament</option>
+                                        <option value="7">UK Pub</option>
+                                        <option value="8">Mini Snooker</option>
+                                        <option value="9">Full-Size Snooker</option>
+                                    </select>
+                                </div>
                             </div>
 
-                            <div class="hsb-slider-group">
-                                <label for="table-saturation">
-                                    Saturation
-                                    <span class="slider-value" id="table-saturation-value">100%</span>
-                                </label>
-                                <input type="range" id="table-saturation" min="0" max="200" value="100" step="1">
+                            <div class="table-preview-container">
+                                <label>Preview</label>
+                                <canvas id="table-creator-preview" width="400" height="200"></canvas>
                             </div>
+                        </div>
 
-                            <div class="hsb-slider-group">
-                                <label for="table-brightness">
-                                    Brightness
-                                    <span class="slider-value" id="table-brightness-value">100%</span>
-                                </label>
-                                <input type="range" id="table-brightness" min="0" max="200" value="100" step="1">
+                        <div class="table-creator-right">
+                            <div class="hsb-controls">
+                                <div class="hsb-slider-group">
+                                    <label for="table-hue">
+                                        Hue
+                                        <span class="slider-value" id="table-hue-value">0°</span>
+                                    </label>
+                                    <input type="range" id="table-hue" min="0" max="360" value="0" step="1">
+                                </div>
+
+                                <div class="hsb-slider-group">
+                                    <label for="table-saturation">
+                                        Saturation
+                                        <span class="slider-value" id="table-saturation-value">100%</span>
+                                    </label>
+                                    <input type="range" id="table-saturation" min="0" max="200" value="100" step="1">
+                                </div>
+
+                                <div class="hsb-slider-group">
+                                    <label for="table-brightness">
+                                        Brightness
+                                        <span class="slider-value" id="table-brightness-value">100%</span>
+                                    </label>
+                                    <input type="range" id="table-brightness" min="0" max="200" value="100" step="1">
+                                </div>
                             </div>
                         </div>
                     </div>

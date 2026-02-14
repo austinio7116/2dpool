@@ -3375,6 +3375,31 @@ export class UI {
             saturation,
             brightness
         });
+
+        this.updateTableSliderGradients(hue, saturation, brightness);
+    }
+
+    // Update table creator slider track gradients
+    updateTableSliderGradients(hue, saturation, brightness) {
+        if (!this.tableHueSlider || !this.tableSaturationSlider || !this.tableBrightnessSlider) return;
+
+        // Hue slider: full spectrum
+        this.tableHueSlider.style.background = 'linear-gradient(to right, ' +
+            '#FF0000 0%, #FFFF00 17%, #00FF00 33%, #00FFFF 50%, ' +
+            '#0000FF 67%, #FF00FF 83%, #FF0000 100%)';
+
+        // Saturation slider: desaturated to oversaturated
+        // At 0% it's fully desaturated, 100% is normal, 200% is oversaturated
+        const satLow = hsbToHex(hue, 0, Math.min(brightness, 100));
+        const satMid = hsbToHex(hue, 100, Math.min(brightness, 100));
+        const satHigh = hsbToHex(hue, 100, Math.min(brightness, 100));
+        this.tableSaturationSlider.style.background =
+            `linear-gradient(to right, ${satLow}, ${satMid} 50%, ${satHigh})`;
+
+        // Brightness slider: black to full brightness to white
+        const brightMid = hsbToHex(hue, Math.min(saturation, 100), 100);
+        this.tableBrightnessSlider.style.background =
+            `linear-gradient(to right, #000000, ${brightMid} 50%, #ffffff)`;
     }
 
     // Render table preview to canvas with HSB adjustments

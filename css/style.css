@@ -1462,14 +1462,41 @@ body {
 
 /* Custom Table Creator */
 .table-creator-content {
-    width: 600px;
+    width: 750px;
     max-width: 90vw;
 }
 
 .table-creator-layout {
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
     gap: 15px;
+    align-items: stretch;
+}
+
+.table-creator-left {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-width: 0;
+}
+
+.table-creator-right {
+    width: 240px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.table-creator-top-fields {
+    display: flex;
+    gap: 10px;
+}
+
+.table-creator-top-fields .creator-field {
+    flex: 1;
+    min-width: 0;
 }
 
 .base-table-select {
@@ -1491,7 +1518,8 @@ body {
 .table-preview-container {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 6px;
+    flex: 1;
 }
 
 .table-preview-container label {
@@ -1506,6 +1534,8 @@ body {
     border-radius: 8px;
     background: #1a1a2e;
     border: 2px solid #4a4a6a;
+    flex: 1;
+    object-fit: contain;
 }
 
 .hsb-controls {
@@ -1515,6 +1545,52 @@ body {
     background: rgba(40, 40, 60, 0.5);
     border-radius: 6px;
     padding: 15px;
+}
+
+/* Table creator HSB sliders with color gradients */
+#table-creator-modal .hsb-slider-group input[type="range"] {
+    height: 16px;
+    border-radius: 8px;
+    border: 2px solid rgba(120, 120, 160, 0.6);
+}
+
+#table-creator-modal .hsb-slider-group input[type="range"]::-webkit-slider-thumb {
+    width: 20px;
+    height: 20px;
+    background: #ffffff;
+    border: 2px solid #1a1a2e;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+#table-creator-modal .hsb-slider-group input[type="range"]::-moz-range-thumb {
+    width: 20px;
+    height: 20px;
+    background: #ffffff;
+    border: 2px solid #1a1a2e;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+#table-creator-modal .hsb-slider-group input[type="range"]::-webkit-slider-thumb:hover {
+    background: #ffffff;
+    border-color: #ffd700;
+}
+
+#table-creator-modal .hsb-slider-group input[type="range"]::-moz-range-thumb:hover {
+    background: #ffffff;
+    border-color: #ffd700;
+}
+
+/* Mobile: stack vertically */
+@media (max-width: 700px) {
+    .table-creator-layout {
+        flex-direction: column;
+    }
+    .table-creator-right {
+        width: 100%;
+    }
+    .table-creator-top-fields {
+        flex-direction: column;
+    }
 }
 
 .hsb-slider-group,

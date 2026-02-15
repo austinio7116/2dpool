@@ -1836,7 +1836,7 @@ export class AI {
         // 6. Corner pocket cushion penalty on curved-pocket tables
         if (pocket.type === 'corner') {
             const tableStyle = this.physics?.tableStyle || 1;
-            const hasCurvedPockets = tableStyle === 7 || tableStyle === 8 || tableStyle === 9;
+            const hasCurvedPockets = tableStyle === 7 || tableStyle === 8 || tableStyle === 9 || tableStyle === 10;
             if (hasCurvedPockets) {
                 // Calculate approach angle vs ideal entry line (diagonal into corner)
                 const idealDir = Vec2.normalize(Vec2.subtract(pocket.position, this.table.center));

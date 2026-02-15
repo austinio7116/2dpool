@@ -101,7 +101,7 @@ export class PlanckPhysics {
 
     createTableBoundaries() {
         // Use ChainShape for continuous rail paths to prevent ghost collisions
-        const useCurvedPockets = this.tableStyle === 7 || this.tableStyle === 8 || this.tableStyle === 9;
+        const useCurvedPockets = this.tableStyle === 7 || this.tableStyle === 8 || this.tableStyle === 9 || this.tableStyle === 10;
 
         if (useCurvedPockets) {
             this.createCurvedRailChains();

@@ -1,7 +1,7 @@
 // Game logic - manages game state, rules, turns, and win conditions
 
 import { Vec2, Constants } from './utils.js';
-import { Ball, createBallSet, createSnookerBallSet, createFullSnookerBallSet, rackBalls, positionSnookerBalls, positionFullSnookerBalls, RackPatterns } from './ball.js';
+import { Ball, createBallSet, createSnookerBallSet, createFullSnookerBallSet, createTenRedSnookerBallSet, rackBalls, positionSnookerBalls, positionFullSnookerBalls, positionTenRedSnookerBalls, RackPatterns } from './ball.js';
 
 export const GameMode = {
     EIGHT_BALL: '8ball',
@@ -203,9 +203,11 @@ export class Game {
         const tableBallRadius = (tableConfig && tableConfig.ballRadius) ? tableConfig.ballRadius : null;
 
         if (mode === GameMode.SNOOKER) {
-            // Check if using full-size snooker table (table style 9)
+            // Check if using full-size or 10ft snooker table
             if (tableConfig && tableConfig.isSnooker && tableConfig.redCount === 15) {
                 this.balls = createFullSnookerBallSet(tableConfig.ballRadius);
+            } else if (tableConfig && tableConfig.isSnooker && tableConfig.redCount === 10) {
+                this.balls = createTenRedSnookerBallSet(tableConfig.ballRadius);
             } else {
                 this.balls = createSnookerBallSet();
             }
@@ -253,9 +255,11 @@ export class Game {
         } else if (this.mode === GameMode.UK_EIGHT_BALL) {
             rackBalls(this.balls, RackPatterns.ukEightBall, center, ballRadius);
         } else if (this.mode === GameMode.SNOOKER) {
-            // Use full snooker positioning for table 9
+            // Use appropriate snooker positioning based on red count
             if (tableConfig && tableConfig.isSnooker && tableConfig.redCount === 15) {
                 positionFullSnookerBalls(this.balls, center, ballRadius, tableConfig.spotlocations);
+            } else if (tableConfig && tableConfig.isSnooker && tableConfig.redCount === 10) {
+                positionTenRedSnookerBalls(this.balls, center, ballRadius, tableConfig.spotlocations);
             } else {
                 positionSnookerBalls(this.balls, center, ballRadius, tableConfig.spotlocations);
             }
@@ -1144,6 +1148,8 @@ export class Game {
         if (this.mode === GameMode.SNOOKER) {
             if (tableConfig && tableConfig.isSnooker && tableConfig.redCount === 15) {
                 this.balls = createFullSnookerBallSet(tableConfig.ballRadius);
+            } else if (tableConfig && tableConfig.isSnooker && tableConfig.redCount === 10) {
+                this.balls = createTenRedSnookerBallSet(tableConfig.ballRadius);
             } else {
                 this.balls = createSnookerBallSet();
             }

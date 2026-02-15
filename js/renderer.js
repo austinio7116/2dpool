@@ -34,13 +34,13 @@ export class Renderer {
 
         // Load table images
         this.tableImages = [];
-        this.tableImagesLoaded = [false, false, false, false, false, false, false, false, false];
+        this.tableImagesLoaded = [false, false, false, false, false, false, false, false, false, false];
         this.currentTableIndex = 0;
         this.allAssetsLoaded = false;
         this.onAssetsLoaded = null;
 
         let loadedCount = 0;
-        const totalImages = 9;
+        const totalImages = 10;
 
         for (let i = 0; i < totalImages; i++) {
             const img = new Image();
@@ -65,9 +65,10 @@ export class Renderer {
                     }
                 }
             };
-            // Table 9 uses fullsizesnooker.png
             if (i === 8) {
                 img.src = 'assets/pooltable9.png';
+            } else if (i === 9) {
+                img.src = 'assets/pooltable10.png';
             } else {
                 img.src = `assets/pooltable${i === 0 ? '' : i + 1}.png`;
             }
@@ -77,7 +78,7 @@ export class Renderer {
         // Load colorize overlays for tables 1, 2, 3, 4, 7, 8, 9
         this.colorizeOverlays = {};
         this.colorizeOverlaysLoaded = {};
-        const overlayTables = [1, 2, 3, 4, 7, 8, 9];
+        const overlayTables = [1, 2, 3, 4, 7, 8, 9, 10];
         for (const tableNum of overlayTables) {
             const img = new Image();
             img.onload = () => {
@@ -225,12 +226,17 @@ export class Renderer {
 
         ctx.save();
 
-        // Draw baulk line (full vertical line)
+        // Draw baulk line (full vertical line, extended by boundsOffset if present)
+        const tableConfig = Constants.TABLE_CONFIGS ? Constants.TABLE_CONFIGS[this.table.tableStyle] : null;
+        const offset = (tableConfig && tableConfig.boundsOffset) ? tableConfig.boundsOffset : null;
+        const drawTop = this.table.bounds.top - (offset ? (offset.top || 0) : 0);
+        const drawBottom = this.table.bounds.bottom + (offset ? (offset.bottom || 0) : 0);
+
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
         ctx.lineWidth = 2;
         ctx.beginPath();
-        ctx.moveTo(baulkX, this.table.bounds.top);
-        ctx.lineTo(baulkX, this.table.bounds.bottom);
+        ctx.moveTo(baulkX, drawTop);
+        ctx.lineTo(baulkX, drawBottom);
         ctx.stroke();
 
         // Draw the D (semicircle opening towards baulk cushion)

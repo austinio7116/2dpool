@@ -326,7 +326,7 @@ export class UI {
         // Table names
         this.tableNames = [
             'Classic Green', 'Blue Felt', 'Red Felt', 'Tournament',
-            'Luxury', 'Glass', 'UK Pub', 'Mini Snooker', 'Full-Size Snooker'
+            'Luxury', 'Glass', 'UK Pub', 'Mini Snooker', 'Full-Size Snooker', '10ft Snooker'
         ];
 
         // Apply loaded table selection to the hidden select element
@@ -961,8 +961,8 @@ export class UI {
 
         this.tableGrid.innerHTML = '';
 
-        // Add predefined tables (1-9)
-        for (let i = 1; i <= 9; i++) {
+        // Add predefined tables (1-10)
+        for (let i = 1; i <= 10; i++) {
             const option = document.createElement('div');
             const isSelected = !this.tableManager.isCustomTable(this.selectedTable) && i === this.selectedTable;
             option.className = 'table-option' + (isSelected ? ' selected' : '');
@@ -2266,7 +2266,7 @@ export class UI {
                     }
                 } else {
                     const tableNum = parseInt(saved);
-                    if (tableNum >= 1 && tableNum <= 9) {
+                    if (tableNum >= 1 && tableNum <= 10) {
                         return tableNum;
                     }
                 }

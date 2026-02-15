@@ -133,8 +133,8 @@ class PoolGame {
             // ---------------------------------------------------------------
 
             // 6. Update the audio context (Audio)
-            // If tableNum is 8 or 9, set to snooker, otherwise default to pool
-            if (tableNum === 8 || tableNum === 9) {
+            // If tableNum is 8, 9, or 10, set to snooker, otherwise default to pool
+            if (tableNum === 8 || tableNum === 9 || tableNum === 10) {
                 this.audio.setTableType('snooker');
             } else {
                 this.audio.setTableType('pool');
@@ -442,8 +442,8 @@ class PoolGame {
                 this.ui.selectTable(7);
             }
         } else {
-            // 8ball / 9ball — any table except full-size snooker - default to tournament
-            if (baseTable == 9 || baseTable == 7 || baseTable == 8) {
+            // 8ball / 9ball — any table except snooker tables - default to tournament
+            if (baseTable == 9 || baseTable == 10 || baseTable == 7 || baseTable == 8) {
                 this.ui.selectTable(4);
             }
         }

@@ -379,6 +379,23 @@ export const Constants = {
                 pink: { x: 236, y: 0 },        // Between center and reds
                 black: { x: 388, y: 0 }        // Behind reds
             }
+        },
+        10: {  // 10ft Snooker (10 reds)
+            ballRadius: 9,
+            pocketRadius: 20,
+            useCurvedPockets: true,
+            isSnooker: true,
+            redCount: 10,
+            tableWidth: 860,
+            boundsOffset: { top: 20, bottom: 21, left: 18, right: 17 },
+            spotlocations: {
+                yellow: { x: -272, y: 73 },
+                green: { x: -272, y: -73 },
+                brown: { x: -272, y: 0 },
+                blue: { x: 0, y: 0 },
+                pink: { x: 222, y: 0 },
+                black: { x: 364, y: 0 }
+            }
         }
     }
 };

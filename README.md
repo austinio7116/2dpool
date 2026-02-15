@@ -8,7 +8,7 @@
 >
 > No downloads. No installs. No excuses when you lose.
 
-### **[Play Now](https://austinio7116.github.io/2dpool/)** | [GitHub](https://github.com/austinio7116/2dpool)
+### **[Play Now](https://austinio7116.github.io/2dpool/)**
 
 ---
 
@@ -38,17 +38,6 @@
 ## Quick Start
 
 **Play instantly:** Open **[austinio7116.github.io/2dpool](https://austinio7116.github.io/2dpool/)** in any modern browser. That's it. No downloads, no sign-ups, no app store. Works on desktop, tablet, and phone.
-
-**Run it locally:** Clone the repo and serve over HTTP (ES6 modules require it):
-
-```bash
-git clone https://github.com/austinio7116/2dpool.git
-cd 2dpool
-python3 -m http.server 8000
-# Open http://localhost:8000
-```
-
----
 
 ## Install on Your Phone
 

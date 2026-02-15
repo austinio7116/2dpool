@@ -581,7 +581,3 @@ Break alternates between frames, and frame scores are tracked throughout the mat
 - **Ball rendering:** Real-time 3D sphere rendering with specular highlights and visible rolling
 
 ---
-
-*Now chalk up, take a breath, and break.*
-
-*The table is waiting.*

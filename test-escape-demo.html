@@ -1,0 +1,805 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Snooker Escape Demo</title>
+    <script type="importmap">
+    {
+        "imports": {
+            "planck": "https://esm.sh/planck-js@1.0.6"
+        }
+    }
+    </script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #1a1a2e;
+            color: #e0e0e0;
+            font-family: 'Segoe UI', Tahoma, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 10px;
+        }
+        #header {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 8px;
+        }
+        #header button {
+            background: #2a2a4a;
+            color: #e0e0e0;
+            border: 1px solid #444;
+            padding: 6px 14px;
+            cursor: pointer;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        #header button:hover { background: #3a3a5a; }
+        #scenario-label {
+            font-size: 16px;
+            font-weight: bold;
+            min-width: 360px;
+            text-align: center;
+        }
+        #status-bar {
+            font-size: 13px;
+            color: #aaa;
+            margin-bottom: 6px;
+            min-height: 20px;
+        }
+        #canvas-wrap {
+            position: relative;
+            margin-bottom: 8px;
+        }
+        #overlay-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            pointer-events: none;
+        }
+        #controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 8px;
+        }
+        #controls button {
+            background: #2a6a2a;
+            color: #fff;
+            border: 1px solid #4a4a4a;
+            padding: 8px 18px;
+            cursor: pointer;
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: bold;
+        }
+        #controls button:hover { background: #3a8a3a; }
+        #controls button:disabled { background: #333; color: #666; cursor: default; }
+        #controls button.reset { background: #6a2a2a; }
+        #controls button.reset:hover { background: #8a3a3a; }
+        #info-panel {
+            background: #222240;
+            border: 1px solid #444;
+            border-radius: 6px;
+            padding: 10px 16px;
+            font-size: 13px;
+            font-family: monospace;
+            min-width: 500px;
+            line-height: 1.6;
+        }
+        #info-panel .label { color: #888; }
+        #info-panel .value { color: #6f6; }
+        #info-panel .warn { color: #fa0; }
+        #info-panel .fail { color: #f66; }
+        .desc { color: #999; font-style: italic; font-size: 12px; margin-bottom: 4px; }
+    </style>
+</head>
+<body>
+    <div id="header">
+        <button id="btn-prev">&lt; Prev</button>
+        <span id="scenario-label">Loading...</span>
+        <button id="btn-next">Next &gt;</button>
+    </div>
+    <div id="status-bar"></div>
+    <div id="canvas-wrap">
+        <canvas id="game-canvas"></canvas>
+        <canvas id="overlay-canvas"></canvas>
+    </div>
+    <div id="controls">
+        <button id="btn-find">Find Escape</button>
+        <button id="btn-execute" disabled>Execute Shot</button>
+        <button id="btn-reset" class="reset">Reset</button>
+    </div>
+    <div id="info-panel">
+        <div class="desc" id="scenario-desc"></div>
+        <div><span class="label">Angle: </span><span class="value" id="info-angle">—</span>
+             <span class="label">  Bounces: </span><span class="value" id="info-bounces">—</span>
+             <span class="label">  Power: </span><span class="value" id="info-power">—</span></div>
+        <div><span class="label">Spin: </span><span class="value" id="info-spin">—</span>
+             <span class="label">  Target: </span><span class="value" id="info-target">—</span></div>
+        <div><span class="label">Result: </span><span id="info-result">—</span></div>
+    </div>
+
+    <script type="module">
+        import { Table } from './js/table.js';
+        import { PlanckPhysics } from './js/planck-physics.js';
+        import { Renderer } from './js/renderer.js';
+        import { Game, GameMode, GameState } from './js/game.js';
+        import { AI } from './js/ai.js';
+        import { Vec2, Constants } from './js/utils.js';
+
+        // ─── Scenarios ───────────────────────────────────────────
+        const TABLE_STYLE = 9;
+        const spots = Constants.TABLE_CONFIGS[TABLE_STYLE].spotlocations;
+
+        // Helper: absolute position from spot-relative offset
+        // Table center is computed after table init, so we store offsets and resolve later
+        const scenarios = [
+            {
+                name: 'Behind the Black',
+                description: 'Cue ball tucked behind the black spot — must escape around it to hit reds at far end',
+                cueBall: { dx: 400, dy: 12 },
+                targets: [
+                    { dx: spots.pink.x + 50, dy: -20 },
+                    { dx: spots.pink.x + 50, dy: 20 },
+                    { dx: spots.pink.x + 70, dy: 0 }
+                ],
+                blockers: [
+                    { dx: spots.black.x, dy: spots.black.y, colorName: 'black' }
+                ]
+            },
+            {
+                name: 'Cluster Snooker',
+                description: 'Multiple colours block path to a cluster of reds near the pink spot',
+                cueBall: { dx: -200, dy: 80 },
+                targets: [
+                    { dx: 200, dy: -10 },
+                    { dx: 215, dy: 10 },
+                    { dx: 230, dy: -5 }
+                ],
+                blockers: [
+                    { dx: spots.blue.x, dy: spots.blue.y, colorName: 'blue' },
+                    { dx: spots.pink.x, dy: spots.pink.y, colorName: 'pink' },
+                    { dx: 100, dy: 30, colorName: 'green' }
+                ]
+            },
+            {
+                name: 'Tight to Cushion',
+                description: 'Cue ball near the top rail — red blocked by pink, narrow escape angle',
+                cueBall: { dx: 50, dy: -185 },
+                targets: [
+                    { dx: 180, dy: 50 }
+                ],
+                blockers: [
+                    { dx: 120, dy: -60, colorName: 'pink' }
+                ]
+            },
+            {
+                name: 'Double Snooker',
+                description: 'Two colours create a wall — no direct or simple one-cushion route',
+                cueBall: { dx: -100, dy: 0 },
+                targets: [
+                    { dx: 250, dy: 0 },
+                    { dx: 260, dy: 20 }
+                ],
+                blockers: [
+                    { dx: 0, dy: -30, colorName: 'blue' },
+                    { dx: 0, dy: 30, colorName: 'brown' }
+                ]
+            },
+            {
+                name: 'Baulk to Top',
+                description: 'Cue ball in the D area, reds behind the blue at the top end of the table',
+                cueBall: { dx: -290, dy: 0 },
+                targets: [
+                    { dx: 150, dy: -60 },
+                    { dx: 160, dy: -40 }
+                ],
+                blockers: [
+                    { dx: spots.blue.x, dy: spots.blue.y, colorName: 'blue' },
+                    { dx: -50, dy: -40, colorName: 'yellow' }
+                ]
+            },
+            {
+                name: 'Near Middle Pocket',
+                description: 'Escape path must bounce dangerously close to a middle pocket',
+                cueBall: { dx: -150, dy: 100 },
+                targets: [
+                    { dx: 200, dy: -80 }
+                ],
+                blockers: [
+                    { dx: -50, dy: 20, colorName: 'green' },
+                    { dx: -60, dy: -20, colorName: 'brown' }
+                ]
+            },
+            {
+                name: 'Multi-Cushion Required',
+                description: 'Direct and one-cushion routes are all blocked — needs two+ cushions',
+                cueBall: { dx: -250, dy: -100 },
+                targets: [
+                    { dx: 280, dy: 80 }
+                ],
+                blockers: [
+                    { dx: -100, dy: -50, colorName: 'yellow' },
+                    { dx: 50, dy: 0, colorName: 'blue' },
+                    { dx: -100, dy: 50, colorName: 'green' }
+                ]
+            },
+            {
+                name: 'Acute Angle Escape',
+                description: 'Cue ball against the side rail — steep bounce angle needed to reach red',
+                cueBall: { dx: -200, dy: 182 },
+                targets: [
+                    { dx: 200, dy: -100 }
+                ],
+                blockers: [
+                    { dx: -100, dy: 100, colorName: 'pink' },
+                    { dx: -50, dy: 140, colorName: 'brown' }
+                ]
+            }
+        ];
+
+        // ─── Game bootstrap ──────────────────────────────────────
+        const canvas = document.getElementById('game-canvas');
+        const overlayCanvas = document.getElementById('overlay-canvas');
+        const octx = overlayCanvas.getContext('2d');
+
+        const table = new Table();
+        table.setTableStyle(TABLE_STYLE);
+
+        const physics = new PlanckPhysics(table);
+        physics.setTableStyle(TABLE_STYLE);
+
+        const renderer = new Renderer(canvas, table);
+        renderer.setTableStyle(TABLE_STYLE);
+
+        // Sync overlay canvas size
+        overlayCanvas.width = canvas.width;
+        overlayCanvas.height = canvas.height;
+
+        const game = new Game(table);
+        game.setTableStyle(TABLE_STYLE);
+
+        const ai = new AI();
+        ai.setGameReferences(game, table);
+        ai.setPhysics(physics);
+        ai.setEnabled(true);
+
+        // ─── State ───────────────────────────────────────────────
+        let currentScenario = 0;
+        let escapeResult = null;
+        let traceResult = null;
+        let cueBallTrail = [];
+        let shotExecuted = false;
+        let firstBallHitId = null;
+        let animating = false;
+
+        // ─── DOM refs ────────────────────────────────────────────
+        const elLabel = document.getElementById('scenario-label');
+        const elStatus = document.getElementById('status-bar');
+        const elDesc = document.getElementById('scenario-desc');
+        const elAngle = document.getElementById('info-angle');
+        const elBounces = document.getElementById('info-bounces');
+        const elPower = document.getElementById('info-power');
+        const elSpin = document.getElementById('info-spin');
+        const elTarget = document.getElementById('info-target');
+        const elResult = document.getElementById('info-result');
+        const btnFind = document.getElementById('btn-find');
+        const btnExecute = document.getElementById('btn-execute');
+        const btnReset = document.getElementById('btn-reset');
+
+        // ─── Scenario Loading ────────────────────────────────────
+        function loadScenario(idx) {
+            const sc = scenarios[idx];
+            const cx = table.center.x;
+            const cy = table.center.y;
+
+            // Start a full snooker game to get the ball set
+            game.startGame(GameMode.SNOOKER, {});
+
+            // Mark ALL balls pocketed
+            for (const b of game.balls) {
+                b.pocketed = true;
+                b.sinking = false;
+                b.velocity.x = 0;
+                b.velocity.y = 0;
+                b.spinZ = 0;
+                b.spin.x = 0;
+                b.spin.y = 0;
+            }
+
+            // Destroy all physics bodies
+            for (const b of game.balls) {
+                if (physics.ballToBody && physics.ballToBody.has(b)) {
+                    const body = physics.ballToBody.get(b);
+                    physics.bodyToBall.delete(body);
+                    physics.world.destroyBody(body);
+                    physics.ballToBody.delete(b);
+                }
+            }
+
+            // Un-pocket cue ball and position it
+            const cueBall = game.cueBall;
+            cueBall.pocketed = false;
+            cueBall.setPosition(cx + sc.cueBall.dx, cy + sc.cueBall.dy);
+
+            // Un-pocket target reds
+            const redBalls = game.balls.filter(b => b.isRed);
+            for (let i = 0; i < sc.targets.length && i < redBalls.length; i++) {
+                const rb = redBalls[i];
+                rb.pocketed = false;
+                rb.setPosition(cx + sc.targets[i].dx, cy + sc.targets[i].dy);
+            }
+
+            // Un-pocket and position blockers using named colour balls
+            const colorMap = { yellow: 16, green: 17, brown: 18, blue: 19, pink: 20, black: 21 };
+            for (const blocker of sc.blockers) {
+                const num = colorMap[blocker.colorName];
+                if (!num) continue;
+                const ball = game.balls.find(b => b.number === num);
+                if (ball) {
+                    ball.pocketed = false;
+                    ball.setPosition(cx + blocker.dx, cy + blocker.dy);
+                }
+            }
+
+            // Create physics bodies for active balls
+            for (const b of game.balls) {
+                if (!b.pocketed) {
+                    physics.createBallBody(b);
+                }
+            }
+
+            // Set snooker state for escape finding
+            game.snookerTarget = 'red';
+            game.currentPlayer = 2;
+            game.state = GameState.PLAYING;
+            game.isBreakShot = false;
+            game.firstBallHit = null;
+
+            // Reset demo state
+            escapeResult = null;
+            traceResult = null;
+            cueBallTrail = [];
+            shotExecuted = false;
+            firstBallHitId = null;
+            animating = false;
+
+            // Update UI
+            elLabel.textContent = `Scenario ${idx + 1}/${scenarios.length}: ${sc.name}`;
+            elDesc.textContent = sc.description;
+            elStatus.textContent = '';
+            elAngle.textContent = '—';
+            elBounces.textContent = '—';
+            elPower.textContent = '—';
+            elSpin.textContent = '—';
+            elTarget.textContent = '—';
+            elResult.textContent = '—';
+            elResult.className = '';
+            btnFind.disabled = false;
+            btnExecute.disabled = true;
+
+            clearOverlay();
+            renderScene();
+        }
+
+        // ─── Path Tracer (for visualization) ─────────────────────
+        // Reimplements traceShotPath logic but records bounce points
+        function tracePathForViz(startPos, aimDir) {
+            const cueBallRadius = game.cueBall?.radius || 8;
+            const bds = table.bounds;
+            const margin = cueBallRadius + 2;
+            const allBalls = game.balls.filter(b => !b.pocketed && !b.isCueBall);
+            const validTargets = game.balls.filter(b => b.isRed && !b.pocketed);
+
+            let cPos = { x: startPos.x, y: startPos.y };
+            let cDir = { x: aimDir.x, y: aimDir.y };
+            let totalDist = 0;
+            let bcount = 0;
+            const maxB = 4;
+            const maxD = 2500;
+            const pts = [];
+
+            while (bcount <= maxB && totalDist < maxD) {
+                let fBall = null, fDist = Infinity;
+                for (const ball of allBalls) {
+                    const br = ball.radius || 8;
+                    const tb = Vec2.subtract(ball.position, cPos);
+                    const proj = Vec2.dot(tb, cDir);
+                    if (proj < 0) continue;
+                    const cp = Vec2.add(cPos, Vec2.multiply(cDir, proj));
+                    const pd = Vec2.distance(ball.position, cp);
+                    const isTgt = validTargets.includes(ball);
+                    const hr = br + cueBallRadius + (isTgt ? 0 : 2);
+                    if (pd < hr) {
+                        const off = Math.sqrt(Math.max(0, hr * hr - pd * pd));
+                        const cd = proj - off;
+                        if (cd > 1 && cd < fDist) { fDist = cd; fBall = ball; }
+                    }
+                }
+
+                let nrDist = Infinity, hRail = null;
+                if (cDir.y < -0.01) { const t = (bds.top + margin - cPos.y) / cDir.y; if (t > 0 && t < nrDist) { nrDist = t; hRail = 'top'; } }
+                if (cDir.y > 0.01) { const t = (bds.bottom - margin - cPos.y) / cDir.y; if (t > 0 && t < nrDist) { nrDist = t; hRail = 'bottom'; } }
+                if (cDir.x < -0.01) { const t = (bds.left + margin - cPos.x) / cDir.x; if (t > 0 && t < nrDist) { nrDist = t; hRail = 'left'; } }
+                if (cDir.x > 0.01) { const t = (bds.right - margin - cPos.x) / cDir.x; if (t > 0 && t < nrDist) { nrDist = t; hRail = 'right'; } }
+
+                if (fBall && fDist < nrDist) {
+                    pts.push(Vec2.add(cPos, Vec2.multiply(cDir, fDist)));
+                    break;
+                }
+                if (!hRail) break;
+
+                const rhp = Vec2.add(cPos, Vec2.multiply(cDir, nrDist));
+                let inPkt = false;
+                for (const p of table.pockets) { if (Vec2.distance(rhp, p.position) < p.radius) { inPkt = true; break; } }
+                if (inPkt) { pts.push(rhp); break; }
+
+                totalDist += nrDist;
+                pts.push({ x: rhp.x, y: rhp.y });
+
+                const ctf = 0.75;
+                if (hRail === 'top' || hRail === 'bottom') cDir = Vec2.normalize({ x: cDir.x * ctf, y: -cDir.y });
+                else cDir = Vec2.normalize({ x: -cDir.x, y: cDir.y * ctf });
+
+                cPos = rhp;
+                bcount++;
+            }
+            return pts;
+        }
+
+        // ─── Find Escape ─────────────────────────────────────────
+        function findEscape() {
+            const validTargets = game.balls.filter(b => b.isRed && !b.pocketed);
+            if (validTargets.length === 0) {
+                elStatus.textContent = 'No valid red targets on table!';
+                return;
+            }
+
+            ai.ensureCushionCalibrator();
+
+            // Check if actually snookered
+            const snookered = ai.checkIfSnookered(validTargets);
+            elStatus.textContent = snookered
+                ? 'Snookered ✓ — searching for escape...'
+                : 'Not fully snookered — searching anyway...';
+
+            escapeResult = ai.findSnookerEscape(validTargets, false);
+            if (!escapeResult) {
+                // Try desperate mode
+                escapeResult = ai.findSnookerEscape(validTargets, true);
+            }
+
+            if (!escapeResult) {
+                elStatus.textContent += ' No escape found!';
+                elAngle.textContent = '—';
+                elBounces.textContent = '—';
+                elPower.textContent = '—';
+                elSpin.textContent = '—';
+                elTarget.textContent = '—';
+                return;
+            }
+
+            // Trace the path for visualization (our own tracer that records bounce points)
+            traceResult = tracePathForViz(game.cueBall.position, escapeResult.direction);
+
+            elStatus.textContent = snookered
+                ? `Snookered ✓ — Escape: ${escapeResult.bounces} cushion(s), ${escapeResult.angle?.toFixed(1) || '?'}°`
+                : `Not snookered — Escape: ${escapeResult.bounces} cushion(s), ${escapeResult.angle?.toFixed(1) || '?'}°`;
+
+            elAngle.textContent = (escapeResult.angle || 0).toFixed(1) + '°';
+            elBounces.textContent = escapeResult.bounces;
+            elPower.textContent = (escapeResult.power || 0).toFixed(1);
+            elSpin.textContent = `x=${(escapeResult.spin?.x || 0).toFixed(2)}, y=${(escapeResult.spin?.y || 0).toFixed(2)}`;
+
+            const targetBall = escapeResult.target;
+            elTarget.textContent = targetBall
+                ? (targetBall.isRed ? `red #${targetBall.number}` : (targetBall.colorName || `ball #${targetBall.number}`))
+                : '—';
+
+            btnExecute.disabled = false;
+
+            drawPlannedPath();
+        }
+
+        // ─── Execute Shot ────────────────────────────────────────
+        function executeShot() {
+            if (!escapeResult || shotExecuted) return;
+
+            const cueBall = game.cueBall;
+            const direction = escapeResult.direction;
+            const power = escapeResult.power || 12;
+            const spin = escapeResult.spin || { x: 0, y: 0 };
+
+            // Replicate main.js executeShot logic
+            const velocity = Vec2.multiply(direction, power);
+            cueBall.velocity.x = velocity.x;
+            cueBall.velocity.y = velocity.y;
+
+            const speed = Math.sqrt(velocity.x * velocity.x + velocity.y * velocity.y);
+            const R = cueBall.radius;
+            const naturalOmega = speed / R;
+
+            cueBall.spinZ = -spin.x * naturalOmega * 2.0 * 60;
+
+            const perpX = -direction.y;
+            const perpY = direction.x;
+            const rollingSpinX = perpX * naturalOmega * 60;
+            const rollingSpinY = perpY * naturalOmega * 60;
+            const spinFactor = spin.y * 5;
+
+            cueBall.spin.x = rollingSpinX * spinFactor;
+            cueBall.spin.y = rollingSpinY * spinFactor;
+
+            cueBall.forceSync = true;
+            cueBall.isSliding = true;
+
+            game.onShotTaken();
+            shotExecuted = true;
+            btnExecute.disabled = true;
+            btnFind.disabled = true;
+
+            cueBallTrail = [{ x: cueBall.position.x, y: cueBall.position.y }];
+            firstBallHitId = null;
+            animating = true;
+        }
+
+        // ─── Physics + Render Loop ───────────────────────────────
+        let lastTime = 0;
+
+        function gameLoop(timestamp) {
+            const deltaTime = lastTime ? Math.min(timestamp - lastTime, 50) : 16.67;
+            lastTime = timestamp;
+
+            if (animating && game.state === GameState.BALLS_MOVING) {
+                const events = physics.update(game.balls, deltaTime);
+
+                for (const event of events) {
+                    if (event.type === 'ball') {
+                        game.onBallCollision(event.ballA, event.ballB);
+                        // Track first ball hit by cue ball
+                        if (firstBallHitId === null) {
+                            if (event.ballA.isCueBall && !event.ballB.isCueBall) {
+                                firstBallHitId = event.ballB.number;
+                            } else if (event.ballB.isCueBall && !event.ballA.isCueBall) {
+                                firstBallHitId = event.ballA.number;
+                            }
+                        }
+                    } else if (event.type === 'pocket') {
+                        game.onBallPocket(event.ball);
+                    } else if (event.type === 'rail') {
+                        game.onRailContact(event.ball, event.railType);
+                    }
+                }
+
+                // Record cue ball position for trail
+                if (game.cueBall && !game.cueBall.pocketed) {
+                    cueBallTrail.push({ x: game.cueBall.position.x, y: game.cueBall.position.y });
+                }
+
+                // Update visual rotation
+                for (const ball of game.balls) {
+                    if (!ball.pocketed) {
+                        ball.updateVisualRotation(deltaTime / 1000);
+                    }
+                }
+
+                if (!physics.areBallsMoving(game.balls)) {
+                    animating = false;
+                    showResult();
+                }
+            }
+
+            renderScene();
+            if (shotExecuted) drawOverlay();
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        function renderScene() {
+            const renderState = {
+                balls: game.balls,
+                cueBall: game.cueBall,
+                aiming: false,
+                aimDirection: null,
+                power: 0,
+                pullBack: 0,
+                trajectory: null,
+                spin: { x: 0, y: 0 },
+                spinIndicator: { x: 0, y: 0 },
+                showSpinIndicator: false,
+                isSettingSpin: false,
+                isTouchSpin: false,
+                aiVisualization: null,
+                showDZone: false,
+                showKitchenZone: false,
+                shootButton: null,
+                powerOverrideActive: false,
+                isTouchDevice: false
+            };
+            renderer.render(renderState);
+        }
+
+        // ─── Overlay Drawing ─────────────────────────────────────
+        function clearOverlay() {
+            octx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+        }
+
+        function drawPlannedPath() {
+            clearOverlay();
+            if (!game.cueBall) return;
+
+            const cb = game.cueBall.position;
+
+            // Highlight cue ball start
+            octx.strokeStyle = '#0ff';
+            octx.lineWidth = 2;
+            octx.beginPath();
+            octx.arc(cb.x, cb.y, game.cueBall.radius + 4, 0, Math.PI * 2);
+            octx.stroke();
+
+            // Draw planned path as cyan dashed line
+            if (traceResult && traceResult.length > 0) {
+                octx.setLineDash([6, 4]);
+                octx.strokeStyle = '#0ff';
+                octx.lineWidth = 2;
+                octx.beginPath();
+                octx.moveTo(cb.x, cb.y);
+                for (const pt of traceResult) {
+                    octx.lineTo(pt.x, pt.y);
+                }
+                octx.stroke();
+                octx.setLineDash([]);
+
+                // Draw bounce points
+                for (let i = 0; i < traceResult.length; i++) {
+                    const pt = traceResult[i];
+                    octx.fillStyle = i === traceResult.length - 1 ? '#ff0' : '#0ff';
+                    octx.beginPath();
+                    octx.arc(pt.x, pt.y, 4, 0, Math.PI * 2);
+                    octx.fill();
+                }
+            } else if (escapeResult) {
+                // Fallback: draw direction line
+                const len = 300;
+                const dir = escapeResult.direction;
+                octx.setLineDash([6, 4]);
+                octx.strokeStyle = '#0ff';
+                octx.lineWidth = 2;
+                octx.beginPath();
+                octx.moveTo(cb.x, cb.y);
+                octx.lineTo(cb.x + dir.x * len, cb.y + dir.y * len);
+                octx.stroke();
+                octx.setLineDash([]);
+            }
+
+            // Highlight target ball
+            if (escapeResult.target && !escapeResult.target.pocketed) {
+                const tp = escapeResult.target.position;
+                octx.strokeStyle = '#ff0';
+                octx.lineWidth = 2;
+                octx.beginPath();
+                octx.arc(tp.x, tp.y, (escapeResult.target.radius || 8) + 4, 0, Math.PI * 2);
+                octx.stroke();
+
+                // Label
+                octx.fillStyle = '#ff0';
+                octx.font = '11px monospace';
+                octx.fillText('TARGET', tp.x - 20, tp.y - (escapeResult.target.radius || 8) - 8);
+            }
+
+            // Mark blockers with X
+            const sc = scenarios[currentScenario];
+            const colorMap = { yellow: 16, green: 17, brown: 18, blue: 19, pink: 20, black: 21 };
+            for (const blocker of sc.blockers) {
+                const num = colorMap[blocker.colorName];
+                const ball = game.balls.find(b => b.number === num);
+                if (ball && !ball.pocketed) {
+                    const bp = ball.position;
+                    const r = ball.radius + 3;
+                    octx.strokeStyle = '#f44';
+                    octx.lineWidth = 2;
+                    octx.beginPath();
+                    octx.moveTo(bp.x - r, bp.y - r);
+                    octx.lineTo(bp.x + r, bp.y + r);
+                    octx.moveTo(bp.x + r, bp.y - r);
+                    octx.lineTo(bp.x - r, bp.y + r);
+                    octx.stroke();
+                }
+            }
+        }
+
+        function drawOverlay() {
+            clearOverlay();
+
+            // Redraw planned path
+            drawPlannedPath();
+
+            // Draw actual trail as green dots
+            if (cueBallTrail.length > 1) {
+                octx.strokeStyle = 'rgba(0, 255, 100, 0.6)';
+                octx.lineWidth = 2;
+                octx.beginPath();
+                octx.moveTo(cueBallTrail[0].x, cueBallTrail[0].y);
+                for (let i = 1; i < cueBallTrail.length; i++) {
+                    octx.lineTo(cueBallTrail[i].x, cueBallTrail[i].y);
+                }
+                octx.stroke();
+
+                // Endpoint marker
+                const last = cueBallTrail[cueBallTrail.length - 1];
+                octx.fillStyle = '#0f0';
+                octx.beginPath();
+                octx.arc(last.x, last.y, 5, 0, Math.PI * 2);
+                octx.fill();
+            }
+        }
+
+        // ─── Result Evaluation ───────────────────────────────────
+        function showResult() {
+            if (!escapeResult) return;
+
+            const targetBall = escapeResult.target;
+            const hitBall = firstBallHitId !== null
+                ? game.balls.find(b => b.number === firstBallHitId)
+                : null;
+
+            if (hitBall && targetBall && hitBall.isRed) {
+                elResult.textContent = `Hit red #${hitBall.number} ✓`;
+                elResult.className = 'value';
+            } else if (hitBall && hitBall.isRed) {
+                elResult.textContent = `Hit red #${hitBall.number} (different red, still valid) ✓`;
+                elResult.className = 'value';
+            } else if (hitBall) {
+                elResult.textContent = `Hit ${hitBall.colorName || 'ball #' + hitBall.number} — FOUL (wrong ball)`;
+                elResult.className = 'fail';
+            } else {
+                // Check distance to nearest red
+                const reds = game.balls.filter(b => b.isRed && !b.pocketed);
+                let minDist = Infinity;
+                const cbPos = game.cueBall ? game.cueBall.position : cueBallTrail[cueBallTrail.length - 1];
+                if (cbPos) {
+                    for (const r of reds) {
+                        const d = Vec2.distance(cbPos, r.position);
+                        if (d < minDist) minDist = d;
+                    }
+                }
+                elResult.textContent = `Missed — nearest red: ${minDist.toFixed(0)}px`;
+                elResult.className = 'fail';
+            }
+        }
+
+        // ─── Button Wiring ───────────────────────────────────────
+        document.getElementById('btn-prev').addEventListener('click', () => {
+            currentScenario = (currentScenario - 1 + scenarios.length) % scenarios.length;
+            loadScenario(currentScenario);
+        });
+        document.getElementById('btn-next').addEventListener('click', () => {
+            currentScenario = (currentScenario + 1) % scenarios.length;
+            loadScenario(currentScenario);
+        });
+        btnFind.addEventListener('click', findEscape);
+        btnExecute.addEventListener('click', executeShot);
+        btnReset.addEventListener('click', () => loadScenario(currentScenario));
+
+        // ─── Init ────────────────────────────────────────────────
+        // Wait for renderer assets to load (or timeout after 3s)
+        function init() {
+            loadScenario(0);
+            requestAnimationFrame(gameLoop);
+        }
+
+        if (renderer.allAssetsLoaded) {
+            init();
+        } else {
+            renderer.onAssetsLoaded = init;
+            // Fallback timeout
+            setTimeout(() => {
+                if (!renderer.allAssetsLoaded) init();
+            }, 3000);
+        }
+    </script>
+</body>
+</html>

@@ -5,9 +5,10 @@ import { Vec2 } from './utils.js';
 import { GameMode, GameState } from './game.js';
 import { AI_PERSONAS, getPersonaById } from './ai-personas.js';
 import { ShotSimulator } from './shot-simulator.js';
+import { CushionCalibrator } from './cushion-calibrator.js';
 
 // Debug logging - set to true to see AI decision making
-const AI_DEBUG = false;
+const AI_DEBUG = true;
 
 // Trained angle error prediction model (loaded dynamically if available)
 let angleModel = null;
@@ -53,6 +54,66 @@ function aiLogGroupEnd() {
 }
 
 // Legacy difficulty settings removed - now using AI personas from ai-personas.js
+
+// Cushion bounce helper: compute incidence angle (degrees) relative to rail normal
+function computeIncidenceAngle(dir, rail) {
+    // Rail normals point INTO the table:
+    // top: (0, 1), bottom: (0, -1), left: (1, 0), right: (-1, 0)
+    let normalX, normalY;
+    if (rail === 'top') { normalX = 0; normalY = 1; }
+    else if (rail === 'bottom') { normalX = 0; normalY = -1; }
+    else if (rail === 'left') { normalX = 1; normalY = 0; }
+    else { normalX = -1; normalY = 0; } // right
+
+    // Incoming direction dot normal (negate dir since it's traveling INTO the rail)
+    const dotVal = (-dir.x * normalX) + (-dir.y * normalY);
+    const angleDeg = Math.acos(Math.max(0, Math.min(1, dotVal))) * 180 / Math.PI;
+    return angleDeg;
+}
+
+// Cushion bounce helper: compute reflected direction from outgoing angle and rail
+function computeReflectedDir(outAngleDeg, rail, incomingDir) {
+    // outAngleDeg is signed: positive = ball deflects in the direction of the
+    // incoming tangential component, negative = opposite (spin-induced)
+    const outRad = Math.abs(outAngleDeg) * Math.PI / 180;
+
+    // Determine the tangential sign from the incoming direction
+    let tangentSign;
+    if (rail === 'top' || rail === 'bottom') {
+        tangentSign = incomingDir.x > 0 ? 1 : -1;
+    } else {
+        tangentSign = incomingDir.y > 0 ? 1 : -1;
+    }
+
+    // If outAngleDeg is negative, reverse the tangential direction
+    if (outAngleDeg < 0) tangentSign *= -1;
+
+    // Build reflected direction from normal + tangential components
+    const normalComponent = Math.cos(outRad);
+    const tangentialComponent = Math.sin(outRad) * tangentSign;
+
+    let rx, ry;
+    if (rail === 'top') {
+        // Normal = (0, 1), tangent = (1, 0)
+        rx = tangentialComponent;
+        ry = normalComponent;
+    } else if (rail === 'bottom') {
+        // Normal = (0, -1), tangent = (1, 0)
+        rx = tangentialComponent;
+        ry = -normalComponent;
+    } else if (rail === 'left') {
+        // Normal = (1, 0), tangent = (0, 1)
+        rx = normalComponent;
+        ry = tangentialComponent;
+    } else {
+        // Normal = (-1, 0), tangent = (0, 1)
+        rx = -normalComponent;
+        ry = tangentialComponent;
+    }
+
+    const len = Math.sqrt(rx * rx + ry * ry);
+    return { x: rx / len, y: ry / len };
+}
 
 export class AI {
     constructor() {
@@ -1015,6 +1076,9 @@ export class AI {
     planAndExecuteShot() {
         if (!this.game || this.game.state !== GameState.PLAYING) return;
 
+        // Ensure cushion calibration is ready (runs once per table style)
+        this.ensureCushionCalibrator();
+
         // Clear per-turn caches
         this._unpottableCache = null;
 
@@ -1590,6 +1654,17 @@ export class AI {
             this.shotSimulator.setTableStyle(this.physics.tableStyle);
         }
         return this.shotSimulator;
+    }
+
+    // Lazy-initialize and run cushion calibration (once per table style)
+    ensureCushionCalibrator() {
+        const currentStyle = (this.physics && this.physics.tableStyle) || null;
+        if (!this.cushionCalibrator || this._calibratedTableStyle !== currentStyle) {
+            this.cushionCalibrator = new CushionCalibrator(this.table, currentStyle);
+            this.cushionCalibrator.calibrate();
+            this._calibratedTableStyle = currentStyle;
+        }
+        return this.cushionCalibrator;
     }
 
     /**
@@ -4168,9 +4243,13 @@ export class AI {
                 if (perpDist < hitRadius) {
                     const offset = Math.sqrt(Math.max(0, hitRadius * hitRadius - perpDist * perpDist));
                     const contactDist = projection - offset;
-                    
-                    if (contactDist > 1 && contactDist < firstBallDist) {
-                        firstBallDist = contactDist;
+
+                    // Clamp to minimum 0.5: when contactDist <= 0, the ball's collision
+                    // envelope overlaps our start position (e.g. blocking ball right next
+                    // to the cue ball). We must still detect it as blocking.
+                    const effectiveDist = Math.max(0.5, contactDist);
+                    if (effectiveDist < firstBallDist) {
+                        firstBallDist = effectiveDist;
                         firstBallHit = ball;
                     }
                 }
@@ -4230,20 +4309,26 @@ export class AI {
             if (inPocket) break; // End trace — ball enters pocket (scratch)
 
             totalDistance += nearestRailDist;
-            
-            // Reflect with cushion throw
-            const cushionThrowFactor = 0.75;
-            if (hitRail === 'top' || hitRail === 'bottom') {
-                currentDir = { x: currentDir.x * cushionThrowFactor, y: -currentDir.y };
-            } else {
-                currentDir = { x: -currentDir.x, y: currentDir.y * cushionThrowFactor };
-            }
-            currentDir = Vec2.normalize(currentDir);
 
-            // Apply sidespin deflection if specified (±1.0 spin → ±15° deflection)
-            if (options.sidespin) {
-                const spinDeflection = options.sidespin * 15 * (Math.PI / 180);
-                currentDir = Vec2.rotate(currentDir, spinDeflection);
+            // Reflect with calibrated cushion bounce model
+            const calibrator = this.cushionCalibrator;
+            if (calibrator && calibrator.calibrated) {
+                const inAngle = computeIncidenceAngle(currentDir, hitRail);
+                const prediction = calibrator.getBouncePrediction(inAngle, options.sidespin || 0);
+                currentDir = computeReflectedDir(prediction.outgoingAngle, hitRail, currentDir);
+            } else {
+                // Fallback: old fixed-constant model
+                const cushionThrowFactor = 0.75;
+                if (hitRail === 'top' || hitRail === 'bottom') {
+                    currentDir = { x: currentDir.x * cushionThrowFactor, y: -currentDir.y };
+                } else {
+                    currentDir = { x: -currentDir.x, y: currentDir.y * cushionThrowFactor };
+                }
+                currentDir = Vec2.normalize(currentDir);
+                if (options.sidespin) {
+                    const spinDeflection = options.sidespin * 15 * (Math.PI / 180);
+                    currentDir = Vec2.rotate(currentDir, spinDeflection);
+                }
             }
             
             currentPos = railHitPoint;

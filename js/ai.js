@@ -112,12 +112,23 @@ export class AI {
             };
             // Track direction in foul history for escape filtering
             if (foulShot.direction) {
-                const cueBall = this.game.cueBall;
+                // Use pre-shot cue ball position (not post-shot) so restore detection works
+                let preShotCueBallPos = null;
+                if (this.game.preShotState) {
+                    const cueBallState = this.game.preShotState.balls.find(b => b.isCueBall);
+                    if (cueBallState) {
+                        preShotCueBallPos = { x: cueBallState.x, y: cueBallState.y };
+                    }
+                }
+                if (!preShotCueBallPos) {
+                    const cueBall = this.game.cueBall;
+                    preShotCueBallPos = cueBall ? Vec2.clone(cueBall.position) : null;
+                }
                 this.foulHistory.push({
                     direction: Vec2.clone(foulShot.direction),
                     targetId: foulShot.target.id || foulShot.target.number,
                     targetPos: foulShot.target.position ? Vec2.clone(foulShot.target.position) : null,
-                    cueBallPos: cueBall ? Vec2.clone(cueBall.position) : null,
+                    cueBallPos: preShotCueBallPos,
                     isSafetyShot: foulShot.isSafetyShot || false
                 });
                 // Keep only last 4 fouls

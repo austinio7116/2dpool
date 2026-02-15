@@ -462,20 +462,22 @@ export class AI {
             return;
         }
 
-        // NEW: Detect Turn Shift
-        // If the current player is different from the last time we actively played,
-        // it means the opponent took a turn in between.
+        // Clear stale foul memory when position has changed
+        // Keep foul history ONLY when cue ball is in the same position (restore/miss replay)
         if (this.lastTurnPlayer !== this.game.currentPlayer) {
-             // Exception: Snooker 'Restore' puts balls back, so we SHOULD keep foul memory.
-             // But for standard play, clear it.
-             const isRestore = this.game.pendingFoulDecision?.decision === 'restore';
-             
-             if (!isRestore) {
-                 this.clearFoulTracking();
-                 aiLog('[AI] New turn detected - clearing previous foul memory');
-             }
-             
+             this.clearFoulTracking();
              this.lastTurnPlayer = this.game.currentPlayer;
+        } else if (this.foulHistory.length > 0) {
+             // Check if cue ball has moved since foul was recorded
+             const cueBall = this.game.cueBall;
+             const lastFoulPos = this.foulHistory[this.foulHistory.length - 1].cueBallPos;
+             if (cueBall && lastFoulPos) {
+                 const moved = Vec2.distance(cueBall.position, lastFoulPos);
+                 if (moved > 2) {  // More than 2px = position changed, history is stale
+                     aiLog(`[AI] Cue ball moved ${moved.toFixed(0)}px since last foul - clearing stale foul memory`);
+                     this.clearFoulTracking();
+                 }
+             }
         }
 
         if (this.game.state === GameState.BALL_IN_HAND) {

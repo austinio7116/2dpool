@@ -7,7 +7,7 @@ import { AI_PERSONAS, getPersonaById } from './ai-personas.js';
 import { ShotSimulator } from './shot-simulator.js';
 
 // Debug logging - set to true to see AI decision making
-const AI_DEBUG = false;
+const AI_DEBUG = true;
 
 // Trained angle error prediction model (loaded dynamically if available)
 let angleModel = null;
@@ -112,9 +112,12 @@ export class AI {
             };
             // Track direction in foul history for escape filtering
             if (foulShot.direction) {
+                const cueBall = this.game.cueBall;
                 this.foulHistory.push({
                     direction: Vec2.clone(foulShot.direction),
                     targetId: foulShot.target.id || foulShot.target.number,
+                    targetPos: foulShot.target.position ? Vec2.clone(foulShot.target.position) : null,
+                    cueBallPos: cueBall ? Vec2.clone(cueBall.position) : null,
                     isSafetyShot: foulShot.isSafetyShot || false
                 });
                 // Keep only last 4 fouls
@@ -3552,10 +3555,34 @@ export class AI {
 
                 const settings = this.getCurrentPersona();
                 // Reduced aim error for escape shots (precision kick shots)
+                // Multi-cushion escapes need even more precision
+                const escapeMultiplier = escapeShot.bounces > 0 ? 0.15 : 0.3;
                 const urgency = this.game.consecutiveMisses >= 2 ? 0.3 : 1.0;
-                let aimError = (Math.random() - 0.5) * 2 * settings.lineAccuracy * 0.5 * urgency * (Math.PI / 180);
+                let aimError = (Math.random() - 0.5) * 2 * settings.lineAccuracy * escapeMultiplier * urgency * (Math.PI / 180);
 
-                const adjustedDir = Vec2.rotate(escapeShot.direction, aimError);
+                // Micro-correction: if this direction is close to a previous foul,
+                // nudge TOWARD the intended target based on the miss direction
+                let foulCorrection = 0;
+                let foulMatchCount = 0;
+                for (const foul of this.foulHistory) {
+                    if (!foul.direction || !foul.targetPos || !foul.cueBallPos) continue;
+                    const dot = Vec2.dot(escapeShot.direction, foul.direction);
+                    if (dot > 0.97) {
+                        foulMatchCount++;
+                        // Compare: angle of foul shot vs angle to the target it was aiming for
+                        const toTarget = Vec2.normalize(Vec2.subtract(foul.targetPos, foul.cueBallPos));
+                        // Cross product: foulDir × toTarget > 0 means target is counter-clockwise from shot
+                        const cross = foul.direction.x * toTarget.y - foul.direction.y * toTarget.x;
+                        // Nudge toward target: 2° per foul, accumulating
+                        const nudge = (cross > 0 ? 1 : -1) * 2 * (Math.PI / 180);
+                        foulCorrection += nudge;
+                    }
+                }
+                if (foulCorrection !== 0) {
+                    aiLog(`Applying ${(foulCorrection * 180 / Math.PI).toFixed(1)}° micro-correction toward target (${foulMatchCount} match${foulMatchCount > 1 ? 'es' : ''})`);
+                }
+
+                const adjustedDir = Vec2.rotate(escapeShot.direction, aimError + foulCorrection);
 
                 let power = escapeShot.power;
                 const powerError = (Math.random() - 0.5) * 2 * settings.powerAccuracy;
@@ -3575,10 +3602,55 @@ export class AI {
 
                 aiLogGroupEnd();
                 if (this.onShot) {
-                    this.onShot(Vec2.normalize(adjustedDir), power, { x: 0, y: 0 });
+                    this.onShot(Vec2.normalize(adjustedDir), power, escapeShot.spin || { x: 0, y: 0 });
                 }
                 return;
             }
+
+            // Try desperate escape immediately (wider search, more bounces)
+            aiLog('No escape found - trying desperate escape');
+            const desperateEscape = this.findSnookerEscape(validTargets, true);
+            if (desperateEscape) {
+                const targetName = desperateEscape.target.colorName || desperateEscape.target.number || 'ball';
+                aiLog('Desperate escape: bank off', desperateEscape.rail, 'to hit', targetName,
+                      '| Power:', desperateEscape.power.toFixed(1));
+
+                const settings2 = this.getCurrentPersona();
+                const urgency2 = this.game.consecutiveMisses >= 2 ? 0.3 : 1.0;
+                let aimError2 = (Math.random() - 0.5) * 2 * settings2.lineAccuracy * 0.7 * urgency2 * (Math.PI / 180);
+
+                // Micro-correction from foul history — nudge toward intended target
+                let foulCorrection2 = 0;
+                for (const foul of this.foulHistory) {
+                    if (!foul.direction || !foul.targetPos || !foul.cueBallPos) continue;
+                    const dot = Vec2.dot(desperateEscape.direction, foul.direction);
+                    if (dot > 0.97) {
+                        const toTarget = Vec2.normalize(Vec2.subtract(foul.targetPos, foul.cueBallPos));
+                        const cross = foul.direction.x * toTarget.y - foul.direction.y * toTarget.x;
+                        foulCorrection2 += (cross > 0 ? 1 : -1) * 2 * (Math.PI / 180);
+                    }
+                }
+                if (foulCorrection2 !== 0) {
+                    aiLog(`Desperate escape: ${(foulCorrection2 * 180 / Math.PI).toFixed(1)}° micro-correction toward target`);
+                }
+
+                const adjustedDir2 = Vec2.rotate(desperateEscape.direction, aimError2 + foulCorrection2);
+
+                this.lastExecutedShot = {
+                    target: desperateEscape.target,
+                    pocket: { position: desperateEscape.target.position },
+                    cutAngle: 0,
+                    direction: Vec2.clone(desperateEscape.direction),
+                    isSafetyShot: true
+                };
+
+                aiLogGroupEnd();
+                if (this.onShot) {
+                    this.onShot(Vec2.normalize(adjustedDir2), desperateEscape.power, desperateEscape.spin || { x: 0, y: 0 });
+                }
+                return;
+            }
+
             aiLog('No escape found - will try direct shot anyway');
         }
 
@@ -3653,35 +3725,6 @@ export class AI {
                     bestDist = dist;
                     bestTarget = target;
                 }
-            }
-        }
-
-        // If still no target found and we're snookered, try the escape shot again with lower standards
-        if (!bestTarget && isSnookered) {
-            const desperateEscape = this.findSnookerEscape(validTargets, true);
-            if (desperateEscape) {
-                aiLog('Desperate escape attempt');
-                const settings = this.getCurrentPersona();
-                // Reduced aim error for desperate escape
-                const urgency = this.game.consecutiveMisses >= 2 ? 0.3 : 1.0;
-                let aimError = (Math.random() - 0.5) * 2 * settings.lineAccuracy * 0.7 * urgency * (Math.PI / 180);
-
-                const adjustedDir = Vec2.rotate(desperateEscape.direction, aimError);
-
-                // Track escape shot for foul avoidance
-                this.lastExecutedShot = {
-                    target: desperateEscape.target,
-                    pocket: { position: desperateEscape.target.position },
-                    cutAngle: 0,
-                    direction: Vec2.clone(desperateEscape.direction),
-                    isSafetyShot: true
-                };
-
-                aiLogGroupEnd();
-                if (this.onShot) {
-                    this.onShot(Vec2.normalize(adjustedDir), desperateEscape.power, { x: 0, y: 0 });
-                }
-                return;
             }
         }
 
@@ -3829,20 +3872,26 @@ export class AI {
         const cueBall = this.game.cueBall;
         if (!cueBall) return null;
 
+        // Desperate mode: wider search, more bounces, no clearance margin
+        const traceOptions = desperate
+            ? { maxBounces: 4, clearanceMargin: 0 }
+            : {};
+        const approachThreshold = desperate ? 80 : 50;
+        const coarseStep = desperate ? 2 : 4;
+
         // 1. PHASE ONE: Coarse Scan
-        // Scan every 4 degrees to find potential sectors
+        // Scan every N degrees to find potential sectors
         const sectors = []; // Store promising angles
-        const coarseStep = 4;
-        
+
         for (let angleDeg = 0; angleDeg < 360; angleDeg += coarseStep) {
             const angleRad = angleDeg * Math.PI / 180;
             const aimDir = { x: Math.cos(angleRad), y: Math.sin(angleRad) };
-            
-            const result = this.traceShotPath(cueBall.position, aimDir, validTargets);
-            
+
+            const result = this.traceShotPath(cueBall.position, aimDir, validTargets, traceOptions);
+
             if (result) {
-                // Keep if we hit a target, OR if we got reasonably close (within 4 ball widths)
-                if (result.hitsValidTarget || result.closestApproach < 50) {
+                // Keep if we hit a target, OR if we got reasonably close
+                if (result.hitsValidTarget || result.closestApproach < approachThreshold) {
                     sectors.push({
                         angle: angleDeg,
                         result: result,
@@ -3854,7 +3903,8 @@ export class AI {
 
         // Sort sectors by potential
         sectors.sort((a, b) => b.score - a.score);
-        
+        aiLog(`Escape Phase 1: ${sectors.length} promising sectors from ${Math.ceil(360 / coarseStep)} angles scanned`);
+
         // Take top 5 distinct sectors to refine
         // (Filter to ensure we don't just refine 5 angles right next to each other)
         const uniqueSectors = [];
@@ -3870,6 +3920,8 @@ export class AI {
         const fineStep = 0.5; // High precision
         const searchRange = 5; // Search +/- 5 degrees around coarse hit
 
+        const spinVariants = [0, -0.7, 0.7]; // no spin, left english, right english
+
         for (const sector of uniqueSectors) {
             const startAng = sector.angle - searchRange;
             const endAng = sector.angle + searchRange;
@@ -3877,64 +3929,62 @@ export class AI {
             for (let a = startAng; a <= endAng; a += fineStep) {
                 const rad = a * Math.PI / 180;
                 const dir = { x: Math.cos(rad), y: Math.sin(rad) };
-                
-                const trace = this.traceShotPath(cueBall.position, dir, validTargets);
-                
-                if (trace && trace.hitsValidTarget) {
-                    // Calculate power with cushion bounce compensation (30% boost per bounce)
-                    const power = Math.min(45, (12 + trace.totalDistance / 25) * Math.pow(1.3, trace.bounces));
-                    
-                    candidates.push({
-                        target: trace.targetHit,
-                        rail: trace.bounces > 0 ? `${trace.bounces} cushion(s)` : 'direct',
-                        direction: dir,
-                        power: power,
-                        score: this.scoreEscapeResult(trace) + 10, // Bonus for confirmed hit
-                        bounces: trace.bounces,
-                        angle: a
-                    });
-                }
-            }
-        }
 
-        // 3. PHASE THREE: Foul Memory Filtering
-        // Filter out shots too close to ANY recent foul direction (not just the last one)
-        if (this.foulHistory.length > 0 && candidates.length > 0) {
-            // Exclusion zone widens with more consecutive fouls
-            const baseExclusion = 3; // degrees
-            const perFoulExtra = 2; // extra degrees per foul in history
-            const exclusionAngle = baseExclusion + (this.foulHistory.length - 1) * perFoulExtra;
+                for (const spin of spinVariants) {
+                    const opts = spin !== 0
+                        ? { ...traceOptions, sidespin: spin }
+                        : traceOptions;
 
-            const filtered = candidates.filter(c => {
-                for (const foul of this.foulHistory) {
-                    if (!foul.direction) continue;
-                    const dot = Vec2.dot(c.direction, foul.direction);
-                    const diffAngle = Math.acos(Math.max(-1, Math.min(1, dot))) * 180 / Math.PI;
+                    const trace = this.traceShotPath(cueBall.position, dir, validTargets, opts);
 
-                    if (diffAngle < exclusionAngle) {
-                        aiLog(`Skipping candidate at ${c.angle.toFixed(1)}° - within ${exclusionAngle.toFixed(0)}° of foul #${this.foulHistory.indexOf(foul) + 1}`);
-                        return false;
+                    if (trace && trace.hitsValidTarget) {
+                        // Calculate power with cushion bounce compensation (30% boost per bounce)
+                        const power = Math.min(45, (12 + trace.totalDistance / 25) * Math.pow(1.3, trace.bounces));
+
+                        candidates.push({
+                            target: trace.targetHit,
+                            rail: trace.bounces > 0 ? `${trace.bounces} cushion(s)` : 'direct',
+                            direction: dir,
+                            power: power,
+                            score: this.scoreEscapeResult(trace) + 10 - (spin !== 0 ? 5 : 0), // Small penalty for spin shots
+                            bounces: trace.bounces,
+                            angle: a,
+                            spin: { x: spin, y: 0 }
+                        });
                     }
                 }
-                return true;
-            });
-
-            // If we have filtered options, use them. If we filtered everything, keep the original list
-            if (filtered.length > 0) {
-                candidates.length = 0;
-                candidates.push(...filtered);
-            } else {
-                aiLog(`All ${candidates.length} candidates filtered by foul history - keeping original list`);
             }
         }
+
+        const spinCandidates = candidates.filter(c => c.spin && c.spin.x !== 0);
+        aiLog(`Escape Phase 2: ${candidates.length} candidates found (${spinCandidates.length} with spin) from ${uniqueSectors.length} sectors`);
 
         if (candidates.length === 0) return null;
 
+        // Foul avoidance: count how many previous fouls match this sector
+        // Micro-vary on early misses, escalate to route change after repeated failures
+        if (this.foulHistory.length > 0) {
+            for (const candidate of candidates) {
+                let foulMatches = 0;
+                for (const foul of this.foulHistory) {
+                    if (!foul.direction) continue;
+                    const dot = Vec2.dot(candidate.direction, foul.direction);
+                    if (dot > 0.97) foulMatches++; // Within ~14° of foul direction
+                }
+                if (foulMatches >= 3) {
+                    // 3+ fouls at this angle — abandon this route entirely
+                    candidate.score -= 60;
+                    aiLog(`Abandoning ${candidate.angle.toFixed(1)}° after ${foulMatches} fouls`);
+                }
+            }
+        }
+
         // Sort by score
         candidates.sort((a, b) => b.score - a.score);
-        
+
         const best = candidates[0];
-        aiLog(`Best Escape Found: ${best.angle.toFixed(1)}° (${best.rail}) -> Score: ${best.score.toFixed(0)}`);
+        const spinInfo = best.spin && best.spin.x !== 0 ? ` spin:${best.spin.x.toFixed(1)}` : '';
+        aiLog(`Best Escape Found: ${best.angle.toFixed(1)}° (${best.rail})${spinInfo} -> Score: ${best.score.toFixed(0)}`);
         
         return best;
     }
@@ -3961,10 +4011,11 @@ export class AI {
 
     // Trace a shot path through rail bounces and find what ball is hit first
     // UPDATED: Now returns closest approach info for homing in on targets
-    traceShotPath(startPos, aimDir, validTargets) {
+    traceShotPath(startPos, aimDir, validTargets, options = {}) {
         const cueBallRadius = this.game.cueBall?.radius || 12;
         const bounds = this.table.bounds;
         const margin = cueBallRadius + 2;
+        const clearanceMargin = options.clearanceMargin !== undefined ? options.clearanceMargin : 2;
 
         // All balls we could potentially hit
         const allBalls = this.game.balls.filter(b => !b.pocketed && !b.isCueBall);
@@ -3973,8 +4024,8 @@ export class AI {
         let currentDir = { x: aimDir.x, y: aimDir.y };
         let totalDistance = 0;
         let bounces = 0;
-        const maxBounces = 3; 
-        const maxDistance = 2500; 
+        const maxBounces = options.maxBounces || 3;
+        const maxDistance = 2500;
 
         // Track the closest we ever get to a valid target (for refining aim)
         let closestApproach = Infinity;
@@ -4006,8 +4057,9 @@ export class AI {
                 const closestPoint = Vec2.add(currentPos, Vec2.multiply(currentDir, projection));
                 const perpDist = Vec2.distance(ball.position, closestPoint);
 
-                // Check collision
-                const hitRadius = ballRadius + cueBallRadius;
+                // Check collision - add clearance margin for non-target balls
+                const isTarget = validTargets.includes(ball);
+                const hitRadius = ballRadius + cueBallRadius + (isTarget ? 0 : clearanceMargin);
                 if (perpDist < hitRadius) {
                     const offset = Math.sqrt(Math.max(0, hitRadius * hitRadius - perpDist * perpDist));
                     const contactDist = projection - offset;
@@ -4061,13 +4113,20 @@ export class AI {
 
             // Move to rail
             const railHitPoint = Vec2.add(currentPos, Vec2.multiply(currentDir, nearestRailDist));
-            
-            // Pocket Scratch Check
-            if (this.isNearPocket(railHitPoint)) return null; 
+
+            // Check if bounce point is inside a pocket opening — ball would fall in, not bounce
+            let inPocket = false;
+            for (const pocket of this.table.pockets) {
+                if (Vec2.distance(railHitPoint, pocket.position) < pocket.radius) {
+                    inPocket = true;
+                    break;
+                }
+            }
+            if (inPocket) break; // End trace — ball enters pocket (scratch)
 
             totalDistance += nearestRailDist;
             
-            // Reflect with cushion throw (Your existing logic)
+            // Reflect with cushion throw
             const cushionThrowFactor = 0.75;
             if (hitRail === 'top' || hitRail === 'bottom') {
                 currentDir = { x: currentDir.x * cushionThrowFactor, y: -currentDir.y };
@@ -4075,6 +4134,12 @@ export class AI {
                 currentDir = { x: -currentDir.x, y: currentDir.y * cushionThrowFactor };
             }
             currentDir = Vec2.normalize(currentDir);
+
+            // Apply sidespin deflection if specified (±1.0 spin → ±15° deflection)
+            if (options.sidespin) {
+                const spinDeflection = options.sidespin * 15 * (Math.PI / 180);
+                currentDir = Vec2.rotate(currentDir, spinDeflection);
+            }
             
             currentPos = railHitPoint;
             bounces++;

@@ -1472,15 +1472,23 @@ export class Game {
                 : this.isPlayerSnookered();
 
             // Determine if restore is available:
-            // - Always available on a miss (standard foul and a miss rule)
+            // - Available on a miss (standard foul and a miss rule)
             // - Also available when player was snookered and scratched (opponent's choice)
+            // - BUT NOT if the fouling player needs snookers (can't win on remaining balls)
+            //   Per WPBSA rules, miss is not called when snookers are required
+            //   (no restore option), but 3 consecutive misses still forfeits the frame
             const wasSnookeredScratch = cueBallPocketed && this.wasSnookeredBeforeShot;
-            const canRestore = (isMiss || wasSnookeredScratch) && this.preShotState !== null;
+            const snookerInfo = this.getSnookersNeeded();
+            const foulingPlayerNeedsSnookers = snookerInfo.needed > 0;
+            const missCalled = isMiss && !foulingPlayerNeedsSnookers;
+            const canRestore = (missCalled || wasSnookeredScratch) && this.preShotState !== null;
 
             // Store foul info for decision
+            // isMiss = true means the player failed to hit a ball-on (used for 3-miss rule)
+            // missCalled = true means "miss" is announced and restore is offered (suppressed when snookers needed)
             this.pendingFoulDecision = {
                 penalty: foulValue,
-                isMiss: isMiss,
+                isMiss: missCalled,
                 wasScratched: cueBallPocketed,
                 wasSnookered: this.wasSnookeredBeforeShot,
                 foulReason: this.foulReason,

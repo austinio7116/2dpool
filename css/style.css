@@ -424,8 +424,8 @@ body {
 
 .table-option .table-menu-dropdown {
     position: absolute;
-    right: 0;
-    top: 24px;
+    right: calc(100% + 4px);
+    bottom: 0;
     background: rgba(40, 40, 60, 0.98);
     border: 1px solid rgba(120, 120, 160, 0.6);
     border-radius: 6px;

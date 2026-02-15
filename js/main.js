@@ -1502,6 +1502,12 @@ class PoolGame {
         const showDZone = this.game.state === GameState.BALL_IN_HAND &&
                           this.game.mode === GameMode.SNOOKER;
 
+        // Show kitchen zone for UK pool ball-in-hand or break shot placement
+        const showKitchenZone = this.game.state === GameState.BALL_IN_HAND &&
+                                !showDZone &&
+                                (this.game.mode === GameMode.UK_EIGHT_BALL ||
+                                 this.game.isBreakShot);
+
         const renderState = {
             balls: this.game.balls,
             cueBall: this.game.cueBall,
@@ -1517,6 +1523,7 @@ class PoolGame {
             isTouchSpin: aimState.isTouchSpin,
             aiVisualization: this.ui.aiDebugVisualization ? this.ai.getVisualization() : null,
             showDZone: showDZone,
+            showKitchenZone: showKitchenZone,
             shootButton: aimState.shootButton,
             powerOverrideActive: aimState.powerOverrideActive,
             isTouchDevice: aimState.isTouchDevice

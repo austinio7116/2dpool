@@ -144,6 +144,11 @@ export class Renderer {
             this.drawDZone();
         }
 
+        // Draw kitchen zone for UK pool / break shot ball-in-hand
+        if (state.showKitchenZone) {
+            this.drawKitchenZone();
+        }
+
         // DEBUG: Draw pocket detection circles (uncomment to visualize)
         // this.drawPocketDebug();
 
@@ -270,6 +275,31 @@ export class Renderer {
                 }
             }
         }
+
+        ctx.restore();
+    }
+
+    // Draw the kitchen zone for ball-in-hand placement (UK pool / break shots)
+    drawKitchenZone() {
+        const ctx = this.ctx;
+        const kitchenX = this.table.kitchenLine;
+        const top = this.table.bounds.top;
+        const bottom = this.table.bounds.bottom;
+        const left = this.table.bounds.left;
+
+        ctx.save();
+
+        // Draw kitchen line (vertical line at 1/4 table width)
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(kitchenX, top);
+        ctx.lineTo(kitchenX, bottom);
+        ctx.stroke();
+
+        // Fill the kitchen area with a subtle highlight
+        ctx.fillStyle = 'rgba(100, 200, 255, 0.1)';
+        ctx.fillRect(left, top, kitchenX - left, bottom - top);
 
         ctx.restore();
     }

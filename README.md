@@ -14,6 +14,11 @@
 
 1. [Welcome to the Table](#welcome-to-the-table)
 2. [Game Modes](#game-modes)
+   - [US 8-Ball](#us-8-ball)
+   - [UK 8-Ball](#uk-8-ball)
+   - [9-Ball](#9-ball)
+   - [Snooker](#snooker)
+   - [Free Play](#free-play)
 3. [How to Play](#how-to-play)
 4. [The AI Opponents](#the-ai-opponents)
 5. [Career Mode](#career-mode)
@@ -27,7 +32,7 @@
 
 ## Welcome to the Table
 
-![Main Menu](screenshots/different-game-modes.png)
+![Main Menu](userguide/screenshots/different-game-modes.png)
 
 Welcome to **2D Pool & Snooker** — a physics-driven cue sports simulation that runs entirely in your browser. Powered by a professional-grade physics engine (Planck.js, a Box2D port), this isn't your typical "drag and flick" mobile pool game. This is the real deal: proper spin mechanics, realistic cushion physics, full rule implementations, and AI opponents that will genuinely make you sweat.
 
@@ -50,14 +55,14 @@ Let's break.
 
 ### US 8-Ball
 
-![US 8-Ball](screenshots/us-8-ball.png)
+![US 8-Ball](userguide/screenshots/us-8-ball.png)
 
 The classic American game. Fifteen balls racked in a triangle — solids (1-7), stripes (9-15), and the all-important 8-ball in the centre.
 
 **How it works:**
 - Groups (solids or stripes) are assigned by the first ball legally potted after the break — not during the break itself
 - Clear all seven of your group, then pocket the 8-ball to win
-- Pocket the 8-ball early, on a foul, or scratch while shooting it? That's an instant loss. Ouch.
+- Pocket the 8-ball early, on a foul, or scratch while shooting it? That's an instant loss
 
 **Break rules:** At least 3 object balls must cross the centre line or be pocketed. Fail to do so and it's a foul. If the 8-ball drops on the break, it's re-spotted — no harm done.
 
@@ -67,7 +72,7 @@ The classic American game. Fifteen balls racked in a triangle — solids (1-7), 
 
 ### UK 8-Ball
 
-![UK 8-Ball](screenshots/uk-8-ball.png)
+![UK 8-Ball](userguide/screenshots/uk-8-ball.png)
 
 The pub rules. If you've ever played pool in a British pub, you know these rules — or at least you think you do. (Everyone's pub had slightly different rules. These are the proper ones.)
 
@@ -83,7 +88,7 @@ Choose between **Red & Yellow** or **Blue & Yellow** colour schemes for that aut
 
 ### 9-Ball
 
-![9-Ball](screenshots/9-ball.png)
+![9-Ball](userguide/screenshots/9-ball.png)
 
 Fast, aggressive, and full of drama. Nine balls, diamond rack, and one simple rule: always hit the lowest-numbered ball first. Any ball can be pocketed on any shot — including the 9-ball for an early win.
 
@@ -97,7 +102,7 @@ Fast, aggressive, and full of drama. Nine balls, diamond rack, and one simple ru
 
 ### Snooker
 
-![Mini Snooker](screenshots/mini-snooker.png)
+![Mini Snooker](userguide/screenshots/mini-snooker.png)
 
 *This is where things get serious.*
 
@@ -105,11 +110,11 @@ Full WPBSA-style snooker rules, implemented with the kind of detail that would m
 
 **Mini Snooker** (tables 1-8): 6 reds and 6 colours on a standard-sized table. Perfect for quicker frames while still demanding real snooker thinking.
 
-![Full-Size Snooker](screenshots/full-size-snooker.png)
+![Full-Size Snooker](userguide/screenshots/full-size-snooker.png)
 
 **Full-Size Snooker** (table 9): 15 reds and 6 colours on a larger table with smaller balls and tighter pockets. This is the real thing. If you can make a century break here, you've earned it.
 
-![Break Counter and Scoring](screenshots/break-counter-snooker-scoring.png)
+![Break Counter and Scoring](userguide/screenshots/break-counter-snooker-scoring.png)
 
 **The scoring system:**
 - Reds are worth 1 point each. Colours: Yellow (2), Green (3), Brown (4), Blue (5), Pink (6), Black (7)
@@ -120,7 +125,7 @@ Full WPBSA-style snooker rules, implemented with the kind of detail that would m
 - Minimum 4-point penalty, or the value of the ball involved — whichever is higher
 - Foul points are awarded to your *opponent*
 
-![Full Snooker Rules - Foul Decisions](screenshots/full-snooker-rules.png)
+![Full Snooker Rules - Foul Decisions](userguide/screenshots/full-snooker-rules.png)
 
 **After a foul, the incoming player gets options:**
 - **Play On** — Accept the position and play
@@ -180,24 +185,24 @@ These guides are generous enough to help you plan, but they won't do the work fo
 
 ## The AI Opponents
 
-![8 AI Opponents with Different Play Styles](screenshots/8-ai-opponents-different-play-styles.png)
+![8 AI Opponents with Different Play Styles](userguide/screenshots/8-ai-opponents-different-play-styles.png)
 
 Eight distinct AI personalities, each with their own playing style, strengths, weaknesses, and ELO rating. They're not just difficulty sliders — they play genuinely different games.
 
 ### The Roster
 
-| | Name | ELO | Style |
-|---|---|---|---|
-| 🟢 | **Rookie Rick** | ~1278 | Enthusiastic but erratic. Hits hard, aims... roughly. Picks shots at random. Everyone starts somewhere. |
-| 🩷 | **Steady Sue** | ~1382 | Cautious and consistent. Won't beat you with flair, but won't give you many freebies either. Favours safety play. |
-| 🟠 | **Hustler Hank** | ~1447 | Aggressive and confident. Goes for the pot more often than he should — but lands it more often than you'd like. |
-| 🟣 | **Professor Pete** | ~1428 | The thinking player's opponent. Outstanding safety play and positioning, even if the pots aren't always flashy. |
-| 🔴 | **Clara "Cue Queen"** | ~1501 | The complete package. Good accuracy, excellent spin control, smart shot selection. A proper challenge. |
-| 🔵 | **Deadshot Dave** | ~1633 | The name says it all. Pinpoint accuracy with an aggressive temperament. He'll go for pots that shouldn't be possible — and make them. |
-| 🥇 | **Iron Nina** | ~1715 | Near-perfect in every department. Exceptional positional play, devastating break-building, and the snooker escape artist you never wanted to face. |
-| ⚪ | **The Machine** | ~1616 | Zero error. Perfect aim. Perfect power. Perfect positioning. It doesn't think — it calculates. Good luck. |
+| Avatar | Name | ELO | Style |
+|:---:|---|:---:|---|
+| <img src="assets/avatars/R.png" width="48"> | **Rookie Rick** | ~1278 | Enthusiastic but erratic. Hits hard, aims... roughly. Picks shots at random. Everyone starts somewhere. |
+| <img src="assets/avatars/S.png" width="48"> | **Steady Sue** | ~1382 | Cautious and consistent. Won't beat you with flair, but won't give you many freebies either. Favours safety play. |
+| <img src="assets/avatars/H.png" width="48"> | **Hustler Hank** | ~1447 | Aggressive and confident. Goes for the pot more often than he should — but lands it more often than you'd like. |
+| <img src="assets/avatars/P.png" width="48"> | **Professor Pete** | ~1428 | The thinking player's opponent. Outstanding safety play and positioning, even if the pots aren't always flashy. |
+| <img src="assets/avatars/C.png" width="48"> | **Clara "Cue Queen"** | ~1501 | The complete package. Good accuracy, excellent spin control, smart shot selection. A proper challenge. |
+| <img src="assets/avatars/D.png" width="48"> | **Deadshot Dave** | ~1633 | The name says it all. Pinpoint accuracy with an aggressive temperament. He'll go for pots that shouldn't be possible — and make them. |
+| <img src="assets/avatars/N.png" width="48"> | **Iron Nina** | ~1715 | Near-perfect in every department. Exceptional positional play, devastating break-building, and the snooker escape artist you never wanted to face. |
+| <img src="assets/avatars/M.png" width="48"> | **The Machine** | ~1616 | Zero error. Perfect aim. Perfect power. Perfect positioning. It doesn't think — it calculates. Good luck. |
 
-![Strong AI Making High Breaks](screenshots/strong-ai-high-breaks.png)
+![Strong AI Making High Breaks](userguide/screenshots/strong-ai-high-breaks.png)
 
 Each AI has five visible skill attributes:
 - **Accuracy** — How precisely they aim (The Machine literally never misses the line)
@@ -212,7 +217,7 @@ Each AI has five visible skill attributes:
 
 ## Career Mode
 
-![Career Mode Dashboard](screenshots/career-mode.png)
+![Career Mode Dashboard](userguide/screenshots/career-mode.png)
 
 This is the heart of the single-player experience. Career Mode drops you into a competitive league system across all four game formats, with real progression, dynamic AI opponents, and 42 achievements to chase.
 
@@ -226,7 +231,7 @@ This is the heart of the single-player experience. Career Mode drops you into a 
 
 ### The League Table
 
-![League Rankings](screenshots/league-ranking.png)
+![League Rankings](userguide/screenshots/league-ranking.png)
 
 Standings are determined by:
 1. **Points** (2 for a win, 0 for a loss)
@@ -235,7 +240,7 @@ Standings are determined by:
 
 ### Fixtures
 
-![Season Fixtures](screenshots/single-player-multi-format-league.png)
+![Season Fixtures](userguide/screenshots/single-player-multi-format-league.png)
 
 The Fixtures tab shows every match across all four leagues — upcoming, in progress, and completed. You can save and resume career matches at any time (one match at a time), so you're never forced to finish a best-of-5 snooker epic in one sitting.
 
@@ -255,7 +260,7 @@ Win your Amateur division and you're **promoted to Pro**. The Pro division featu
 
 ### Profile
 
-![Career Profile](screenshots/career-profile.png)
+![Career Profile](userguide/screenshots/career-profile.png)
 
 Your Profile tab tracks everything:
 - Current ELO and season number
@@ -270,7 +275,7 @@ Your Profile tab tracks everything:
 
 ## Tables & Customisation
 
-![Table Selection](screenshots/table-selection-and-create-custom.png)
+![Table Selection](userguide/screenshots/table-selection-and-create-custom.png)
 
 ### Built-in Tables
 
@@ -302,7 +307,7 @@ Custom tables can be **exported and imported** as JSON files — share your desi
 
 ## Ball Sets & The Ball Creator
 
-![Pre-made and Custom Ball Sets](screenshots/premade-and-custom-balls.png)
+![Pre-made and Custom Ball Sets](userguide/screenshots/premade-and-custom-balls.png)
 
 ### Pre-made Ball Sets
 
@@ -321,7 +326,7 @@ Five additional built-in custom sets showcase what the ball creator can do:
 
 ### The Ball Creator
 
-![Custom Ball Builder](screenshots/custom-ball-builder.png)
+![Custom Ball Builder](userguide/screenshots/custom-ball-builder.png)
 
 This is where things get creative. The Ball Creator is a full design studio with five tabs:
 
@@ -341,7 +346,7 @@ The live **preview panel** on the right updates instantly as you tweak settings,
 
 ## Match Statistics
 
-![Post-Frame Match Statistics](screenshots/post-frame-match-stats.png)
+![Post-Frame Match Statistics](userguide/screenshots/post-frame-match-stats.png)
 
 At the end of every match, the game presents a detailed statistical breakdown for both players:
 
@@ -362,51 +367,114 @@ In snooker, **total points** and **break** stats take on even greater significan
 
 ## Achievements
 
-![42 Achievements to Complete](screenshots/42-achievements-to-complete.png)
+![42 Achievements to Complete](userguide/screenshots/42-achievements-to-complete.png)
 
-Career Mode features **42 achievements** across several categories. Each one comes with its own trophy — displayed in full colour when unlocked, greyed out when still waiting for you.
+Career Mode features **42 achievements** to unlock. Each one comes with its own trophy — displayed in full colour when earned, greyed out when still waiting for you. Can you collect them all?
 
-### Beat the Roster (8 Achievements)
-Defeat each AI opponent at least once:
-*Beat Rookie Rick, Steady Sue, Hustler Hank, Professor Pete, Clara "Cue Queen", Deadshot Dave, Iron Nina, and The Machine*
+### Beat the Roster
 
-### Victory in Every Format (4 Achievements)
-Win a match in each game mode:
-*8-Ball Victor, UK Rules, 9-Ball Victor, Snooker Victor*
+Prove your worth against every opponent in the game. No hiding from the tough ones.
 
-### League Champions (8 Achievements)
-Win each league at both division levels:
-*Amateur and Pro Champion in US 8-Ball, UK 8-Ball, 9-Ball, and Snooker*
+| Trophy | Achievement | How to Unlock |
+|:---:|---|---|
+| <img src="assets/trophies/beat_rookie_rick.png" width="48"> | **Beat Rookie Rick** | Win a career match against Rookie Rick |
+| <img src="assets/trophies/beat_steady_sue.png" width="48"> | **Beat Steady Sue** | Win a career match against Steady Sue |
+| <img src="assets/trophies/beat_hustler_hank.png" width="48"> | **Beat Hustler Hank** | Win a career match against Hustler Hank |
+| <img src="assets/trophies/beat_professor_pete.png" width="48"> | **Beat Professor Pete** | Win a career match against Professor Pete |
+| <img src="assets/trophies/beat_clara_cue_queen.png" width="48"> | **Beat Clara "Cue Queen"** | Win a career match against Clara "Cue Queen" |
+| <img src="assets/trophies/beat_deadshot_dave.png" width="48"> | **Beat Deadshot Dave** | Win a career match against Deadshot Dave |
+| <img src="assets/trophies/beat_iron_nina.png" width="48"> | **Beat Iron Nina** | Win a career match against Iron Nina |
+| <img src="assets/trophies/beat_the_machine.png" width="48"> | **Beat The Machine** | Win a career match against The Machine. Yes, it's possible. Probably. |
 
-### Snooker Milestones (6 Achievements)
-- **Solid Break** — Score a break of 30+
-- **Half Century** — Score a break of 50+
-- **Century Break** — Score a break of 100+
-- **Mini Maximum** — Full clearance in mini snooker (75 points)
-- **Maximum Break** — The holy grail: a 147 in full snooker
-- **Colour Clearance** — Pot Yellow through Black consecutively
+### Game Mode Victories
 
-### Pool Milestones (5 Achievements)
-- **Double Pot** — Pot 2 balls in one visit
-- **Hat Trick** — Pot 3 balls in one visit
-- **On Fire** — Pot 5 balls in one visit
-- **8-Ball Clearance** — Clear your group and pocket the 8-ball in one visit
-- **9-Ball Run Out** — Run the table in 9-ball
+Show you can win in every format. Variety is the spice of cue sports.
 
-### Perfect Games (2 Achievements)
-- **8-Ball Perfect Game** — Clear from the break without your opponent taking a shot
-- **9-Ball Perfect Game** — Run out from the break in 9-ball
+| Trophy | Achievement | How to Unlock |
+|:---:|---|---|
+| <img src="assets/trophies/win_8ball.png" width="48"> | **8-Ball Victor** | Win any 8-Ball (US) match |
+| <img src="assets/trophies/win_uk8ball.png" width="48"> | **UK Rules** | Win any 8-Ball (UK) match |
+| <img src="assets/trophies/win_9ball.png" width="48"> | **9-Ball Victor** | Win any 9-Ball match |
+| <img src="assets/trophies/win_snooker.png" width="48"> | **Snooker Victor** | Win any Snooker match |
 
-### Special Shots (2 Achievements)
-- **Off the Cushion** — Pot a ball via a cushion (bank shot)
-- **Plant Master** — Pot a ball via another object ball (combo/plant)
+### League Champions
 
-### Career Milestones (7 Achievements)
-- **Moving Up** — First promotion to Pro division
-- **Clean Sweep** — Win a match without losing a frame
-- **Season Veteran** — Complete an entire season
-- **Top Flight** — Reach Pro division in all 4 leagues
-- **Grand Champion** — Win all 4 Pro leagues
+Dominate the divisions. Eight trophies for eight league titles — four Amateur, four Pro.
+
+| Trophy | Achievement | How to Unlock |
+|:---:|---|---|
+| <img src="assets/trophies/league_lower.png" width="48"> | **8-Ball (US) Amateur Champion** | Win the Amateur league in 8-Ball (US) |
+| <img src="assets/trophies/league_lower.png" width="48"> | **8-Ball (UK) Amateur Champion** | Win the Amateur league in 8-Ball (UK) |
+| <img src="assets/trophies/league_lower.png" width="48"> | **9-Ball Amateur Champion** | Win the Amateur league in 9-Ball |
+| <img src="assets/trophies/league_lower.png" width="48"> | **Snooker Amateur Champion** | Win the Amateur league in Snooker |
+| <img src="assets/trophies/league_upper.png" width="48"> | **8-Ball (US) Pro Champion** | Win the Pro league in 8-Ball (US) |
+| <img src="assets/trophies/league_upper.png" width="48"> | **8-Ball (UK) Pro Champion** | Win the Pro league in 8-Ball (UK) |
+| <img src="assets/trophies/league_upper.png" width="48"> | **9-Ball Pro Champion** | Win the Pro league in 9-Ball |
+| <img src="assets/trophies/league_upper.png" width="48"> | **Snooker Pro Champion** | Win the Pro league in Snooker |
+
+### Career Milestones
+
+The long game. These track your overall career progression.
+
+| Trophy | Achievement | How to Unlock |
+|:---:|---|---|
+| <img src="assets/trophies/promotion_first.png" width="48"> | **Moving Up** | Earn your first promotion to the Pro division in any league |
+| <img src="assets/trophies/clean_sweep.png" width="48"> | **Clean Sweep** | Win a match without losing a single frame |
+| <img src="assets/trophies/season_complete.png" width="48"> | **Season Veteran** | Complete an entire season (all fixtures across all 4 leagues) |
+| <img src="assets/trophies/all_upper.png" width="48"> | **Top Flight** | Reach the Pro division in all 4 leagues |
+| <img src="assets/trophies/grand_champion.png" width="48"> | **Grand Champion** | Win all 4 Pro leagues. The ultimate career achievement. |
+
+### Pool Pot Streaks
+
+String together pots in a single visit. Easier said than done when the pressure is on.
+
+| Trophy | Achievement | How to Unlock |
+|:---:|---|---|
+| <img src="assets/trophies/pool_break_2.png" width="48"> | **Double Pot** | Pot 2 balls in one visit |
+| <img src="assets/trophies/pool_break_3.png" width="48"> | **Hat Trick** | Pot 3 balls in one visit |
+| <img src="assets/trophies/pool_break_5.png" width="48"> | **On Fire** | Pot 5 balls in one visit. You're not missing, you're just... not missing. |
+
+### Clearances & Perfect Games
+
+The pinnacle of pool. Clear the table. Leave nothing behind.
+
+| Trophy | Achievement | How to Unlock |
+|:---:|---|---|
+| <img src="assets/trophies/clearance_8ball.png" width="48"> | **8-Ball Clearance** | Clear all your balls and pot the 8-ball in a single visit |
+| <img src="assets/trophies/clearance_9ball.png" width="48"> | **9-Ball Run Out** | Run the table in 9-Ball — pot all remaining balls in one visit |
+| <img src="assets/trophies/clearance_8ball_break.png" width="48"> | **8-Ball Perfect Game** | Clear from the break in 8-Ball without your opponent taking a shot |
+| <img src="assets/trophies/clearance_9ball_break.png" width="48"> | **9-Ball Perfect Game** | Clear from the break in 9-Ball. The golden run. |
+
+### Special Shots
+
+Show some flair. These reward the creative shot-maker.
+
+| Trophy | Achievement | How to Unlock |
+|:---:|---|---|
+| <img src="assets/trophies/bank_shot.png" width="48"> | **Off the Cushion** | Pot a ball via a cushion (bank shot) |
+| <img src="assets/trophies/combo_shot.png" width="48"> | **Plant Master** | Pot a ball via another object ball (combo/plant) |
+
+### Snooker Break Building
+
+The gentleman's game demands precision and consistency. Build those breaks.
+
+| Trophy | Achievement | How to Unlock |
+|:---:|---|---|
+| <img src="assets/trophies/snooker_break_30.png" width="48"> | **Solid Break** | Score a snooker break of 30 or more |
+| <img src="assets/trophies/snooker_break_50.png" width="48"> | **Half Century** | Score a snooker break of 50 or more |
+| <img src="assets/trophies/snooker_century.png" width="48"> | **Century Break** | Score a snooker break of 100 or more. Welcome to the elite. |
+
+### Snooker Clearances
+
+The holy grails of snooker. Maximum breaks are the stuff of legends.
+
+| Trophy | Achievement | How to Unlock |
+|:---:|---|---|
+| <img src="assets/trophies/snooker_clear_colours.png" width="48"> | **Colour Clearance** | Pot Yellow through Black consecutively in the correct order |
+| <img src="assets/trophies/clearance_mini_snooker.png" width="48"> | **Mini Maximum** | Full clearance in Mini Snooker — pot every ball on the table |
+| <img src="assets/trophies/clearance_full_snooker.png" width="48"> | **Full Clearance** | Full clearance in Full-Size Snooker. 15 reds, 15 blacks, and the colours. |
+| <img src="assets/trophies/snooker_75_break.png" width="48"> | **Mini Max Break** | Score a maximum 75 break in Mini Snooker |
+| <img src="assets/trophies/snooker_147.png" width="48"> | **Maximum Break** | Score a 147 in Full-Size Snooker. The holy grail. If you get this one, take a screenshot. |
 
 ---
 

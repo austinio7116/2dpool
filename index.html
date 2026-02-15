@@ -340,7 +340,15 @@
                                                     <div class="color-field-hsb border-color-field hidden" id="solid-border-color-field">
                                                         <button class="color-swatch" id="swatch-solid-number-border" data-color-id="solid-number-border" data-color="#000000" style="background-color: #000000;"></button>
                                                     </div>
+                                                    <label class="checkbox-label border-checkbox hidden" id="solid-double-border-field">
+                                                        <input type="checkbox" id="solid-double-border">
+                                                        Double Border
+                                                    </label>
                                                 </div>
+                                                <label class="checkbox-label">
+                                                    <input type="checkbox" id="solid-invert-circle">
+                                                    Invert Circle
+                                                </label>
                                             </div>
                                         </div>
                                         <!-- Stripe mode numbers -->
@@ -374,7 +382,15 @@
                                                 <div class="color-field-hsb border-color-field hidden" id="border-color-field">
                                                     <button class="color-swatch" id="swatch-number-border" data-color-id="number-border" data-color="#000000" style="background-color: #000000;"></button>
                                                 </div>
+                                                <label class="checkbox-label border-checkbox hidden" id="double-border-field">
+                                                    <input type="checkbox" id="double-border">
+                                                    Double Border
+                                                </label>
                                             </div>
+                                            <label class="checkbox-label">
+                                                <input type="checkbox" id="invert-circle">
+                                                Invert Circle
+                                            </label>
                                         </div>
                                     </div>
 
@@ -533,6 +549,14 @@
                                                         <input type="number" class="texture-seed-input" id="solid-texture-seed" value="0" min="0" max="9999">
                                                         <button class="texture-seed-btn" id="solid-texture-seed-randomize" title="Randomize seed">&#x1f3b2;</button>
                                                     </div>
+                                                    <div class="texture-target-row">
+                                                        <label>Apply To</label>
+                                                        <div class="texture-target-toggle" id="solid-texture-target-toggle">
+                                                            <button class="texture-target-btn active" data-target="main">Colour</button>
+                                                            <button class="texture-target-btn" data-target="background">Background</button>
+                                                            <button class="texture-target-btn" data-target="both">Both</button>
+                                                        </div>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
@@ -563,6 +587,14 @@
                                                         <label>Seed</label>
                                                         <input type="number" class="texture-seed-input" id="stripe-texture-seed" value="0" min="0" max="9999">
                                                         <button class="texture-seed-btn" id="stripe-texture-seed-randomize" title="Randomize seed">&#x1f3b2;</button>
+                                                    </div>
+                                                    <div class="texture-target-row">
+                                                        <label>Apply To</label>
+                                                        <div class="texture-target-toggle" id="stripe-texture-target-toggle">
+                                                            <button class="texture-target-btn active" data-target="main">Colour</button>
+                                                            <button class="texture-target-btn" data-target="background">Background</button>
+                                                            <button class="texture-target-btn" data-target="both">Both</button>
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </div>

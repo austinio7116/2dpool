@@ -88,7 +88,9 @@ export class BallRenderer3D {
                                  (ball.numberCircleOpacity != null && ball.numberCircleOpacity !== 1.0) ||
                                  (ball.texture && ball.texture !== 'none') ||
                                  (ball.numberFont && ball.numberFont !== 'Arial') ||
-                                 (ball.textureSeed && ball.textureSeed !== 0);
+                                 (ball.textureSeed && ball.textureSeed !== 0) ||
+                                 ball.doubleBorder || ball.invertCircleColor ||
+                                 (ball.textureTarget && ball.textureTarget !== 'main');
 
         if (!hasCustomOptions) return null;
 
@@ -111,7 +113,10 @@ export class BallRenderer3D {
             textureColorMode: ball.textureColorMode || 'auto',
             textureColor: ball.textureColor || '#FFFFFF',
             textureSeed: ball.textureSeed || 0,
-            numberFont: ball.numberFont || 'Arial'
+            numberFont: ball.numberFont || 'Arial',
+            doubleBorder: ball.doubleBorder || false,
+            invertCircleColor: ball.invertCircleColor || false,
+            textureTarget: ball.textureTarget || 'main'
         };
     }
 
@@ -139,6 +144,9 @@ export class BallRenderer3D {
             key += `-${options.textureColor || ''}`;
             key += `-${options.textureSeed || 0}`;
             key += `-${options.numberFont || 'Arial'}`;
+            key += `-${options.doubleBorder || false}`;
+            key += `-${options.invertCircleColor || false}`;
+            key += `-${options.textureTarget || 'main'}`;
         }
         return key;
     }
@@ -291,18 +299,26 @@ export class BallRenderer3D {
         const imageData = ctx.createImageData(size, size);
         const data = imageData.data;
 
-        const rgb = this.hexToRgb(baseColor);
+        const origRgb = this.hexToRgb(baseColor);
         // Default to ivory/off-white for number circles and stripe backgrounds
         const ivoryDefault = '#FFFEF0';
-        const numberCircleRgb = this.hexToRgb(numberOptions.numberCircleColor || ivoryDefault);
+        const origNumberCircleRgb = this.hexToRgb(numberOptions.numberCircleColor || ivoryDefault);
         const stripeBackgroundRgb = this.hexToRgb(numberOptions.stripeBackgroundColor || ivoryDefault);
         const numberTextRgb = this.hexToRgb(numberOptions.numberTextColor || '#000000');
         const numberBorderRgb = this.hexToRgb(numberOptions.numberBorderColor || '#000000');
         const radius = this.sphereRadius;
 
+        // Invert circle color: only affects solid/spot balls (1-7), not stripe balls
+        // Solid balls: body becomes stripeBackgroundColor, number circle becomes ball color
+        // Stripe balls: unchanged
+        const invertCircle = numberOptions.invertCircleColor || false;
+        const rgb = origRgb;
+        const numberCircleRgb = origNumberCircleRgb;
+
         // Texture parameters
         const texture = numberOptions.texture || 'none';
         const hasTexture = texture !== 'none';
+        const textureTarget = numberOptions.textureTarget || 'main';
         const textureColorMode = numberOptions.textureColorMode || 'auto';
         const textureColorRgb = hasTexture ? this.hexToRgb(numberOptions.textureColor || '#FFFFFF') : null;
         const textureSeed = numberOptions.textureSeed || 0;
@@ -321,7 +337,11 @@ export class BallRenderer3D {
         let textTexture = null;
         let textTextureSize = 0;
         if (showNumber) {
-            const textureResult = this.createTextTexture(ballNumber, numberOptions);
+            // When invertCircleColor on solid (non-stripe) balls, circle bg becomes ball color
+            const textOpts = (invertCircle && !isStripe)
+                ? { ...numberOptions, numberCircleColor: baseColor }
+                : numberOptions;
+            const textureResult = this.createTextTexture(ballNumber, textOpts);
             textTexture = textureResult.imageData;
             textTextureSize = textureResult.size;
         }
@@ -392,7 +412,7 @@ export class BallRenderer3D {
                         textColor = this.sampleTextTexture(
                             localX, localY, localZ,
                             textTexture, textTextureSize,
-                            numberSpotAngle, numberOptions
+                            numberSpotAngle
                         );
                     }
 
@@ -406,7 +426,7 @@ export class BallRenderer3D {
                             r = rgb.r;
                             g = rgb.g;
                             b = rgb.b;
-                            if (hasTexture) {
+                            if (hasTexture && (textureTarget === 'main' || textureTarget === 'both')) {
                                 const tex = this.applyTexture(r, g, b, texture, textureColorMode, textureColorRgb, localX, localY, localZ, textureSeed);
                                 r = tex.r; g = tex.g; b = tex.b;
                             }
@@ -422,6 +442,10 @@ export class BallRenderer3D {
                             r = stripeBackgroundRgb.r;
                             g = stripeBackgroundRgb.g;
                             b = stripeBackgroundRgb.b;
+                            if (hasTexture && (textureTarget === 'background' || textureTarget === 'both')) {
+                                const tex = this.applyTexture(r, g, b, texture, textureColorMode, textureColorRgb, localX, localY, localZ, textureSeed);
+                                r = tex.r; g = tex.g; b = tex.b;
+                            }
                             if (textColor && textColor.a != null) {
                                 const a = textColor.a;
                                 r = Math.round(textColor.r * a + r * (1 - a));
@@ -431,14 +455,16 @@ export class BallRenderer3D {
                         }
                     } else {
                         // Solid ball
+                        // When invertCircle: body uses stripe background color, circle uses ball color
+                        const solidBodyRgb = invertCircle ? stripeBackgroundRgb : rgb;
                         if (textColor && textColor.a == null) {
                             r = textColor.r;
                             g = textColor.g;
                             b = textColor.b;
                         } else {
-                            r = rgb.r;
-                            g = rgb.g;
-                            b = rgb.b;
+                            r = solidBodyRgb.r;
+                            g = solidBodyRgb.g;
+                            b = solidBodyRgb.b;
                             if (hasTexture) {
                                 const tex = this.applyTexture(r, g, b, texture, textureColorMode, textureColorRgb, localX, localY, localZ, textureSeed);
                                 r = tex.r; g = tex.g; b = tex.b;
@@ -478,8 +504,25 @@ export class BallRenderer3D {
 
     // Create a texture map for the number text, border, and radial lines
     createTextTexture(number, options = {}) {
-        // Create a high-resolution texture for the number
-        const textureSize = 512; // High resolution for quality
+        // Get scale options (default to 1.0)
+        const borderWidthScale = options.borderWidth ?? 1.0;
+        const numberScale = options.numberScale ?? 1.0;
+        const borderWidth = 32 * borderWidthScale;
+
+        // For double border, increase texture size so the outer ring fits
+        // Circle = textureSize * 0.38, sampling limit = textureSize * 0.52
+        // Double border outer edge = circleRadius + 3 * borderWidth
+        // Need: textureSize * 0.38 + 3 * borderWidth + margin <= textureSize * 0.52
+        // => textureSize >= (3 * borderWidth + margin) / 0.14
+        const useDoubleBorder = options.doubleBorder && options.numberBorder;
+        let textureSize;
+        if (useDoubleBorder) {
+            const needed = Math.ceil((3 * borderWidth + 16) / 0.14);
+            textureSize = Math.max(512, Math.min(1024, needed));
+        } else {
+            textureSize = 512;
+        }
+
         const canvas = document.createElement('canvas');
         canvas.width = textureSize;
         canvas.height = textureSize;
@@ -489,16 +532,24 @@ export class BallRenderer3D {
         const centerY = textureSize / 2;
         const circleRadius = textureSize * 0.38; // Slightly larger circle
 
-        // Get scale options (default to 1.0)
-        const borderWidthScale = options.borderWidth ?? 1.0;
-        const numberScale = options.numberScale ?? 1.0;
-
         // Fill with transparent
         ctx.clearRect(0, 0, textureSize, textureSize);
 
         // Draw border FIRST if enabled (so it's underneath)
         if (options.numberBorder) {
-            const borderWidth = 32 * borderWidthScale; // Scale border width
+            // Draw double border (outer ring) first if enabled
+            if (useDoubleBorder) {
+                // Gap = borderWidth, outer ring width = borderWidth
+                // Outer ring center at circleRadius + 2.5 * borderWidth
+                const ring2Radius = circleRadius + borderWidth * 2.5;
+                ctx.strokeStyle = options.numberBorderColor || '#000000';
+                ctx.lineWidth = borderWidth;
+                ctx.beginPath();
+                ctx.arc(centerX, centerY, ring2Radius, 0, Math.PI * 2);
+                ctx.stroke();
+            }
+
+            // Inner border ring
             ctx.strokeStyle = options.numberBorderColor || '#000000';
             ctx.lineWidth = borderWidth;
             ctx.beginPath();
@@ -519,7 +570,6 @@ export class BallRenderer3D {
         // Draw radial lines if enabled (on top of border, starting from outer edge)
         if (options.numberBorder && options.numberCircleRadialLines > 0) {
             const lineCount = options.numberCircleRadialLines;
-            const borderWidth = 32 * borderWidthScale;
             const outerRadius = circleRadius + borderWidth; // Outer edge of border
             const lineLength = borderWidth + circleRadius * 0.15; // Extend slightly into circle
 
@@ -560,7 +610,7 @@ export class BallRenderer3D {
     }
 
     // Sample color from text texture based on sphere position
-    sampleTextTexture(localX, localY, localZ, textureData, textureSize, spotAngle, options) {
+    sampleTextTexture(localX, localY, localZ, textureData, textureSize, spotAngle) {
         // Map 3D position on sphere to 2D texture coordinates
         // The number spot is centered at (0, 0, 1) in local coords
 

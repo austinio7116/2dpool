@@ -1443,6 +1443,44 @@ body {
     color: #fff;
 }
 
+.texture-target-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 4px;
+}
+
+.texture-target-row label {
+    font-size: 0.7rem;
+    color: #aaa;
+}
+
+.texture-target-toggle {
+    display: flex;
+    gap: 4px;
+}
+
+.texture-target-btn {
+    padding: 4px 10px;
+    border: 2px solid #4a4a6a;
+    background: rgba(40, 40, 60, 0.8);
+    color: #aaa;
+    font-size: 0.7rem;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.texture-target-btn:hover {
+    border-color: #6a6a8a;
+}
+
+.texture-target-btn.active {
+    border-color: #ffd700;
+    background: rgba(60, 60, 80, 0.9);
+    color: #fff;
+}
+
 /* Mobile: collapse grid to 1 column and stack layout */
 @media (max-width: 700px) {
     .creator-content {

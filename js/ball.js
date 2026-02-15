@@ -41,6 +41,9 @@ export class Ball {
         this.textureColor = '#FFFFFF';  // Custom texture color
         this.textureSeed = 0;  // Seed offset for procedural texture variation
         this.numberFont = 'Arial';  // Font for number text
+        this.doubleBorder = false;  // Double concentric border ring
+        this.invertCircleColor = false;  // Swap number circle color with ball color
+        this.textureTarget = 'main';  // 'main', 'background', or 'both'
 
         // VISUALS
         this.rotation = 0; // Legacy 2D rotation (can map to Z-spin)

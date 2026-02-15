@@ -182,6 +182,11 @@ export class UI {
         this.solidTextureSeedInput = document.getElementById('solid-texture-seed');
         this.solidTextureSeedRandomize = document.getElementById('solid-texture-seed-randomize');
         this.solidNumberFontSelect = document.getElementById('solid-number-font');
+        this.solidDoubleBorderCheckbox = document.getElementById('solid-double-border');
+        this.solidDoubleBorderField = document.getElementById('solid-double-border-field');
+        this.solidInvertCircleCheckbox = document.getElementById('solid-invert-circle');
+        this.solidTextureTargetToggle = document.getElementById('solid-texture-target-toggle');
+        this.solidCreatorTextureTarget = 'main';
 
         // Stripe mode elements
         this.stripeModeOptions = document.getElementById('stripe-mode-options');
@@ -229,6 +234,11 @@ export class UI {
         this.stripeTextureSeedInput = document.getElementById('stripe-texture-seed');
         this.stripeTextureSeedRandomize = document.getElementById('stripe-texture-seed-randomize');
         this.stripeNumberFontSelect = document.getElementById('stripe-number-font');
+        this.doubleBorderCheckbox = document.getElementById('double-border');
+        this.doubleBorderField = document.getElementById('double-border-field');
+        this.invertCircleCheckbox = document.getElementById('invert-circle');
+        this.stripeTextureTargetToggle = document.getElementById('stripe-texture-target-toggle');
+        this.creatorTextureTarget = 'main';
 
         // Table creator elements
         this.customTableNameInput = document.getElementById('custom-table-name');
@@ -601,11 +611,15 @@ export class UI {
         this.solidNumberBorderCheckbox?.addEventListener('change', () => {
             const borderEnabled = this.solidNumberBorderCheckbox.checked;
             this.solidBorderColorField?.classList.toggle('hidden', !borderEnabled);
+            this.solidDoubleBorderField?.classList.toggle('hidden', !borderEnabled);
+            if (!borderEnabled && this.solidDoubleBorderCheckbox) this.solidDoubleBorderCheckbox.checked = false;
             if (this.solidRadialLinesSlider) {
                 this.solidRadialLinesSlider.disabled = !borderEnabled;
             }
             this.updateCreatorPreview();
         });
+        this.solidDoubleBorderCheckbox?.addEventListener('change', () => this.updateCreatorPreview());
+        this.solidInvertCircleCheckbox?.addEventListener('change', () => this.updateCreatorPreview());
         this.solidRadialLinesSlider?.addEventListener('input', (e) => {
             if (this.solidRadialLinesValue) this.solidRadialLinesValue.textContent = e.target.value;
             // Show/hide radial lines color picker based on value
@@ -680,6 +694,14 @@ export class UI {
                 this.updateCreatorPreview();
             });
         });
+        this.solidTextureTargetToggle?.querySelectorAll('.texture-target-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                this.solidTextureTargetToggle.querySelectorAll('.texture-target-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                this.solidCreatorTextureTarget = btn.dataset.target;
+                this.updateCreatorPreview();
+            });
+        });
 
         // Stripe mode color picker changes
         this.colorSolids?.addEventListener('input', () => this.updateCreatorPreview());
@@ -700,12 +722,16 @@ export class UI {
         this.numberBorderCheckbox?.addEventListener('change', () => {
             const borderEnabled = this.numberBorderCheckbox.checked;
             this.borderColorField?.classList.toggle('hidden', !borderEnabled);
+            this.doubleBorderField?.classList.toggle('hidden', !borderEnabled);
+            if (!borderEnabled && this.doubleBorderCheckbox) this.doubleBorderCheckbox.checked = false;
             // Enable/disable radial lines slider based on border checkbox
             if (this.radialLinesSlider) {
                 this.radialLinesSlider.disabled = !borderEnabled;
             }
             this.updateCreatorPreview();
         });
+        this.doubleBorderCheckbox?.addEventListener('change', () => this.updateCreatorPreview());
+        this.invertCircleCheckbox?.addEventListener('change', () => this.updateCreatorPreview());
         this.colorNumberBorder?.addEventListener('input', () => this.updateCreatorPreview());
 
         // Ball customization sliders
@@ -780,6 +806,14 @@ export class UI {
                 btn.classList.add('active');
                 this.creatorTextureColorMode = btn.dataset.mode;
                 this.stripeTextureColorField?.classList.toggle('hidden', btn.dataset.mode !== 'single');
+                this.updateCreatorPreview();
+            });
+        });
+        this.stripeTextureTargetToggle?.querySelectorAll('.texture-target-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                this.stripeTextureTargetToggle.querySelectorAll('.texture-target-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                this.creatorTextureTarget = btn.dataset.target;
                 this.updateCreatorPreview();
             });
         });
@@ -1132,7 +1166,10 @@ export class UI {
             textureColorMode: config.textureColorMode,
             textureColor: config.textureColor,
             textureSeed: config.textureSeed,
-            numberFont: config.numberFont
+            numberFont: config.numberFont,
+            doubleBorder: config.doubleBorder,
+            invertCircleColor: config.invertCircleColor,
+            textureTarget: config.textureTarget
         };
 
         try {
@@ -1488,6 +1525,17 @@ export class UI {
             this.setSwatchColor('solid-texture-color', set.options?.textureColor || '#FFFFFF');
             this.solidCreatorTextureSeed = set.options?.textureSeed || 0;
             if (this.solidTextureSeedInput) this.solidTextureSeedInput.value = this.solidCreatorTextureSeed;
+
+            // Load double border
+            if (this.solidDoubleBorderCheckbox) this.solidDoubleBorderCheckbox.checked = set.options?.doubleBorder || false;
+            this.solidDoubleBorderField?.classList.toggle('hidden', !set.options?.numberBorder);
+            // Load invert circle
+            if (this.solidInvertCircleCheckbox) this.solidInvertCircleCheckbox.checked = set.options?.invertCircleColor || false;
+            // Load texture target
+            this.solidCreatorTextureTarget = set.options?.textureTarget || 'main';
+            this.solidTextureTargetToggle?.querySelectorAll('.texture-target-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.target === this.solidCreatorTextureTarget);
+            });
         } else {
             // Load stripe mode values
             this.setSwatchColor('solids', set.colors?.group1 || '#FFD700');
@@ -1563,6 +1611,17 @@ export class UI {
             this.setSwatchColor('stripe-texture-color', set.options?.textureColor || '#FFFFFF');
             this.creatorTextureSeed = set.options?.textureSeed || 0;
             if (this.stripeTextureSeedInput) this.stripeTextureSeedInput.value = this.creatorTextureSeed;
+
+            // Load double border
+            if (this.doubleBorderCheckbox) this.doubleBorderCheckbox.checked = set.options?.doubleBorder || false;
+            this.doubleBorderField?.classList.toggle('hidden', !set.options?.numberBorder);
+            // Load invert circle
+            if (this.invertCircleCheckbox) this.invertCircleCheckbox.checked = set.options?.invertCircleColor || false;
+            // Load texture target
+            this.creatorTextureTarget = set.options?.textureTarget || 'main';
+            this.stripeTextureTargetToggle?.querySelectorAll('.texture-target-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.target === this.creatorTextureTarget);
+            });
 
             // Load advanced mode
             if (set.advancedMode && set.ballColors) {
@@ -1675,6 +1734,15 @@ export class UI {
         this.solidTextureColorField?.classList.add('hidden');
         this.setSwatchColor('solid-texture-color', '#FFFFFF');
         if (this.solidTextureSeedInput) this.solidTextureSeedInput.value = 0;
+        this.solidCreatorTextureTarget = 'main';
+        this.solidTextureTargetToggle?.querySelectorAll('.texture-target-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.target === 'main');
+        });
+
+        // Reset solid double border and invert circle
+        if (this.solidDoubleBorderCheckbox) this.solidDoubleBorderCheckbox.checked = false;
+        this.solidDoubleBorderField?.classList.add('hidden');
+        if (this.solidInvertCircleCheckbox) this.solidInvertCircleCheckbox.checked = false;
 
         // Reset stripe mode fields
         this.setSwatchColor('solids', '#FFD700');
@@ -1760,6 +1828,15 @@ export class UI {
         this.stripeTextureColorField?.classList.add('hidden');
         this.setSwatchColor('stripe-texture-color', '#FFFFFF');
         if (this.stripeTextureSeedInput) this.stripeTextureSeedInput.value = 0;
+        this.creatorTextureTarget = 'main';
+        this.stripeTextureTargetToggle?.querySelectorAll('.texture-target-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.target === 'main');
+        });
+
+        // Reset stripe double border and invert circle
+        if (this.doubleBorderCheckbox) this.doubleBorderCheckbox.checked = false;
+        this.doubleBorderField?.classList.add('hidden');
+        if (this.invertCircleCheckbox) this.invertCircleCheckbox.checked = false;
 
         // Reset modal title and button text for create mode
         const modalTitle = this.creatorModal.querySelector('.modal-header h2');
@@ -1969,7 +2046,10 @@ export class UI {
                     textureColorMode: this.solidCreatorTextureColorMode || 'auto',
                     textureColor: this.getSwatchColor('solid-texture-color'),
                     textureSeed: this.solidCreatorTextureSeed || 0,
-                    numberFont: this.solidNumberFontSelect?.value || 'Arial'
+                    numberFont: this.solidNumberFontSelect?.value || 'Arial',
+                    doubleBorder: this.solidDoubleBorderCheckbox?.checked || false,
+                    invertCircleColor: this.solidInvertCircleCheckbox?.checked || false,
+                    textureTarget: this.solidCreatorTextureTarget || 'main'
                 }
             };
         } else {
@@ -2004,7 +2084,10 @@ export class UI {
                     textureColorMode: this.creatorTextureColorMode || 'auto',
                     textureColor: this.getSwatchColor('stripe-texture-color'),
                     textureSeed: this.creatorTextureSeed || 0,
-                    numberFont: this.stripeNumberFontSelect?.value || 'Arial'
+                    numberFont: this.stripeNumberFontSelect?.value || 'Arial',
+                    doubleBorder: this.doubleBorderCheckbox?.checked || false,
+                    invertCircleColor: this.invertCircleCheckbox?.checked || false,
+                    textureTarget: this.creatorTextureTarget || 'main'
                 }
             };
 
@@ -2078,7 +2161,10 @@ export class UI {
                     textureColorMode: this.solidCreatorTextureColorMode || 'auto',
                     textureColor: this.getSwatchColor('solid-texture-color'),
                     textureSeed: this.solidCreatorTextureSeed || 0,
-                    numberFont: this.solidNumberFontSelect?.value || 'Arial'
+                    numberFont: this.solidNumberFontSelect?.value || 'Arial',
+                    doubleBorder: this.solidDoubleBorderCheckbox?.checked || false,
+                    invertCircleColor: this.solidInvertCircleCheckbox?.checked || false,
+                    textureTarget: this.solidCreatorTextureTarget || 'main'
                 }
             };
         } else {
@@ -2111,7 +2197,10 @@ export class UI {
                     textureColorMode: this.creatorTextureColorMode || 'auto',
                     textureColor: this.getSwatchColor('stripe-texture-color'),
                     textureSeed: this.creatorTextureSeed || 0,
-                    numberFont: this.stripeNumberFontSelect?.value || 'Arial'
+                    numberFont: this.stripeNumberFontSelect?.value || 'Arial',
+                    doubleBorder: this.doubleBorderCheckbox?.checked || false,
+                    invertCircleColor: this.invertCircleCheckbox?.checked || false,
+                    textureTarget: this.creatorTextureTarget || 'main'
                 }
             };
 

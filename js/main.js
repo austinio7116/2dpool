@@ -359,6 +359,9 @@ class PoolGame {
             ball.textureColor = config.textureColor || '#FFFFFF';
             ball.textureSeed = config.textureSeed || 0;
             ball.numberFont = config.numberFont || 'Arial';
+            ball.doubleBorder = config.doubleBorder || false;
+            ball.invertCircleColor = config.invertCircleColor || false;
+            ball.textureTarget = config.textureTarget || 'main';
         }
     }
 

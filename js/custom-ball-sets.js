@@ -391,7 +391,10 @@ export class CustomBallSetManager {
                 textureColorMode: setData.options?.textureColorMode || 'auto',
                 textureColor: setData.options?.textureColor || '#FFFFFF',
                 textureSeed: setData.options?.textureSeed || 0,
-                numberFont: setData.options?.numberFont || 'Arial'
+                numberFont: setData.options?.numberFont || 'Arial',
+                doubleBorder: setData.options?.doubleBorder || false,
+                invertCircleColor: setData.options?.invertCircleColor || false,
+                textureTarget: setData.options?.textureTarget || 'main'
             },
             isPredefined: false,
             createdAt: Date.now()
@@ -447,7 +450,10 @@ export class CustomBallSetManager {
                 textureColorMode: setData.options?.textureColorMode || 'auto',
                 textureColor: setData.options?.textureColor || '#FFFFFF',
                 textureSeed: setData.options?.textureSeed || 0,
-                numberFont: setData.options?.numberFont || 'Arial'
+                numberFont: setData.options?.numberFont || 'Arial',
+                doubleBorder: setData.options?.doubleBorder || false,
+                invertCircleColor: setData.options?.invertCircleColor || false,
+                textureTarget: setData.options?.textureTarget || 'main'
             },
             isPredefined: false,
             createdAt: existingSet.createdAt,
@@ -674,7 +680,10 @@ export class CustomBallSetManager {
             textureColorMode: ballSet.options?.textureColorMode || 'auto',
             textureColor: ballSet.options?.textureColor || '#FFFFFF',
             textureSeed: ballSet.options?.textureSeed || 0,
-            numberFont: ballSet.options?.numberFont || 'Arial'
+            numberFont: ballSet.options?.numberFont || 'Arial',
+            doubleBorder: ballSet.options?.doubleBorder || false,
+            invertCircleColor: ballSet.options?.invertCircleColor || false,
+            textureTarget: ballSet.options?.textureTarget || 'main'
         };
     }
 

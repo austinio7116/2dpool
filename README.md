@@ -115,7 +115,7 @@ The pub rules. If you've ever played pool in a British pub, you know these rules
 - **Ball-in-hand is behind the baulk line** — No placing it anywhere you like
 - **You cannot clear your last ball and the black in the same shot** — Group must be fully cleared before you go for the black
 
-Choose between **Red & Yellow** or **Blue & Yellow** colour schemes for that authentic pub feel.
+Choose between **Red & Yellow** or **Blue & Yellow** colour schemes for that authentic pub feel - or use any custom pool ball set - it's up to you.
 
 ---
 

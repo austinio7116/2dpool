@@ -1220,8 +1220,13 @@ export class Game {
             placementMode = placementMode ? 'kitchen' : 'anywhere';
         }
 
-        // Check bounds
-        if (!this.table.isOnTable(position.x, position.y)) {
+        // Use actual ball radius (which may differ for full snooker)
+        const checkRadius = this.cueBall?.radius || Constants.BALL_RADIUS;
+
+        // Check bounds - inset by ball radius so the ball doesn't overlap cushions
+        const b = this.table.bounds;
+        if (position.x - checkRadius < b.left || position.x + checkRadius > b.right ||
+            position.y - checkRadius < b.top || position.y + checkRadius > b.bottom) {
             return false;
         }
 
@@ -1231,9 +1236,6 @@ export class Game {
         } else if (placementMode === 'dzone' && !this.table.isInD(position.x, position.y)) {
             return false;
         }
-
-        // Check ball overlap - use actual ball radius (which may differ for full snooker)
-        const checkRadius = this.cueBall?.radius || Constants.BALL_RADIUS;
         for (const ball of this.balls) {
             if (ball === this.cueBall || ball.pocketed) continue;
             const dist = Vec2.distance(position, ball.position);

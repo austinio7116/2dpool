@@ -189,7 +189,7 @@ A practice mode with no rules, no opponent, and no judgement. Just you, the ball
 **Spin (English):** The spin indicator sits on the left side of the screen — a small circle representing the face of the cue ball. Click and drag within it to set your contact point:
 - **Up** = topspin (follow) — the cue ball runs through after contact
 - **Down** = backspin (draw/screw) — the cue ball pulls back
-- **Left/Right** = sidespin — the cue ball curves and throws off the cushion at altered angles
+- **Left/Right** = sidespin — the cue ball throws off the cushion at altered angles and transfers spin to the object ball
 
 Spin is a game-changer. A well-placed bit of screw-back or a touch of right-hand side can be the difference between a simple pot and a frame-winning positional masterpiece.
 

@@ -3551,23 +3551,18 @@ export class AI {
                       '| Power:', escapeShot.power.toFixed(1));
 
                 const settings = this.getCurrentPersona();
-                let aimError = (Math.random() - 0.5) * 2 * settings.lineAccuracy * (Math.PI / 180);
-
-                // Scale foul avoidance based on how many consecutive fouls we've had
-                if (this.foulHistory.length > 0) {
-                    const foulCount = this.foulHistory.length;
-                    const baseAvoid = 5 + foulCount * 3;
-                    const foulAvoidanceAngle = (Math.random() > 0.5 ? 1 : -1) * (baseAvoid + Math.random() * 10) * (Math.PI / 180);
-                    aimError += foulAvoidanceAngle;
-                    aiLog(`Foul avoidance (${foulCount} fouls): adding ${(foulAvoidanceAngle * 180 / Math.PI).toFixed(1)}° to escape shot`);
-                }
+                // Reduced aim error for escape shots (precision kick shots)
+                const urgency = this.game.consecutiveMisses >= 2 ? 0.3 : 1.0;
+                let aimError = (Math.random() - 0.5) * 2 * settings.lineAccuracy * 0.5 * urgency * (Math.PI / 180);
 
                 const adjustedDir = Vec2.rotate(escapeShot.direction, aimError);
 
                 let power = escapeShot.power;
                 const powerError = (Math.random() - 0.5) * 2 * settings.powerAccuracy;
                 power = power * (1 + powerError);
-                power = Math.max(5, Math.min(40, power));
+                // Boost power slightly when urgent to ensure ball is reached
+                if (urgency < 1.0) power = Math.max(power, 18);
+                power = Math.max(5, Math.min(45, power));
 
                 // Track escape shot for foul avoidance
                 this.lastExecutedShot = {
@@ -3607,14 +3602,15 @@ export class AI {
 
             const settings = this.getCurrentPersona();
 
-            // Apply aim error based on difficulty
-            let aimError = (Math.random() - 0.5) * 2 * settings.lineAccuracy * (Math.PI / 180);
+            // Apply aim error based on difficulty, tighter when facing frame forfeit
+            const urgency = this.game.consecutiveMisses >= 2 ? 0.3 : 1.0;
+            let aimError = (Math.random() - 0.5) * 2 * settings.lineAccuracy * urgency * (Math.PI / 180);
 
-            // Scale foul avoidance based on consecutive fouls
+            // Mild foul avoidance on safety shots
             if (this.foulHistory.length > 0) {
                 const foulCount = this.foulHistory.length;
-                const baseAvoid = 5 + foulCount * 3;
-                const foulAvoidanceAngle = (Math.random() > 0.5 ? 1 : -1) * (baseAvoid + Math.random() * 10) * (Math.PI / 180);
+                const baseAvoid = 3 + foulCount * 2;
+                const foulAvoidanceAngle = (Math.random() > 0.5 ? 1 : -1) * (baseAvoid + Math.random() * 4) * (Math.PI / 180);
                 aimError += foulAvoidanceAngle;
                 aiLog(`Foul avoidance (${foulCount} fouls): adding ${(foulAvoidanceAngle * 180 / Math.PI).toFixed(1)}° to safety shot`);
             }
@@ -3666,16 +3662,9 @@ export class AI {
             if (desperateEscape) {
                 aiLog('Desperate escape attempt');
                 const settings = this.getCurrentPersona();
-                let aimError = (Math.random() - 0.5) * 2 * settings.lineAccuracy * (Math.PI / 180);
-
-                // Scale foul avoidance based on consecutive fouls - desperate gets even larger shifts
-                if (this.foulHistory.length > 0) {
-                    const foulCount = this.foulHistory.length;
-                    const baseAvoid = 10 + foulCount * 5;
-                    const foulAvoidanceAngle = (Math.random() > 0.5 ? 1 : -1) * (baseAvoid + Math.random() * 20) * (Math.PI / 180);
-                    aimError += foulAvoidanceAngle;
-                    aiLog(`Desperate foul avoidance (${foulCount} fouls): adding ${(foulAvoidanceAngle * 180 / Math.PI).toFixed(1)}°`);
-                }
+                // Reduced aim error for desperate escape
+                const urgency = this.game.consecutiveMisses >= 2 ? 0.3 : 1.0;
+                let aimError = (Math.random() - 0.5) * 2 * settings.lineAccuracy * 0.7 * urgency * (Math.PI / 180);
 
                 const adjustedDir = Vec2.rotate(desperateEscape.direction, aimError);
 
@@ -3718,19 +3707,11 @@ export class AI {
         aiLog('Fallback target:', targetName);
 
         const direction = Vec2.normalize(Vec2.subtract(bestTarget.position, cueBall.position));
-        const power = Math.max(8, Math.min(14, 6 + bestDist / 80));
+        const power = Math.max(12, Math.min(25, 8 + bestDist / 50));
 
         const settings = this.getCurrentPersona();
-        let aimError = (Math.random() - 0.5) * 2 * settings.lineAccuracy * (Math.PI / 180);
-
-        // Scale fallback foul avoidance based on consecutive fouls
-        if (this.foulHistory.length > 0) {
-            const foulCount = this.foulHistory.length;
-            const baseAvoid = 15 + foulCount * 5;
-            const foulAvoidanceAngle = (Math.random() > 0.5 ? 1 : -1) * (baseAvoid + Math.random() * 15) * (Math.PI / 180);
-            aimError += foulAvoidanceAngle;
-            aiLog(`Fallback foul avoidance (${foulCount} fouls): adding ${(foulAvoidanceAngle * 180 / Math.PI).toFixed(1)}°`);
-        }
+        const urgency = this.game.consecutiveMisses >= 2 ? 0.3 : 1.0;
+        let aimError = (Math.random() - 0.5) * 2 * settings.lineAccuracy * urgency * (Math.PI / 180);
 
         const adjustedDir = Vec2.rotate(direction, aimError);
 
@@ -3900,8 +3881,8 @@ export class AI {
                 const trace = this.traceShotPath(cueBall.position, dir, validTargets);
                 
                 if (trace && trace.hitsValidTarget) {
-                    // Calculate precise power based on distance
-                    const power = Math.min(35, 12 + trace.totalDistance / 25);
+                    // Calculate power with cushion bounce compensation (30% boost per bounce)
+                    const power = Math.min(45, (12 + trace.totalDistance / 25) * Math.pow(1.3, trace.bounces));
                     
                     candidates.push({
                         target: trace.targetHit,
@@ -3971,9 +3952,9 @@ export class AI {
             score = 50 - Math.min(50, trace.closestApproach);
         }
 
-        // Penalize distance and bounces (prefer simple shots)
-        score -= (trace.totalDistance / 20); 
-        score -= (trace.bounces * 10);
+        // Penalize distance and bounces (prefer simpler, more reliable routes)
+        score -= (trace.totalDistance / 20);
+        score -= (trace.bounces * 15);
 
         return score;
     }

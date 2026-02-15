@@ -3379,25 +3379,93 @@ export class UI {
         this.updateTableSliderGradients(hue, saturation, brightness);
     }
 
+    // Sample the base hue of a colorize overlay image
+    sampleOverlayBaseHue(baseTable, callback) {
+        const cacheKey = `overlay_base_hue_${baseTable}`;
+        if (this._overlayBaseHueCache && this._overlayBaseHueCache[cacheKey] !== undefined) {
+            callback(this._overlayBaseHueCache[cacheKey]);
+            return;
+        }
+        if (!this._overlayBaseHueCache) this._overlayBaseHueCache = {};
+
+        const img = new Image();
+        img.src = `assets/Table${baseTable}-colorize.png`;
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = img.width;
+            canvas.height = img.height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0);
+            const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+
+            // Accumulate hue using circular mean (sin/cos) from non-transparent, saturated pixels
+            let sinSum = 0, cosSum = 0, count = 0;
+            for (let i = 0; i < data.length; i += 16) { // sample every 4th pixel for speed
+                const r = data[i], g = data[i+1], b = data[i+2], a = data[i+3];
+                if (a < 128) continue;
+                const max = Math.max(r, g, b), min = Math.min(r, g, b);
+                const delta = max - min;
+                if (delta < 20) continue; // skip near-grey pixels
+                let h;
+                if (max === r) h = ((g - b) / delta) % 6;
+                else if (max === g) h = (b - r) / delta + 2;
+                else h = (r - g) / delta + 4;
+                h = h * 60;
+                if (h < 0) h += 360;
+                const rad = h * Math.PI / 180;
+                sinSum += Math.sin(rad);
+                cosSum += Math.cos(rad);
+                count++;
+            }
+
+            let baseHue = 0;
+            if (count > 0) {
+                baseHue = Math.atan2(sinSum / count, cosSum / count) * 180 / Math.PI;
+                if (baseHue < 0) baseHue += 360;
+            }
+            this._overlayBaseHueCache[cacheKey] = baseHue;
+            callback(baseHue);
+        };
+        img.onerror = () => callback(0);
+    }
+
     // Update table creator slider track gradients
     updateTableSliderGradients(hue, saturation, brightness) {
         if (!this.tableHueSlider || !this.tableSaturationSlider || !this.tableBrightnessSlider) return;
 
-        // Hue slider: full spectrum
-        this.tableHueSlider.style.background = 'linear-gradient(to right, ' +
-            '#FF0000 0%, #FFFF00 17%, #00FF00 33%, #00FFFF 50%, ' +
-            '#0000FF 67%, #FF00FF 83%, #FF0000 100%)';
+        const baseTable = parseInt(this.baseTableSelect?.value || '1');
+        const hasOverlay = this.tableManager.hasColorizeOverlay(baseTable);
 
-        // Saturation slider: desaturated to oversaturated
-        // At 0% it's fully desaturated, 100% is normal, 200% is oversaturated
-        const satLow = hsbToHex(hue, 0, Math.min(brightness, 100));
-        const satMid = hsbToHex(hue, 100, Math.min(brightness, 100));
-        const satHigh = hsbToHex(hue, 100, Math.min(brightness, 100));
+        if (hasOverlay) {
+            this.sampleOverlayBaseHue(baseTable, (baseHue) => {
+                this._applySliderGradients(hue, saturation, brightness, baseHue);
+            });
+        } else {
+            this._applySliderGradients(hue, saturation, brightness, 0);
+        }
+    }
+
+    _applySliderGradients(hue, saturation, brightness, baseHue) {
+        // The actual resulting hue is baseHue + hue-rotate value
+        const effectiveHue = (baseHue + hue) % 360;
+
+        // Hue slider: show spectrum offset by base hue so each position shows actual result
+        const stops = [];
+        for (let i = 0; i <= 6; i++) {
+            const h = (baseHue + (i * 60)) % 360;
+            const pct = Math.round(i * 100 / 6);
+            stops.push(`${hsbToHex(h, 100, 100)} ${pct}%`);
+        }
+        this.tableHueSlider.style.background = `linear-gradient(to right, ${stops.join(', ')})`;
+
+        // Saturation slider: desaturated to current color
+        const satLow = hsbToHex(effectiveHue, 0, Math.min(brightness, 100));
+        const satMid = hsbToHex(effectiveHue, 100, Math.min(brightness, 100));
         this.tableSaturationSlider.style.background =
-            `linear-gradient(to right, ${satLow}, ${satMid} 50%, ${satHigh})`;
+            `linear-gradient(to right, ${satLow}, ${satMid} 50%, ${satMid})`;
 
         // Brightness slider: black to full brightness to white
-        const brightMid = hsbToHex(hue, Math.min(saturation, 100), 100);
+        const brightMid = hsbToHex(effectiveHue, Math.min(saturation, 100), 100);
         this.tableBrightnessSlider.style.background =
             `linear-gradient(to right, #000000, ${brightMid} 50%, #ffffff)`;
     }

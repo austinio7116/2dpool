@@ -3729,7 +3729,52 @@ export class AI {
         }
 
         if (!bestTarget) {
-            aiLog('No legal target found - forced to foul');
+            // No reachable target — try escape even if checkIfSnookered said we're not snookered
+            // (the angular gap model can be too optimistic)
+            aiLog('No legal target found - attempting escape before fallback');
+            const lastResortEscape = this.findSnookerEscape(validTargets, true);
+            if (lastResortEscape) {
+                const targetName = lastResortEscape.target.colorName || lastResortEscape.target.number || 'ball';
+                aiLog('Last-resort escape:', targetName, 'at', lastResortEscape.angle.toFixed(1) + '°',
+                      '| bounces:', lastResortEscape.bounces, '| nearMiss:', !!lastResortEscape.isNearMiss);
+
+                const settings3 = this.getCurrentPersona();
+                const urgency3 = this.game.consecutiveMisses >= 2 ? 0.3 : 1.0;
+                let aimError3 = (Math.random() - 0.5) * 2 * settings3.lineAccuracy * 0.5 * urgency3 * (Math.PI / 180);
+
+                // Micro-correction from foul history
+                let foulCorrection3 = 0;
+                for (const foul of this.foulHistory) {
+                    if (!foul.direction || !foul.targetPos || !foul.cueBallPos) continue;
+                    const dot = Vec2.dot(lastResortEscape.direction, foul.direction);
+                    if (dot > 0.97) {
+                        const toTarget = Vec2.normalize(Vec2.subtract(foul.targetPos, foul.cueBallPos));
+                        const cross = foul.direction.x * toTarget.y - foul.direction.y * toTarget.x;
+                        foulCorrection3 += (cross > 0 ? 1 : -1) * 2 * (Math.PI / 180);
+                    }
+                }
+                if (foulCorrection3 !== 0) {
+                    aiLog(`Last-resort: ${(foulCorrection3 * 180 / Math.PI).toFixed(1)}° micro-correction`);
+                }
+
+                const adjustedDir3 = Vec2.rotate(lastResortEscape.direction, aimError3 + foulCorrection3);
+
+                this.lastExecutedShot = {
+                    target: lastResortEscape.target,
+                    pocket: { position: lastResortEscape.target.position },
+                    cutAngle: 0,
+                    direction: Vec2.clone(lastResortEscape.direction),
+                    isSafetyShot: true
+                };
+
+                aiLogGroupEnd();
+                if (this.onShot) {
+                    this.onShot(Vec2.normalize(adjustedDir3), lastResortEscape.power, lastResortEscape.spin || { x: 0, y: 0 });
+                }
+                return;
+            }
+
+            aiLog('No escape found either - forced to foul');
             // Last resort: aim at nearest valid target even if blocked
             for (const target of validTargets) {
                 const dist = Vec2.distance(cueBall.position, target.position);

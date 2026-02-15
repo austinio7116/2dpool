@@ -180,7 +180,7 @@ A practice mode with no rules, no opponent, and no judgement. Just you, the ball
 
 ### Mouse Controls
 
-**Aiming:** Click and drag anywhere on the table. The direction from the cue ball determines where you'll shoot — drag further away for more power.
+**Aiming:** Click and drag anywhere on the table. The direction from the cue ball determines where you'll shoot — drag further away for more power.  Right click to cancel a shot and re-think.
 
 **Shooting:** Release the mouse to fire. The cue pulls back as you increase power, giving you a clear visual of how hard you're about to hit.
 
@@ -195,15 +195,15 @@ Spin is a game-changer. A well-placed bit of screw-back or a touch of right-hand
 
 ### Touch Controls
 
-**Aim:** Touch and drag anywhere on the canvas. The cue ball fires in the opposite direction of your drag.
+**Aim:** Touch and drag anywhere on the canvas. The cue ball fires in the opposite direction of your drag.  Right click to cancel a shot and re-think.
 
-**Power:** Use the vertical power meter above the spin indicator — drag up for more power, down for less.
+**Power:** The further away you drag the aim point - the more power.  If needed use a second finger to adjust the vertical power meter above the spin indicator whilst aiming — drag up for more power, down for less - great for adding more power even when you are near the edge of the screen.
 
-**Spin:** Touch and drag the spin indicator with a second finger while holding your aim.
+**Spin:** Touch and drag the spin indicator before aiming or with a second finger while holding your aim.
 
-**Shoot:** Tap the shoot button below the spin indicator, or simply release your aiming finger.
+**Shoot:** Tap the shoot button below the spin indicator with a second touch whilst aiming, or simply release your aiming finger.
 
-**Ball-in-hand:** Touch and drag to position the cue ball. It turns red if you're placing it somewhere illegal.
+**Ball-in-hand:** Touch and drag to position the cue ball. It turns red if you're placing it somewhere illegal.  Pick it up again with a menu option if you need to reposition.
 
 ### Aiming Aids
 

@@ -353,7 +353,6 @@ Ten beautifully rendered tables, each with its own character:
 | **UK Pub** | Smaller table, traditional pub style. Feels like a Friday night. |
 | **Mini Snooker** | Green baize with snooker-style cushions and markings. 6 reds. |
 | **Full-Size Snooker** | The big table. 15 reds, smaller balls, tighter pockets. Respect the table. |
-| **Ultimate** | A sleek, modern design for serious sessions. |
 
 ### Custom Tables
 

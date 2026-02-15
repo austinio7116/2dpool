@@ -449,14 +449,14 @@ Prove your worth against every opponent in the game. No hiding from the tough on
 
 | Trophy | Achievement | How to Unlock |
 |:---:|---|---|
-| <img src="assets/trophies/beat_rookie_rick.png" width="48"> | **Beat Rookie Rick** | Win a career match against Rookie Rick |
-| <img src="assets/trophies/beat_steady_sue.png" width="48"> | **Beat Steady Sue** | Win a career match against Steady Sue |
-| <img src="assets/trophies/beat_hustler_hank.png" width="48"> | **Beat Hustler Hank** | Win a career match against Hustler Hank |
-| <img src="assets/trophies/beat_professor_pete.png" width="48"> | **Beat Professor Pete** | Win a career match against Professor Pete |
-| <img src="assets/trophies/beat_clara_cue_queen.png" width="48"> | **Beat Clara "Cue Queen"** | Win a career match against Clara "Cue Queen" |
-| <img src="assets/trophies/beat_deadshot_dave.png" width="48"> | **Beat Deadshot Dave** | Win a career match against Deadshot Dave |
-| <img src="assets/trophies/beat_iron_nina.png" width="48"> | **Beat Iron Nina** | Win a career match against Iron Nina |
-| <img src="assets/trophies/beat_the_machine.png" width="48"> | **Beat The Machine** | Win a career match against The Machine. Yes, it's possible. Probably. |
+| <img src="assets/trophies/beat_rookie_rick.png" width="48"> | **Beat Rookie Rick** | Win a match against Rookie Rick |
+| <img src="assets/trophies/beat_steady_sue.png" width="48"> | **Beat Steady Sue** | Win a match against Steady Sue |
+| <img src="assets/trophies/beat_hustler_hank.png" width="48"> | **Beat Hustler Hank** | Win a match against Hustler Hank |
+| <img src="assets/trophies/beat_professor_pete.png" width="48"> | **Beat Professor Pete** | Win a match against Professor Pete |
+| <img src="assets/trophies/beat_clara_cue_queen.png" width="48"> | **Beat Clara "Cue Queen"** | Win a match against Clara "Cue Queen" |
+| <img src="assets/trophies/beat_deadshot_dave.png" width="48"> | **Beat Deadshot Dave** | Win a match against Deadshot Dave |
+| <img src="assets/trophies/beat_iron_nina.png" width="48"> | **Beat Iron Nina** | Win a match against Iron Nina |
+| <img src="assets/trophies/beat_the_machine.png" width="48"> | **Beat The Machine** | Win a match against The Machine. Yes, it's possible. Probably. |
 
 ### Game Mode Victories
 

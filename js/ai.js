@@ -3922,6 +3922,10 @@ export class AI {
 
         const spinVariants = [0, -0.7, 0.7]; // no spin, left english, right english
 
+        // Track best near-miss in case no confirmed hits are found
+        let bestNearMiss = null;
+        let bestNearMissApproach = Infinity;
+
         for (const sector of uniqueSectors) {
             const startAng = sector.angle - searchRange;
             const endAng = sector.angle + searchRange;
@@ -3951,6 +3955,21 @@ export class AI {
                             angle: a,
                             spin: { x: spin, y: 0 }
                         });
+                    } else if (trace && trace.closestApproach < bestNearMissApproach && trace.targetHit && validTargets.includes(trace.targetHit)) {
+                        // Track the closest we got to a VALID target for fallback
+                        bestNearMissApproach = trace.closestApproach;
+                        bestNearMiss = {
+                            target: trace.targetHit,
+                            rail: trace.bounces > 0 ? `${trace.bounces} cushion(s)` : 'direct',
+                            direction: dir,
+                            power: Math.min(45, (12 + trace.totalDistance / 25) * Math.pow(1.3, trace.bounces)),
+                            score: this.scoreEscapeResult(trace),
+                            bounces: trace.bounces,
+                            angle: a,
+                            spin: { x: spin, y: 0 },
+                            isNearMiss: true,
+                            closestApproach: trace.closestApproach
+                        };
                     }
                 }
             }
@@ -3959,7 +3978,35 @@ export class AI {
         const spinCandidates = candidates.filter(c => c.spin && c.spin.x !== 0);
         aiLog(`Escape Phase 2: ${candidates.length} candidates found (${spinCandidates.length} with spin) from ${uniqueSectors.length} sectors`);
 
-        if (candidates.length === 0) return null;
+        // If no confirmed hits, use best near-miss — far better than deliberate foul
+        if (candidates.length === 0) {
+            if (bestNearMiss) {
+                aiLog(`No confirmed hits — using best near-miss: ${bestNearMiss.angle.toFixed(1)}° (${bestNearMiss.rail}), approach: ${bestNearMissApproach.toFixed(1)}px`);
+                return bestNearMiss;
+            }
+            // Also check Phase 1 sectors as last resort — find one targeting a valid ball
+            for (const sector of sectors) {
+                const sectorTarget = sector.result.targetHit;
+                if (!sectorTarget || !validTargets.includes(sectorTarget)) continue;
+                const rad = sector.angle * Math.PI / 180;
+                const dir = { x: Math.cos(rad), y: Math.sin(rad) };
+                const power = Math.min(45, (12 + (sector.result.totalDistance || 200) / 25) * Math.pow(1.3, sector.result.bounces || 1));
+                aiLog(`No Phase 2 results — using Phase 1 sector: ${sector.angle.toFixed(1)}°, approach: ${(sector.result.closestApproach || 0).toFixed(1)}px`);
+                return {
+                    target: sectorTarget,
+                    rail: (sector.result.bounces || 0) > 0 ? `${sector.result.bounces} cushion(s)` : 'direct',
+                    direction: dir,
+                    power: power,
+                    score: sector.score,
+                    bounces: sector.result.bounces || 0,
+                    angle: sector.angle,
+                    spin: { x: 0, y: 0 },
+                    isNearMiss: true,
+                    closestApproach: sector.result.closestApproach || 0
+                };
+            }
+            return null;
+        }
 
         // Foul avoidance: count how many previous fouls match this sector
         // Micro-vary on early misses, escalate to route change after repeated failures

@@ -147,12 +147,14 @@ export class CareerUI {
             const sd = league.seasonData;
             if (!sd) continue;
 
-            const divLabel = league.division === 'upper' ? 'Pro' : 'Amateur';
+            const promoted = sd.complete && sd.promoted;
+            const divLabel = promoted ? 'Promoted!' : (league.division === 'upper' ? 'Pro' : 'Amateur');
+            const divClass = promoted ? 'promoted' : league.division;
             html += `<div class="career-mini-league">
                 <div class="mini-league-header">
                     <span class="mini-league-title">${MODE_LABELS[mode]}</span>
-                    <span class="mini-league-div ${league.division}">${divLabel}</span>
-                    ${sd.complete ? '<span class="mini-league-complete">Complete</span>' : ''}
+                    <span class="mini-league-div ${divClass}">${divLabel}</span>
+                    ${sd.complete && !promoted ? '<span class="mini-league-complete">Complete</span>' : ''}
                 </div>
                 <table class="mini-league-table">
                     <thead><tr><th>#</th><th>Player</th><th>P</th><th>Pts</th></tr></thead>
@@ -262,8 +264,10 @@ export class CareerUI {
         const league = state.leagues[this.activeLeagueMode];
         const sd = league?.seasonData;
         if (sd) {
-            const divLabel = league.division === 'upper' ? 'Pro Division' : 'Amateur Division';
-            html += `<div class="league-division-badge ${league.division}">${divLabel}</div>`;
+            const promoted = sd.complete && sd.promoted;
+            const divLabel = promoted ? 'Promoted to Pro!' : (league.division === 'upper' ? 'Pro Division' : 'Amateur Division');
+            const divClass = promoted ? 'promoted' : league.division;
+            html += `<div class="league-division-badge ${divClass}">${divLabel}</div>`;
 
             html += `<table class="league-table">
                 <thead><tr>
@@ -321,8 +325,11 @@ export class CareerUI {
                 f.home === 'player' || f.away === 'player'
             );
 
+            const promoted = sd.complete && sd.promoted;
+            const fixDivLabel = promoted ? 'Promoted!' : (state.leagues[mode].division === 'upper' ? 'Pro' : 'Amateur');
+            const fixDivClass = promoted ? 'promoted' : '';
             html += `<div class="fixture-mode-group">
-                <h4>${MODE_LABELS[mode]} <span class="fixture-div">${state.leagues[mode].division === 'upper' ? 'Pro' : 'Amateur'}</span></h4>`;
+                <h4>${MODE_LABELS[mode]} <span class="fixture-div ${fixDivClass}">${fixDivLabel}</span></h4>`;
 
             const bestOf = this.career.getBestOf(mode);
 

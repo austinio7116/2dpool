@@ -1163,6 +1163,18 @@ export class UI {
     showTableModal() {
         if (!this.tableModal) return;
 
+        // Show modal immediately with a loading spinner if grid is empty
+        if (!this.tableGrid.children.length) {
+            this.tableGrid.innerHTML = '<div class="modal-loading"><div class="spinner"></div><div class="loading-text">Loading tables...</div></div>';
+            this.tableModal.classList.remove('hidden');
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    this.initializeTableGrid();
+                });
+            });
+            return;
+        }
+
         // Update selection state
         const options = this.tableGrid.querySelectorAll('.table-option');
         options.forEach(opt => {
@@ -1213,8 +1225,17 @@ export class UI {
     showBallModal() {
         if (!this.ballModal) return;
 
-        this.populateBallSetGrid();
+        // Show modal immediately with a loading spinner
+        this.ballSetGrid.innerHTML = '<div class="modal-loading"><div class="spinner"></div><div class="loading-text">Loading ball sets...</div></div>';
         this.ballModal.classList.remove('hidden');
+
+        // Defer heavy rendering so the browser can paint the spinner first
+        // Double-rAF ensures the spinner frame is committed before heavy work begins
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                this.populateBallSetGrid();
+            });
+        });
     }
 
     // Hide ball set selection modal

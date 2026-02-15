@@ -1311,12 +1311,24 @@ class PoolGame {
     }
 
     // Resume a saved match
-    resumeMatch(career = false) {
+    async resumeMatch(career = false) {
         const savedData = this.loadSavedMatch(career);
         if (!savedData) {
             console.warn('No saved match to resume');
             return;
         }
+
+        // Show loading overlay with progress bar
+        const loadingOverlay = document.getElementById('loading-overlay');
+        const progressBar = document.getElementById('loading-progress-bar');
+        const progressText = document.getElementById('loading-progress-text');
+
+        if (loadingOverlay) loadingOverlay.classList.remove('hidden');
+        if (progressBar) progressBar.style.width = '0%';
+        if (progressText) progressText.textContent = '0%';
+
+        // Yield to browser to show spinner before starting work
+        await new Promise(resolve => setTimeout(resolve, 0));
 
         this.audio.init();
         this.physics.reset();
@@ -1390,6 +1402,22 @@ class PoolGame {
             this.applyCustomBallSet(ballSet);
         }
 
+        // Pre-generate 3D ball frames with progress bar
+        this._precaching = true;
+        const progressCallback = (progress) => {
+            if (progressBar) progressBar.style.width = `${progress}%`;
+            if (progressText) progressText.textContent = `${Math.round(progress)}%`;
+        };
+        await this.renderer.ballRenderer3D.precacheBallSet(this.game.balls, progressCallback);
+        this._precaching = false;
+
+        // Fire any AI turn that was deferred during precaching
+        if (this._pendingAfterPrecache) {
+            const callback = this._pendingAfterPrecache;
+            this._pendingAfterPrecache = null;
+            setTimeout(callback, 300);
+        }
+
         // Sync physics with restored ball positions
         this.physics.syncBallsToPlanck(this.game.balls);
 
@@ -1415,6 +1443,9 @@ class PoolGame {
 
         this.ui.showGameHUD(savedData.gameMode, this.game.getMatchInfo());
         this.ui.updateFromGameInfo(this.game.getGameInfo());
+
+        // Hide loading overlay
+        if (loadingOverlay) loadingOverlay.classList.add('hidden');
 
         // Trigger proper state handling for the restored state
         // This ensures input mode (ball-in-hand vs shooting) matches the game state

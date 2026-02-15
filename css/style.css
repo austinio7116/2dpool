@@ -318,6 +318,15 @@ body {
     box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
 }
 
+.modal-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    padding: 60px 20px;
+}
+
 .modal-header {
     display: flex;
     justify-content: space-between;
@@ -3506,6 +3515,12 @@ img.persona-avatar {
     color: #000;
 }
 
+.mini-league-div.promoted {
+    background: #4CAF50;
+    color: #fff;
+    animation: promoted-pulse 1.5s ease-in-out infinite;
+}
+
 .mini-league-complete {
     font-size: 0.7rem;
     color: #4CAF50;
@@ -3675,6 +3690,22 @@ img.persona-avatar {
 .league-division-badge.upper {
     background: #FFD700;
     color: #000;
+}
+
+.league-division-badge.promoted {
+    background: #4CAF50;
+    color: #fff;
+    animation: promoted-pulse 1.5s ease-in-out infinite;
+}
+
+.fixture-div.promoted {
+    color: #4CAF50;
+    font-weight: bold;
+}
+
+@keyframes promoted-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
 }
 
 .league-table {

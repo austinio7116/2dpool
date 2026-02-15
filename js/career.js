@@ -304,8 +304,16 @@ export class Career {
         // Update standings
         this.updateStandings(mode);
 
-        // Simulate one AI vs AI match in this league
-        this.simulateNextAIMatch(mode);
+        // Simulate a round of AI vs AI matches to keep the league progressing.
+        // With 5 players: 6 AI fixtures, 4 user fixtures → ~1.5 AI per user match.
+        // Simulate ceil(remaining AI / remaining user) to spread evenly,
+        // finishing any stragglers after the user's last match.
+        const remainingAI = sd.fixtures.filter(f => !f.played && f.home !== 'player' && f.away !== 'player').length;
+        const remainingUser = sd.fixtures.filter(f => !f.played && (f.home === 'player' || f.away === 'player')).length;
+        const toSimulate = remainingUser > 0 ? Math.ceil(remainingAI / remainingUser) : remainingAI;
+        for (let i = 0; i < toSimulate; i++) {
+            if (!this.simulateNextAIMatch(mode)) break;
+        }
 
         // Check if this league is complete
         this.checkLeagueComplete(mode);
@@ -368,14 +376,14 @@ export class Career {
 
     simulateNextAIMatch(mode) {
         const sd = this.state.leagues[mode].seasonData;
-        if (!sd) return;
+        if (!sd) return false;
 
         // Find next unplayed AI vs AI fixture
         const fixture = sd.fixtures.find(f =>
             !f.played && f.home !== 'player' && f.away !== 'player'
         );
 
-        if (!fixture) return;
+        if (!fixture) return false;
 
         const bestOf = this.getBestOf(mode);
         const eloA = this.state.aiElo[fixture.home] || 1500;
@@ -401,6 +409,7 @@ export class Career {
 
         // Recalculate standings
         this.updateStandings(mode);
+        return true;
     }
 
     checkLeagueComplete(mode) {
@@ -421,9 +430,9 @@ export class Career {
                     this.onLeagueAchievement(`league_${division}_${mode}`);
                 }
 
-                // If lower division, promote
+                // If lower division, mark promotion as pending (applied when new season starts)
                 if (division === 'lower') {
-                    this.state.leagues[mode].division = 'upper';
+                    sd.promoted = true;
 
                     // Fire first promotion achievement via callback
                     if (this.onLeagueAchievement) {
@@ -443,6 +452,14 @@ export class Career {
 
     advanceSeason() {
         this.state.season++;
+
+        // Apply pending promotions from completed season
+        for (const mode of GAME_MODES) {
+            const sd = this.state.leagues[mode].seasonData;
+            if (sd?.promoted) {
+                this.state.leagues[mode].division = 'upper';
+            }
+        }
 
         // Fire season complete achievement via callback
         if (this.onLeagueAchievement) {

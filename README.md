@@ -8,7 +8,7 @@
 >
 > No downloads. No installs. No excuses when you lose.
 
-### **[Play Now](https://austinio7116.github.io/2dpool/)**
+[![Play Now](https://img.shields.io/badge/%F0%9F%8E%B1%20PLAY%20NOW-Click%20to%20Play-brightgreen?style=for-the-badge&labelColor=1a1a2e&color=16a34a)](https://austinio7116.github.io/2dpool/)
 
 ---
 

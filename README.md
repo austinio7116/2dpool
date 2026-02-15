@@ -8,25 +8,69 @@
 >
 > No downloads. No installs. No excuses when you lose.
 
+### **[Play Now](https://austinio7116.github.io/2dpool/)** | [GitHub](https://github.com/austinio7116/2dpool)
+
 ---
 
 ## Table of Contents
 
-1. [Welcome to the Table](#welcome-to-the-table)
-2. [Game Modes](#game-modes)
+1. [Quick Start](#quick-start)
+2. [Install on Your Phone](#install-on-your-phone)
+3. [Welcome to the Table](#welcome-to-the-table)
+4. [Game Modes](#game-modes)
    - [US 8-Ball](#us-8-ball)
    - [UK 8-Ball](#uk-8-ball)
    - [9-Ball](#9-ball)
    - [Snooker](#snooker)
    - [Free Play](#free-play)
-3. [How to Play](#how-to-play)
-4. [The AI Opponents](#the-ai-opponents)
-5. [Career Mode](#career-mode)
-6. [Tables & Customisation](#tables--customisation)
-7. [Ball Sets & The Ball Creator](#ball-sets--the-ball-creator)
-8. [Match Statistics](#match-statistics)
-9. [Achievements](#achievements)
-10. [Settings & Tips](#settings--tips)
+5. [How to Play](#how-to-play)
+6. [The Physics](#the-physics)
+7. [The AI Opponents](#the-ai-opponents)
+8. [Career Mode](#career-mode)
+9. [Tables & Customisation](#tables--customisation)
+10. [Ball Sets & The Ball Creator](#ball-sets--the-ball-creator)
+11. [Match Statistics](#match-statistics)
+12. [Achievements](#achievements)
+13. [Settings & Tips](#settings--tips)
+
+---
+
+## Quick Start
+
+**Play instantly:** Open **[austinio7116.github.io/2dpool](https://austinio7116.github.io/2dpool/)** in any modern browser. That's it. No downloads, no sign-ups, no app store. Works on desktop, tablet, and phone.
+
+**Run it locally:** Clone the repo and serve over HTTP (ES6 modules require it):
+
+```bash
+git clone https://github.com/austinio7116/2dpool.git
+cd 2dpool
+python3 -m http.server 8000
+# Open http://localhost:8000
+```
+
+---
+
+## Install on Your Phone
+
+2D Pool & Snooker is a **Progressive Web App** — you can install it to your home screen and launch it like a native app, complete with full-screen play and no browser chrome getting in the way.
+
+### Android (Chrome)
+
+1. Open **[austinio7116.github.io/2dpool](https://austinio7116.github.io/2dpool/)** in Chrome
+2. Tap the **three-dot menu** (top right)
+3. Tap **"Add to Home screen"** (or **"Install app"** if prompted)
+4. Give it a name (or keep the default) and tap **Add**
+5. The game icon appears on your home screen — tap it to launch in full-screen landscape mode
+
+### iPhone & iPad (Safari)
+
+1. Open **[austinio7116.github.io/2dpool](https://austinio7116.github.io/2dpool/)** in **Safari** (this only works in Safari on iOS)
+2. Tap the **Share button** (the square with an arrow pointing up, at the bottom of the screen)
+3. Scroll down and tap **"Add to Home Screen"**
+4. Give it a name and tap **Add**
+5. The game icon appears on your home screen — tap it to launch as a standalone app
+
+> **Tip:** Once installed, the game runs offline. Perfect for flights, commutes, or anywhere you need to settle a grudge match without Wi-Fi.
 
 ---
 
@@ -179,7 +223,35 @@ The game provides helpful visual guides while you aim:
 - A **ghost ball** appears where the cue ball will make contact with the target
 - A **dashed yellow line** shows the predicted path of the target ball after contact
 
-These guides are generous enough to help you plan, but they won't do the work for you. You still need to judge the angle, manage the power, and account for spin. This is a sim, after all.
+**Important:** These guides show the *geometric* aim line — where the ball *would* go in a frictionless, spinless vacuum. In practice, the physics engine models **cut-induced throw** and **spin-induced throw** (see [The Physics](#the-physics) below), which means the actual ball path will deviate from the guideline. Use the aiming aids as a starting point, then adjust for the realities of the shot. The thinner the cut, the more throw you'll need to compensate for. Add sidespin and the deviation increases further. This is a sim, after all — and that's what makes it satisfying.
+
+---
+
+## The Physics
+
+The physics engine doesn't just move balls in straight lines and bounce them off cushions. It models the real-world effects that make cue sports such a deep game.
+
+### Cut-Induced Throw
+
+When the cue ball strikes an object ball at an angle (a "cut" shot), friction between the two balls at the moment of contact causes the object ball to be **thrown** slightly off the expected line. The thinner the cut, the more pronounced the throw. This means a half-ball pot doesn't go exactly where the geometric aiming line suggests — it deviates by a small but meaningful amount. Just like on a real table, you need to learn to compensate.
+
+### Spin-Induced Throw
+
+Applying sidespin (English) to the cue ball adds another layer. When a spinning cue ball contacts an object ball, the spin transfers as friction at the contact point, **throwing** the object ball in the opposite direction to the spin. Right-hand side throws the object ball to the left, and vice versa. Skilled players use this deliberately — spinning *into* the throw to cancel it out, or spinning *with* it to widen the angle. The aiming guides don't account for this. You have to.
+
+### What This Means for You
+
+The dashed guidelines show you the *theoretical* path assuming a clean, spinless contact. Real shots deviate. You'll need to:
+- **Over-cut thin shots** slightly to compensate for throw
+- **Factor in cushion behaviour** — sidespin changes the angle the cue ball takes off a rail
+
+This is what separates a good player from a great one. The guides get you close. Physics knowledge gets you the pot.
+
+### The AI and the Angle Model
+
+The AI doesn't just follow the aiming guides either. Under the hood, each AI opponent uses a **trained machine learning model** to predict the correct shot angle — accounting for throw, spin, and deflection. The model was trained on thousands of simulated shots and gives the AI a genuine understanding of how balls behave in the physics engine.
+
+But here's the thing: **even the model isn't perfect**. Cut-induced throw and spin interactions are complex enough that the prediction is an approximation. Even The Machine — with zero aiming error and perfect power control — will occasionally see a ball rattle the jaws or drift just wide on a thin cut. The physics is honest. Nobody gets a free pass.
 
 ---
 
@@ -491,10 +563,6 @@ During play, the hamburger menu gives you quick access to:
 ### Sound
 
 The audio system uses Web Audio synthesis for cushion hits, fouls, and victory jingles, combined with sampled sounds for ball collisions and pots. Snooker even distinguishes between soft and hard pots with different audio. Toggle sound on or off in settings.
-
-### Game Speed
-
-A speed slider lets you adjust from **0.2x** (slow-motion, great for studying ball paths) up to **2.0x** (for when you just want the AI to hurry up).
 
 ### Match Formats
 

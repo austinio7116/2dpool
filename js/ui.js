@@ -75,6 +75,7 @@ export class UI {
         this.gameMenuDropdown = document.getElementById('game-menu-dropdown');
         this.btnBallsUpright = document.getElementById('btn-balls-upright');
         this.btnPickupBall = document.getElementById('btn-pickup-ball');
+        this.btnNominateColor = document.getElementById('btn-nominate-color');
         this.btnConcedeFrame = document.getElementById('btn-concede-frame');
         this.btnQuitGame = document.getElementById('btn-quit-game');
         this.soundToggle = document.getElementById('sound-toggle');
@@ -424,6 +425,12 @@ export class UI {
             if (this.onPickUpBall) {
                 this.onPickUpBall();
             }
+        });
+
+        this.btnNominateColor?.addEventListener('click', () => {
+            this.closeGameMenu();
+            this._manualNominationFromMenu = true;
+            this.showNominationModal();
         });
 
         this.btnBallsUpright.addEventListener('click', () => {
@@ -902,9 +909,11 @@ export class UI {
         nomBalls?.forEach(ball => {
             ball.addEventListener('click', () => {
                 const color = ball.dataset.color;
+                const manual = this._manualNominationFromMenu || false;
+                this._manualNominationFromMenu = false;
                 this.hideNominationModal();
                 if (this.onColorNomination) {
-                    this.onColorNomination(color);
+                    this.onColorNomination(color, manual);
                 }
             });
         });
@@ -2794,7 +2803,8 @@ export class UI {
     }
 
     // Update UI based on game state
-    updateFromGameInfo(info) {
+    updateFromGameInfo(info, options = {}) {
+        this._isAITurn = options.isAITurn || false;
         if (info.state === GameState.MENU) {
             this.showMainMenu();
             return;
@@ -3102,10 +3112,18 @@ export class UI {
                     this.hudSnookerNomination.classList.add('hidden');
                 }
             }
+
+            // Show/hide "Nominate Colour" menu item for human players when on colours
+            if (this.btnNominateColor) {
+                const showNominate = gameInfo.snookerTarget === 'color' && !this._isAITurn;
+                this.btnNominateColor.classList.toggle('hidden', !showNominate);
+            }
+
         } else {
             // Hide snooker elements for non-snooker modes
             if (this.hudSnookerBreak) this.hudSnookerBreak.classList.add('hidden');
             if (this.hudSnookerTarget) this.hudSnookerTarget.classList.add('hidden');
+            if (this.btnNominateColor) this.btnNominateColor.classList.add('hidden');
         }
 
         // Update player active states
@@ -4142,6 +4160,7 @@ export class UI {
         if (this.snookerNominationModal) {
             this.snookerNominationModal.classList.add('hidden');
         }
+        this._manualNominationFromMenu = false;
     }
 
     // Show free ball nomination modal with available balls
@@ -4162,8 +4181,8 @@ export class UI {
             'black': '#000000'
         };
 
-        // Filter to non-pocketed, non-cue balls
-        const availableBalls = balls.filter(b => !b.pocketed && !b.isCueBall);
+        // Filter to non-pocketed, non-cue, non-red balls (reds can never be nominated as free ball)
+        const availableBalls = balls.filter(b => !b.pocketed && !b.isCueBall && b.colorName !== 'red');
 
         // Create ball buttons
         for (const ball of availableBalls) {

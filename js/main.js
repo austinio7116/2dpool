@@ -49,6 +49,9 @@ class PoolGame {
         // Ball-in-hand: track whether player can pick up the ball again
         this.ballInHandActive = false;
 
+        // Manual snooker colour nomination override
+        this.manualNomination = false;
+
         // Match persistence
         this.STORAGE_KEY = 'poolGame_savedMatch';
         this.CAREER_STORAGE_KEY = 'poolGame_savedCareerMatch';
@@ -196,7 +199,7 @@ class PoolGame {
 
         // UI snooker callbacks
         this.ui.onSnookerDecision = (decision) => this.applySnookerDecision(decision);
-        this.ui.onColorNomination = (colorName) => this.handleColorNomination(colorName);
+        this.ui.onColorNomination = (colorName, manual) => this.handleColorNomination(colorName, manual);
         this.ui.onFreeBallNomination = (ball) => this.handleFreeBallNomination(ball);
 
         // 9-ball push-out callbacks
@@ -674,8 +677,10 @@ class PoolGame {
             );
 
             // Dynamic nomination for snooker when targeting a color
+            // Skip auto-nomination if the player has manually nominated
             if (this.game.mode === GameMode.SNOOKER &&
                 this.game.snookerTarget === 'color' &&
+                !this.manualNomination &&
                 this.trajectory && this.trajectory.firstHit) {
                 // Find the ball that would be hit first
                 const hitBallNum = this.trajectory.firstHit.targetBallNumber;
@@ -730,10 +735,13 @@ class PoolGame {
     }
 
     handleStateChange(state) {
-        this.ui.updateFromGameInfo(this.game.getGameInfo());
-
-        // Check if it's AI's turn (in training mode, both players are AI)
         const isAITurn = this.isCurrentPlayerAI();
+        this.ui.updateFromGameInfo(this.game.getGameInfo(), { isAITurn });
+
+        // Clear manual nomination when target changes away from 'color'
+        if (this.game.snookerTarget !== 'color') {
+            this.manualNomination = false;
+        }
 
         // Hide pick-up ball button by default on any state change
         if (this.ui.btnPickupBall) {
@@ -1129,9 +1137,10 @@ class PoolGame {
     }
 
     // Handle color nomination from UI or AI
-    handleColorNomination(colorName) {
+    handleColorNomination(colorName, manual = false) {
         this.ui.hideNominationModal();
-        this.game.setNominatedColor(colorName);
+        this.game.setNominatedColor(colorName, manual);
+        this.manualNomination = manual;
     }
 
     // Handle free ball awarded (after foul leaves player snookered)
@@ -1250,7 +1259,7 @@ class PoolGame {
         this.ui.gameHud.classList.remove('hidden');
 
         // Update HUD with new frame info
-        this.ui.updateFromGameInfo(this.game.getGameInfo());
+        this.ui.updateFromGameInfo(this.game.getGameInfo(), { isAITurn: this.isCurrentPlayerAI() });
 
         // Save match state
         if (this.game.match.bestOf > 1) {
@@ -1445,7 +1454,7 @@ class PoolGame {
         this.input.resetSpin();
 
         this.ui.showGameHUD(savedData.gameMode, this.game.getMatchInfo());
-        this.ui.updateFromGameInfo(this.game.getGameInfo());
+        this.ui.updateFromGameInfo(this.game.getGameInfo(), { isAITurn: this.isCurrentPlayerAI() });
 
         // Hide loading overlay
         if (loadingOverlay) loadingOverlay.classList.add('hidden');
@@ -1517,7 +1526,7 @@ class PoolGame {
         }
 
         if (this.game.state !== GameState.MENU && this.game.state !== GameState.GAME_OVER) {
-            this.ui.updateFromGameInfo(this.game.getGameInfo());
+            this.ui.updateFromGameInfo(this.game.getGameInfo(), { isAITurn: this.isCurrentPlayerAI() });
         }
 
         // Update visual rotation for all balls (rolling animation + return to upright)

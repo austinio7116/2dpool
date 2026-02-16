@@ -88,6 +88,7 @@ export class Game {
         this.foulPenalty = 0;               // Points awarded to opponent on foul
         this.missRuleApplies = false;       // True if "Miss" can be called (didn't hit ball on)
         this.nominatedColor = null;         // Currently nominated color when target is 'color'
+        this.manualNomination = false;      // True when player manually nominated (not auto from aiming)
         this.consecutiveMisses = 0;         // Track consecutive misses (3 = frame forfeit)
         this.wasSnookeredBeforeShot = false; // Track if player was snookered before taking shot
         this.pendingFoulDecision = null;    // Stores foul info while awaiting decision
@@ -1580,6 +1581,7 @@ export class Game {
             // Clear nomination after potting a color
             if (this.snookerTarget === 'red') {
                 this.nominatedColor = null;
+                this.manualNomination = false;
             }
 
             this.turnContinues = true;
@@ -1600,6 +1602,7 @@ export class Game {
             this.finalizeCurrentBreak();
             this.currentBreak = 0;
             this.nominatedColor = null;  // Clear nomination on turn change
+            this.manualNomination = false;
             this.handleSnookerTurnChange(false);
 
             // 6. Check Game Over
@@ -1622,6 +1625,7 @@ export class Game {
 
         // Clear nomination on any decision
         this.nominatedColor = null;
+        this.manualNomination = false;
         this.isFreeBall = false;
         this.freeBallNomination = null;
 
@@ -1722,9 +1726,12 @@ export class Game {
     }
 
     // Set nominated color (called from input when aiming at colors)
-    setNominatedColor(colorName) {
+    setNominatedColor(colorName, manual = false) {
         if (this.snookerTarget === 'color' && colorName !== this.nominatedColor) {
             this.nominatedColor = colorName;
+            if (manual) {
+                this.manualNomination = true;
+            }
             if (this.onNominationChange) {
                 this.onNominationChange(colorName);
             }
@@ -1762,7 +1769,11 @@ export class Game {
 
         // 2. Target is "Any Color" (Nomination phase after a red)
         if (this.snookerTarget === 'color') {
-            return ball.isColor; // Any color is valid to HIT in this phase
+            // If a color has been nominated (auto or manual), only that color is valid
+            if (this.nominatedColor) {
+                return ball.isColor && ball.colorName === this.nominatedColor;
+            }
+            return ball.isColor; // Any color valid if no nomination yet
         }
 
         // 3. Target is Specific Color (Clearance phase)
@@ -1785,9 +1796,11 @@ export class Game {
 
         // 2. Target "Any Color" (After Red)
         if (this.snookerTarget === 'color') {
-            // If we hit a color, we must pot THAT color.
-            // If we hit multiple colors (rare/lucky), it's complex,
-            // but standard rule: You can only pot the nominated (first hit) color.
+            // If a color has been nominated (auto or manual), only that color can be potted
+            if (this.nominatedColor) {
+                return ball.isColor && ball.colorName === this.nominatedColor;
+            }
+            // Fallback: must pot the first color hit
             if (!this.firstBallHit) return false;
             return ball.isColor && ball.colorName === this.firstBallHit.colorName;
         }
@@ -2127,6 +2140,7 @@ export class Game {
         this.switchPlayer();
         this.turnContinues = false;
         this.nominatedColor = null;  // Clear nomination on turn change
+        this.manualNomination = false;
 
         // Reset target based on game state
         if (this.colorsPhase) {

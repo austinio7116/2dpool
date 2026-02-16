@@ -1510,9 +1510,9 @@ class PoolGame {
                         }
                     }
                 } else if (event.type === 'pocket') {
-                    this.game.onBallPocket(event.ball);
+                    this.game.onBallPocket(event.ball, event.pocket);
                 } else if (event.type === 'rail') {
-                    this.game.onRailContact(event.ball, event.railType);
+                    this.game.onRailContact(event.ball, event.railType, event.chainIndex);
                 }
             }
 

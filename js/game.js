@@ -51,7 +51,7 @@ export class Game {
         this.ballPottedThisShot = false;
 
         // Per-shot special shot detection
-        this.ballsHitCushion = new Set();       // balls that hit a cushion this shot
+        this.ballsHitChains = new Map();        // Map<ball, Set<chainIndex>> - which rail chains each ball hit
         this.ballsHitByObjectBall = new Set();  // balls hit by another object ball (not cue)
         this.bankShotThisShot = false;
         this.comboShotThisShot = false;
@@ -350,7 +350,7 @@ export class Game {
         this.ballPottedThisShot = false;
 
         // Reset per-shot special shot detection
-        this.ballsHitCushion = new Set();
+        this.ballsHitChains = new Map();
         this.ballsHitByObjectBall = new Set();
         this.bankShotThisShot = false;
         this.comboShotThisShot = false;
@@ -375,36 +375,95 @@ export class Game {
     }
 
     // Called when a ball hits a rail cushion
-    onRailContact(ball, railType) {
+    onRailContact(ball, railType, chainIndex) {
         // Only counts after cue ball has hit an object ball
         if (this.firstBallHit !== null) {
             this.railContactAfterHit = true;
         }
 
-        // Track per-ball cushion contact for bank shot detection
+        // Track per-ball cushion contact with chain index for bank shot detection
         // Only count real cushion bounces, not pocket liner contacts
-        if (railType !== 'pocket-liner' && !ball.isCueBall) {
-            this.ballsHitCushion.add(ball);
+        if (railType !== 'pocket-liner' && !ball.isCueBall && chainIndex !== undefined) {
+            if (!this.ballsHitChains.has(ball)) {
+                this.ballsHitChains.set(ball, new Set());
+            }
+            this.ballsHitChains.get(ball).add(chainIndex);
         }
     }
 
+    // Which rail chains are adjacent to each pocket (the "jaws")
+    // Pocket indices: 0=TL, 1=TR, 2=BL, 3=BR, 4=Top-mid, 5=Bot-mid
+    // Chain indices: 0=TL→TopMid, 1=TopMid→TR, 2=TR→BR, 3=BR→BotMid, 4=BotMid→BL, 5=BL→TL
+    static POCKET_ADJACENT_CHAINS = [
+        [0, 5],  // Pocket 0 (top-left): chains 0 and 5
+        [1, 2],  // Pocket 1 (top-right): chains 1 and 2
+        [4, 5],  // Pocket 2 (bottom-left): chains 4 and 5
+        [2, 3],  // Pocket 3 (bottom-right): chains 2 and 3
+        [0, 1],  // Pocket 4 (top middle): chains 0 and 1
+        [3, 4],  // Pocket 5 (bottom middle): chains 3 and 4
+    ];
+
     // Called when a ball is pocketed
-    onBallPocket(ball) {
+    onBallPocket(ball, pocket) {
         this.ballsPocketed.push(ball);
         this.ballPottedThisShot = true;
 
-        // Detect bank shot: ball hit cushion before being pocketed
-        if (!ball.isCueBall && this.ballsHitCushion.has(ball)) {
-            this.bankShotThisShot = true;
+        // Detect bank shot: ball hit a cushion that is NOT adjacent to the pocket it went in
+        if (!ball.isCueBall && this.ballsHitChains.has(ball) && pocket && pocket.index !== undefined) {
+            const hitChains = this.ballsHitChains.get(ball);
+            const adjacentChains = Game.POCKET_ADJACENT_CHAINS[pocket.index];
+            // Check if any hit chain is NOT one of the pocket's jaw chains
+            for (const chainIdx of hitChains) {
+                if (!adjacentChains.includes(chainIdx)) {
+                    this.bankShotThisShot = true;
+                    break;
+                }
+            }
         }
 
         // Detect combo/plant: ball was hit by another object ball (not directly by cue ball)
+        // AND both the first ball hit and the potted ball must be valid targets ("on")
         if (!ball.isCueBall && this.ballsHitByObjectBall.has(ball) && ball !== this.firstBallHit) {
-            this.comboShotThisShot = true;
+            if (this.isBallOnForCurrentPlayer(ball) && this.isBallOnForCurrentPlayer(this.firstBallHit)) {
+                this.comboShotThisShot = true;
+            }
         }
 
         if (this.onBallPocketed) {
             this.onBallPocketed(ball);
+        }
+    }
+
+    // Check if a ball is a valid target ("on") for the current player
+    isBallOnForCurrentPlayer(ball) {
+        if (!ball || ball.isCueBall) return false;
+
+        switch (this.mode) {
+            case GameMode.EIGHT_BALL: {
+                if (!this.player1Group) return true; // Open table - any ball is on
+                const group = this.getCurrentPlayerGroup();
+                const needsEightBall = this.isGroupCleared(group, true);
+                if (needsEightBall) return ball.isEightBall;
+                if (group === 'solid') return ball.number >= 1 && ball.number <= 7;
+                if (group === 'stripe') return ball.number >= 9 && ball.number <= 15;
+                return false;
+            }
+            case GameMode.UK_EIGHT_BALL: {
+                if (!this.player1Group) return true; // Open table
+                const group = this.getCurrentPlayerGroup();
+                const needsBlack = this.isUKGroupCleared(group, true);
+                if (needsBlack) return ball.isEightBall;
+                if (group === 'group1') return ball.isGroup1;
+                if (group === 'group2') return ball.isGroup2;
+                return false;
+            }
+            case GameMode.NINE_BALL:
+                // Any ball can be legally potted in 9-ball
+                return !ball.pocketed;
+            case GameMode.SNOOKER:
+                return this.isValidSnookerPot(ball);
+            default:
+                return true;
         }
     }
 
@@ -443,6 +502,12 @@ export class Game {
         } else if (this.mode === GameMode.SNOOKER) {
             this.evaluateSnookerShot();
             return; // Snooker handles its own state changes
+        }
+
+        // If evaluation ended the game (e.g. 8-ball potted), stop here.
+        // endGame() already set GAME_OVER and fired callbacks.
+        if (this.state === GameState.GAME_OVER) {
+            return;
         }
 
         // Track pool stats after shot evaluation

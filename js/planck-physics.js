@@ -208,7 +208,8 @@ export class PlanckPhysics {
             restitution: Constants.RAIL_RESTITUTION
         });
 
-        body.setUserData({ type: 'rail', railType: 'chain' });
+        const chainIndex = this.railChainPoints.length;
+        body.setUserData({ type: 'rail', railType: 'chain', chainIndex });
         this.railBodies.push(body);
         this.railChainPoints.push(points);
     }
@@ -434,6 +435,7 @@ export class PlanckPhysics {
                     type: 'rail',
                     ball: ballData.ball,
                     railType: railData.railType,
+                    chainIndex: railData.chainIndex,
                     speed
                 });
             }

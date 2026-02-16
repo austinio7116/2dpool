@@ -116,43 +116,51 @@ export class Table {
 
         // Corner pockets - offset diagonally into the pocket holes
         const cornerOffset = 5;
-        // Top-left
+        // Top-left (index 0)
         pockets.push({
             position: Vec2.create(b.left - cornerOffset, b.top - cornerOffset),
             radius: pocketRadius,
-            type: 'corner'
+            type: 'corner',
+            index: 0
         });
-        // Top-right
+        // Top-right (index 1)
         pockets.push({
             position: Vec2.create(b.right + cornerOffset, b.top - cornerOffset),
             radius: pocketRadius,
-            type: 'corner'
+            type: 'corner',
+            index: 1
         });
-        // Bottom-left
+        // Bottom-left (index 2)
         pockets.push({
             position: Vec2.create(b.left - cornerOffset, b.bottom + cornerOffset),
             radius: pocketRadius,
-            type: 'corner'
+            type: 'corner',
+            index: 2
         });
-        // Bottom-right
+        // Bottom-right (index 3)
         pockets.push({
             position: Vec2.create(b.right + cornerOffset, b.bottom + cornerOffset),
             radius: pocketRadius,
-            type: 'corner'
+            type: 'corner',
+            index: 3
         });
 
         // Side pockets - offset into the cushions
         const sidePocketRadius = pocketRadius * 0.9;
         const sideOffset = 15; // Move pocket centers back into cushions
+        // Top middle (index 4)
         pockets.push({
             position: Vec2.create(this.center.x, b.top - sideOffset),
             radius: sidePocketRadius,
-            type: 'side'
+            type: 'side',
+            index: 4
         });
+        // Bottom middle (index 5)
         pockets.push({
             position: Vec2.create(this.center.x, b.bottom + sideOffset),
             radius: sidePocketRadius,
-            type: 'side'
+            type: 'side',
+            index: 5
         });
 
         return pockets;

@@ -1105,6 +1105,15 @@ export class AI {
             if (this.game.isBreakShot) {
                 aiLog('Shot type: BREAK');
                 this.playBreakShot();
+            }
+            // CRITICAL: On 3rd miss attempt (consecutiveMisses >= 2) in snooker,
+            // when NOT snookered, always aim directly at the center of the nearest
+            // reachable target ball. No safeties, no fine cuts — just make contact.
+            else if (this.game.mode === GameMode.SNOOKER &&
+                     this.game.consecutiveMisses >= 2 &&
+                     !this.game.isPlayerSnookered()) {
+                aiLog('⚠️ MISS RULE: 2 consecutive misses — MUST hit ball directly to avoid frame forfeit');
+                this.playDesperateDirect();
             } else {
                 const shot = this.findBestShot();
 
@@ -3602,6 +3611,95 @@ export class AI {
         }
 
         return bestScore;
+    }
+
+    // Desperate direct shot: aim at center of nearest reachable target with minimal error.
+    // Used when facing frame forfeit (2 consecutive misses, 3rd attempt).
+    playDesperateDirect() {
+        aiLogGroup('Desperate Direct (3rd Miss Attempt)');
+        const cueBall = this.game.cueBall;
+        if (!cueBall || cueBall.pocketed) {
+            aiLog('No cue ball');
+            aiLogGroupEnd();
+            return;
+        }
+
+        const validTargets = this.getValidTargets();
+
+        // Handle snooker color nomination
+        if (this.game.snookerTarget === 'color' && validTargets.length > 0) {
+            // Pick closest reachable color to nominate
+            let closest = null;
+            let closestDist = Infinity;
+            for (const t of validTargets) {
+                const d = Vec2.distance(cueBall.position, t.position);
+                if (this.canLegallyReachBall(cueBall.position, t) && d < closestDist) {
+                    closestDist = d;
+                    closest = t;
+                }
+            }
+            if (!closest) closest = validTargets[0];
+            if (closest.isColor && this.game.setNominatedColor) {
+                aiLog('Nominating color for desperate direct:', closest.colorName);
+                this.game.setNominatedColor(closest.colorName);
+            }
+        }
+
+        // Find closest reachable target ball
+        let bestTarget = null;
+        let bestDist = Infinity;
+        for (const target of validTargets) {
+            const dist = Vec2.distance(cueBall.position, target.position);
+            if (this.canLegallyReachBall(cueBall.position, target) && dist < bestDist) {
+                bestDist = dist;
+                bestTarget = target;
+            }
+        }
+
+        // Fallback: closest target even if partially blocked
+        if (!bestTarget) {
+            for (const target of validTargets) {
+                const dist = Vec2.distance(cueBall.position, target.position);
+                if (dist < bestDist) {
+                    bestDist = dist;
+                    bestTarget = target;
+                }
+            }
+        }
+
+        if (!bestTarget) {
+            aiLog('No target found - falling back to safety');
+            aiLogGroupEnd();
+            this.playSafety();
+            return;
+        }
+
+        const targetName = bestTarget.colorName || bestTarget.number || 'ball';
+        aiLog('Aiming directly at CENTER of', targetName, '(distance:', bestDist.toFixed(0) + ')');
+
+        // Aim straight at center of target — no cut angle, no safety consideration
+        const direction = Vec2.normalize(Vec2.subtract(bestTarget.position, cueBall.position));
+
+        // Very tight aim error — this is a survival shot
+        const settings = this.getCurrentPersona();
+        const aimError = (Math.random() - 0.5) * 2 * settings.lineAccuracy * 0.15 * (Math.PI / 180);
+        const adjustedDir = Vec2.rotate(direction, aimError);
+
+        // Moderate power — enough to reach the ball comfortably but not wild
+        const power = Math.max(15, Math.min(30, 10 + bestDist / 40));
+
+        this.lastExecutedShot = {
+            target: bestTarget,
+            pocket: { position: bestTarget.position },
+            cutAngle: 0,
+            direction: Vec2.clone(direction),
+            isSafetyShot: false
+        };
+
+        aiLogGroupEnd();
+        if (this.onShot) {
+            this.onShot(Vec2.normalize(adjustedDir), power, { x: 0, y: 0 });
+        }
     }
 
     // Play a safety shot when no good pocketing options

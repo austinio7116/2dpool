@@ -1887,30 +1887,44 @@ export class Game {
 
     // Check if there's a clear straight-line path between cue ball and target
     // Must be able to hit BOTH extreme edges of the target ball
+    // (i.e., full ball visible — not partially obscured)
     hasClearPath(cueBallPos, targetPos, cueBallRadius, targetRadius, blockerBalls) {
         const direction = Vec2.subtract(targetPos, cueBallPos);
         const distance = Vec2.length(direction);
         if (distance < 1) return true;
 
         const normalized = Vec2.normalize(direction);
+        // Perpendicular direction for calculating edge paths
+        const perp = { x: -normalized.y, y: normalized.x };
 
-        // Check if any blocker ball is in the path
-        for (const blocker of blockerBalls) {
-            const blockerRadius = blocker.radius;
-            const toBall = Vec2.subtract(blocker.position, cueBallPos);
-            const projection = Vec2.dot(toBall, normalized);
+        // Check TWO paths: cue ball aimed at left extreme edge and right extreme edge
+        // of the target ball. Both must be clear for "full ball" visibility.
+        const leftEdge = Vec2.add(targetPos, Vec2.multiply(perp, targetRadius));
+        const rightEdge = Vec2.add(targetPos, Vec2.multiply(perp, -targetRadius));
 
-            // Blocker is behind cue ball or beyond target
-            if (projection < 0 || projection > distance - targetRadius) continue;
+        for (const edgePos of [leftEdge, rightEdge]) {
+            const edgeDir = Vec2.subtract(edgePos, cueBallPos);
+            const edgeDist = Vec2.length(edgeDir);
+            if (edgeDist < 1) continue;
+            const edgeNorm = Vec2.normalize(edgeDir);
 
-            // Calculate perpendicular distance to path
-            const closestPoint = Vec2.add(cueBallPos, Vec2.multiply(normalized, projection));
-            const perpDist = Vec2.distance(blocker.position, closestPoint);
+            for (const blocker of blockerBalls) {
+                const blockerRadius = blocker.radius;
+                const toBall = Vec2.subtract(blocker.position, cueBallPos);
+                const projection = Vec2.dot(toBall, edgeNorm);
 
-            // Check if blocker is in the way (cue ball would collide)
-            const clearance = blockerRadius + cueBallRadius;
-            if (perpDist < clearance) {
-                return false; // Path is blocked
+                // Blocker is behind cue ball or beyond the edge point
+                if (projection < 0 || projection > edgeDist) continue;
+
+                // Calculate perpendicular distance to this edge path
+                const closestPoint = Vec2.add(cueBallPos, Vec2.multiply(edgeNorm, projection));
+                const perpDist = Vec2.distance(blocker.position, closestPoint);
+
+                // Check if blocker is in the way (cue ball would collide on this edge path)
+                const clearance = blockerRadius + cueBallRadius;
+                if (perpDist < clearance) {
+                    return false; // This edge is blocked — not full ball visible
+                }
             }
         }
 

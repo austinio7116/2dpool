@@ -1114,6 +1114,13 @@ export class AI {
                      !this.game.isPlayerSnookered()) {
                 aiLog('⚠️ MISS RULE: 2 consecutive misses — MUST hit ball directly to avoid frame forfeit');
                 this.playDesperateDirect();
+            }
+            // After 1 miss: AI should be more cautious — prefer safety/easy shots
+            else if (this.game.mode === GameMode.SNOOKER &&
+                     this.game.consecutiveMisses === 1 &&
+                     !this.game.isPlayerSnookered()) {
+                aiLog('⚠️ MISS WARNING: 1 consecutive miss — playing cautiously to avoid escalation');
+                this.playCautiousAfterMiss();
             } else {
                 const shot = this.findBestShot();
 
@@ -3702,6 +3709,49 @@ export class AI {
         }
     }
 
+    // Cautious play after 1 consecutive miss: prefer easy direct shots or safe contact.
+    // The AI focuses on making legal contact to reset the miss counter, avoiding risky pots.
+    playCautiousAfterMiss() {
+        aiLogGroup('Cautious Play (1 Miss)');
+        const cueBall = this.game.cueBall;
+        if (!cueBall || cueBall.pocketed) {
+            aiLog('No cue ball');
+            aiLogGroupEnd();
+            return;
+        }
+
+        // Handle snooker color nomination
+        if (this.game.snookerTarget === 'color') {
+            const nomination = this.chooseColorNomination(this.game.balls);
+            if (this.game.setNominatedColor) {
+                this.game.setNominatedColor(nomination);
+            }
+        }
+
+        // Try to find a good pot first — but only accept very high confidence shots
+        const shot = this.findBestShot();
+        if (shot && shot.potScore > 70) {
+            aiLog('High-confidence pot available (score:', shot.potScore.toFixed(0) + ') — taking it to reset miss counter');
+
+            // Handle color nomination for pot
+            if (this.game.snookerTarget === 'color' && shot.target.isColor && this.game.setNominatedColor) {
+                this.game.setNominatedColor(shot.target.colorName);
+            }
+
+            aiLogGroupEnd();
+            this.executeShot(shot);
+            return;
+        }
+
+        aiLog('No high-confidence pot — playing safe to ensure legal contact');
+        aiLogGroupEnd();
+
+        // Fall back to safety play — the existing safety logic will handle
+        // making legal contact with reduced aim error (the urgency multiplier
+        // at consecutiveMisses >= 1 will apply in the safety execution path)
+        this.playSafety();
+    }
+
     // Play a safety shot when no good pocketing options
     playSafety() {
         aiLogGroup('Safety Shot');
@@ -3743,7 +3793,7 @@ export class AI {
                 // Reduced aim error for escape shots (precision kick shots)
                 // Multi-cushion escapes need even more precision
                 const escapeMultiplier = escapeShot.bounces > 0 ? 0.15 : 0.3;
-                const urgency = this.game.consecutiveMisses >= 2 ? 0.3 : 1.0;
+                const urgency = this.game.consecutiveMisses >= 2 ? 0.3 : this.game.consecutiveMisses === 1 ? 0.6 : 1.0;
                 let aimError = (Math.random() - 0.5) * 2 * settings.lineAccuracy * escapeMultiplier * urgency * (Math.PI / 180);
 
                 // Micro-correction: if this direction is close to a previous foul,
@@ -3802,7 +3852,7 @@ export class AI {
                       '| Power:', desperateEscape.power.toFixed(1));
 
                 const settings2 = this.getCurrentPersona();
-                const urgency2 = this.game.consecutiveMisses >= 2 ? 0.3 : 1.0;
+                const urgency2 = this.game.consecutiveMisses >= 2 ? 0.3 : this.game.consecutiveMisses === 1 ? 0.6 : 1.0;
                 let aimError2 = (Math.random() - 0.5) * 2 * settings2.lineAccuracy * 0.7 * urgency2 * (Math.PI / 180);
 
                 // Micro-correction from foul history — nudge toward intended target
@@ -3861,7 +3911,7 @@ export class AI {
             const settings = this.getCurrentPersona();
 
             // Apply aim error based on difficulty, tighter when facing frame forfeit
-            const urgency = this.game.consecutiveMisses >= 2 ? 0.3 : 1.0;
+            const urgency = this.game.consecutiveMisses >= 2 ? 0.3 : this.game.consecutiveMisses === 1 ? 0.6 : 1.0;
             let aimError = (Math.random() - 0.5) * 2 * settings.lineAccuracy * urgency * (Math.PI / 180);
 
             // Mild foul avoidance on safety shots
@@ -3925,7 +3975,7 @@ export class AI {
                       '| bounces:', lastResortEscape.bounces, '| nearMiss:', !!lastResortEscape.isNearMiss);
 
                 const settings3 = this.getCurrentPersona();
-                const urgency3 = this.game.consecutiveMisses >= 2 ? 0.3 : 1.0;
+                const urgency3 = this.game.consecutiveMisses >= 2 ? 0.3 : this.game.consecutiveMisses === 1 ? 0.6 : 1.0;
                 let aimError3 = (Math.random() - 0.5) * 2 * settings3.lineAccuracy * 0.5 * urgency3 * (Math.PI / 180);
 
                 // Micro-correction from foul history
@@ -3984,7 +4034,7 @@ export class AI {
         const power = Math.max(12, Math.min(25, 8 + bestDist / 50));
 
         const settings = this.getCurrentPersona();
-        const urgency = this.game.consecutiveMisses >= 2 ? 0.3 : 1.0;
+        const urgency = this.game.consecutiveMisses >= 2 ? 0.3 : this.game.consecutiveMisses === 1 ? 0.6 : 1.0;
         let aimError = (Math.random() - 0.5) * 2 * settings.lineAccuracy * urgency * (Math.PI / 180);
 
         const adjustedDir = Vec2.rotate(direction, aimError);

@@ -1206,6 +1206,7 @@ export class Game {
         this.playerHasHadTurn = { 1: false, 2: false };
         this.breakShotPlayer = this.currentPlayer;
         this.coloursClearancePlayer = null;
+        this.consecutiveMisses = 0;
 
         // Recreate balls based on game mode
         const tableConfig = Constants.TABLE_CONFIGS ? Constants.TABLE_CONFIGS[this.tableStyle] : null;
@@ -2509,6 +2510,11 @@ export class Game {
             highestBreak: this.highestBreak,
             snookerStats: this.matchStats,
 
+            // Clearance tracking
+            playerHasHadTurn: { ...this.playerHasHadTurn },
+            breakShotPlayer: this.breakShotPlayer,
+            coloursClearancePlayer: this.coloursClearancePlayer,
+
             // Game state for proper resume
             state: this.state
         };
@@ -2568,6 +2574,17 @@ export class Game {
                 }
             }
             this.cueBall = this.balls.find(b => b.number === 0);
+        }
+
+        // Restore clearance tracking
+        if (data.playerHasHadTurn) {
+            this.playerHasHadTurn = { ...data.playerHasHadTurn };
+        }
+        if (data.breakShotPlayer !== undefined) {
+            this.breakShotPlayer = data.breakShotPlayer;
+        }
+        if (data.coloursClearancePlayer !== undefined) {
+            this.coloursClearancePlayer = data.coloursClearancePlayer;
         }
 
         // Reset transient state

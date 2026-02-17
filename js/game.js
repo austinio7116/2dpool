@@ -58,6 +58,7 @@ export class Game {
 
         // Pool break tracking (consecutive pots in a visit)
         this.poolCurrentBreak = 0;              // balls potted consecutively this visit
+        this.currentVisitPots = [];             // ball numbers potted legally this visit
         this.playerHasHadTurn = { 1: false, 2: false }; // track if player ever had a turn
 
         // 9-ball specific
@@ -189,6 +190,7 @@ export class Game {
 
         // Clearance tracking
         this.playerHasHadTurn = { 1: false, 2: false };
+        this.currentVisitPots = [];
         this.breakShotPlayer = this.currentPlayer;
         this.coloursClearancePlayer = null; // snooker: who started clearing colours
 
@@ -1075,8 +1077,9 @@ export class Game {
         // Reset consecutive misses when player changes (3 miss rule is per-player)
         this.consecutiveMisses = 0;
 
-        // Reset pool break counter for new player
+        // Reset pool break counter and visit pots for new player
         this.poolCurrentBreak = 0;
+        this.currentVisitPots = [];
 
         // Snooker: if colours phase started and player switches, clearance is broken
         if (this.mode === GameMode.SNOOKER && this.colorsPhase) {
@@ -1209,6 +1212,7 @@ export class Game {
 
         // Reset per-frame tracking (matchStats persists across frames)
         this.poolCurrentBreak = 0;
+        this.currentVisitPots = [];
         this.playerHasHadTurn = { 1: false, 2: false };
         this.breakShotPlayer = this.currentPlayer;
         this.coloursClearancePlayer = null;
@@ -1252,8 +1256,11 @@ export class Game {
     endGame() {
         this.state = GameState.GAME_OVER;
 
-        // Finalize any in-progress break
+        // Record final pots into currentVisitPots (pool modes end before updatePoolStats)
         if (this.mode !== GameMode.SNOOKER && this.mode !== GameMode.FREE_PLAY) {
+            for (const b of this.ballsPocketed) {
+                if (!b.isCueBall) this.currentVisitPots.push(b.number);
+            }
             this.finalizePoolBreak();
         }
 
@@ -1368,6 +1375,7 @@ export class Game {
 
         // Clearance tracking
         info.playerHasHadTurn = { ...this.playerHasHadTurn };
+        info.currentVisitPots = [...this.currentVisitPots];
         info.breakShotPlayer = this.breakShotPlayer;
 
         // Table style for snooker variant detection
@@ -2466,10 +2474,15 @@ export class Game {
             // Foul ends the break
             this.finalizePoolBreak();
             this.poolCurrentBreak = 0;
+            this.currentVisitPots = [];
         } else if (legalPots > 0 && this.turnContinues) {
             // Legal pot - increment break and pot stats
             this.matchStats[playerKey].potShots++;
             this.poolCurrentBreak += legalPots;
+            // Track which balls were potted in this visit
+            for (const b of this.ballsPocketed) {
+                if (!b.isCueBall) this.currentVisitPots.push(b.number);
+            }
             // Update high break immediately
             this.matchStats[playerKey].highBreak = Math.max(
                 this.matchStats[playerKey].highBreak,

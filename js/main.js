@@ -991,24 +991,34 @@ class PoolGame {
         const mode = gameInfo.mode;
         const stats = gameInfo.matchStats;
 
-        // 8-ball clearance: winner potted all balls without opponent getting a turn
+        // 8-ball clearance: potted all group balls + 8-ball in one visit
         if (mode === '8ball') {
-            // Check if opponent (player 2) never had a turn
-            if (!gameInfo.playerHasHadTurn[2]) {
-                if (gameInfo.breakShotPlayer === 1) {
+            const visitPots = gameInfo.currentVisitPots || [];
+            const group = gameInfo.player1Group;
+            const has8 = visitPots.includes(8);
+            let groupBalls;
+            if (group === 'solid') {
+                groupBalls = [1, 2, 3, 4, 5, 6, 7];
+            } else if (group === 'stripe') {
+                groupBalls = [9, 10, 11, 12, 13, 14, 15];
+            }
+            if (has8 && groupBalls && groupBalls.every(n => visitPots.includes(n))) {
+                this.unlockAchievement('clearance_8ball');
+                if (gameInfo.breakShotPlayer === 1 && !gameInfo.playerHasHadTurn[2]) {
                     this.unlockAchievement('clearance_8ball_break');
                 }
-                this.unlockAchievement('clearance_8ball');
             }
         }
 
-        // 9-ball clearance
+        // 9-ball clearance: potted all 9 balls in one visit
         if (mode === '9ball') {
-            if (!gameInfo.playerHasHadTurn[2]) {
-                if (gameInfo.breakShotPlayer === 1) {
+            const visitPots = gameInfo.currentVisitPots || [];
+            const allNine = [1, 2, 3, 4, 5, 6, 7, 8, 9];
+            if (allNine.every(n => visitPots.includes(n))) {
+                this.unlockAchievement('clearance_9ball');
+                if (gameInfo.breakShotPlayer === 1 && !gameInfo.playerHasHadTurn[2]) {
                     this.unlockAchievement('clearance_9ball_break');
                 }
-                this.unlockAchievement('clearance_9ball');
             }
         }
 

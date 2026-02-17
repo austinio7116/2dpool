@@ -825,6 +825,7 @@
                         <button id="btn-nominate-color" class="game-menu-item hidden">Nominate Colour</button>
                         <button id="btn-balls-upright" class="game-menu-item hidden">Balls Upright</button>
                         <button id="btn-concede-frame" class="game-menu-item hidden">Concede Frame</button>
+                        <button id="btn-frame-stats" class="game-menu-item hidden">Frame Stats</button>
                         <button id="btn-quit-game" class="game-menu-item">Quit to Menu</button>
                     </div>
                     <span id="hud-mode-name">8-Ball</span>
@@ -883,6 +884,16 @@
             <div id="freeplay-controls" class="hidden">
                 <button id="btn-rerack" class="menu-btn small">Re-rack</button>
                 <button id="btn-exit-freeplay" class="menu-btn small">Exit</button>
+            </div>
+
+            <!-- Mid-frame stats overlay -->
+            <div id="frame-stats-overlay" class="frame-stats-overlay hidden">
+                <div class="frame-stats-panel">
+                    <div class="frame-stats-title">Frame Statistics</div>
+                    <div id="frame-stats-scores" class="frame-stats-scores"></div>
+                    <div id="frame-stats-content"></div>
+                    <button id="btn-close-frame-stats" class="menu-btn small">Close</button>
+                </div>
             </div>
 
             <!-- Career Mode Modal -->

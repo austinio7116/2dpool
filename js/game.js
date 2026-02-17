@@ -78,6 +78,8 @@ export class Game {
         this.player2Score = 0;
         this.currentBreak = 0;
         this.highestBreak = 0;
+        this.breakHistory = [];
+        this.currentBreakPots = [];
         this.snookerTarget = 'red';         // 'red', 'color', or specific color name
         this.colorsPhase = false;           // True when potting colors in order
         this.nextColorInSequence = 'yellow';
@@ -173,6 +175,8 @@ export class Game {
         this.player2Score = 0;
         this.currentBreak = 0;
         this.highestBreak = 0;
+        this.breakHistory = [];
+        this.currentBreakPots = [];
         this.snookerTarget = 'red';
         this.colorsPhase = false;
         this.nextColorInSequence = 'yellow';
@@ -1197,6 +1201,8 @@ export class Game {
         this.player1Score = 0;
         this.player2Score = 0;
         this.currentBreak = 0;
+        this.breakHistory = [];
+        this.currentBreakPots = [];
         this.snookerTarget = 'red';
         this.colorsPhase = false;
         this.nextColorInSequence = 'yellow';
@@ -1383,6 +1389,8 @@ export class Game {
             info.freeBallNomination = this.freeBallNomination;
             info.snookerStats = this.matchStats;
             info.coloursClearancePlayer = this.coloursClearancePlayer;
+            info.breakHistory = this.breakHistory;
+            info.currentBreakPots = this.currentBreakPots;
         }
 
         return info;
@@ -1617,6 +1625,27 @@ export class Game {
             this.awardSnookerPoints(this.currentPlayer, turnScore);
             this.currentBreak += turnScore;
             this.highestBreak = Math.max(this.highestBreak, this.currentBreak);
+
+            // Record pots for break tracking
+            let breakRunning = this.currentBreak - turnScore;
+            for (const b of pocketed) {
+                if (b.isCueBall) continue;
+                let potPoints;
+                if (pottedFreeBall && b === pottedFreeBall) {
+                    // Free ball: scores as the ball-on
+                    const values = { 'red': 1, 'yellow': 2, 'green': 3, 'brown': 4, 'blue': 5, 'pink': 6, 'black': 7 };
+                    potPoints = values[this.snookerTarget] || 1;
+                } else {
+                    potPoints = this.getSnookerBallValue(b);
+                }
+                breakRunning += potPoints;
+                this.currentBreakPots.push({
+                    ball: b.isRed ? 'red' : b.colorName,
+                    points: potPoints,
+                    runningTotal: breakRunning,
+                    isFreeBall: !!(pottedFreeBall && b === pottedFreeBall)
+                });
+            }
 
             // Track pot stats
             const potPlayerKey = this.currentPlayer === 1 ? 'player1' : 'player2';
@@ -2401,7 +2430,26 @@ export class Game {
                 this.matchStats[playerKey].highBreak,
                 this.currentBreak
             );
+            this.breakHistory.push({
+                player: this.currentPlayer,
+                pots: [...this.currentBreakPots],
+                total: this.currentBreak,
+                isClearance: this.detectClearance(this.currentBreakPots)
+            });
         }
+        this.currentBreakPots = [];
+    }
+
+    detectClearance(pots) {
+        if (!pots || pots.length === 0) return false;
+        const tableConfig = Constants.TABLE_CONFIGS ? Constants.TABLE_CONFIGS[this.tableStyle] : null;
+        const redCount = (tableConfig && tableConfig.redCount) ? tableConfig.redCount : 6;
+        const expectedPotCount = redCount * 2 + 6;
+        if (pots.length < expectedPotCount) return false;
+        if (pots.filter(p => p.ball === 'red').length !== redCount) return false;
+        const finalSix = pots.slice(-6).map(p => p.ball);
+        const expected = ['yellow', 'green', 'brown', 'blue', 'pink', 'black'];
+        return finalSix.every((b, i) => b === expected[i]);
     }
 
     // Track pool stats after each shot evaluation (8-ball, 9-ball, UK 8-ball)
@@ -2510,6 +2558,10 @@ export class Game {
             highestBreak: this.highestBreak,
             snookerStats: this.matchStats,
 
+            // Break tracking
+            breakHistory: this.breakHistory,
+            currentBreakPots: this.currentBreakPots,
+
             // Clearance tracking
             playerHasHadTurn: { ...this.playerHasHadTurn },
             breakShotPlayer: this.breakShotPlayer,
@@ -2575,6 +2627,10 @@ export class Game {
             }
             this.cueBall = this.balls.find(b => b.number === 0);
         }
+
+        // Restore break tracking
+        this.breakHistory = data.breakHistory || [];
+        this.currentBreakPots = data.currentBreakPots || [];
 
         // Restore clearance tracking
         if (data.playerHasHadTurn) {

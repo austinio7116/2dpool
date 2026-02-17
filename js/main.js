@@ -162,6 +162,10 @@ class PoolGame {
         // Menu callbacks
         this.ui.onBallsUpright = () => this.animateBallsUpright();
         this.ui.onConcedeFrame = () => this.concedeFrame();
+        this.ui.onFrameStats = () => {
+            const gameInfo = this.game.getGameInfo();
+            this.ui.showFrameStats(gameInfo);
+        };
 
         // Career callbacks
         this.careerUI.onPlayMatch = (mode, opponentId, bestOf) => {
@@ -1024,12 +1028,15 @@ class PoolGame {
                 this.unlockAchievement('snooker_clear_colours');
             }
 
-            // Full clearance: player 1 never lost turn for entire frame
-            if (!gameInfo.playerHasHadTurn[2]) {
-                if (isFullSnooker) {
-                    this.unlockAchievement('clearance_full_snooker');
-                } else {
-                    this.unlockAchievement('clearance_mini_snooker');
+            // Full clearance: check break history for a clearance break by player 1
+            if (gameInfo.breakHistory) {
+                const hasClearance = gameInfo.breakHistory.some(b => b.player === 1 && b.isClearance);
+                if (hasClearance) {
+                    if (isFullSnooker) {
+                        this.unlockAchievement('clearance_full_snooker');
+                    } else {
+                        this.unlockAchievement('clearance_mini_snooker');
+                    }
                 }
             }
 

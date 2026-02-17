@@ -77,7 +77,12 @@ export class UI {
         this.btnPickupBall = document.getElementById('btn-pickup-ball');
         this.btnNominateColor = document.getElementById('btn-nominate-color');
         this.btnConcedeFrame = document.getElementById('btn-concede-frame');
+        this.btnFrameStats = document.getElementById('btn-frame-stats');
         this.btnQuitGame = document.getElementById('btn-quit-game');
+        this.frameStatsOverlay = document.getElementById('frame-stats-overlay');
+        this.frameStatsContent = document.getElementById('frame-stats-content');
+        this.frameStatsScores = document.getElementById('frame-stats-scores');
+        this.btnCloseFrameStats = document.getElementById('btn-close-frame-stats');
         this.soundToggle = document.getElementById('sound-toggle');
         this.speedSlider = document.getElementById('speed-slider');
         this.speedValue = document.getElementById('speed-value');
@@ -289,6 +294,7 @@ export class UI {
         this.onResumeMatch = null;
         this.onBallsUpright = null;
         this.onConcedeFrame = null;
+        this.onFrameStats = null;
         this.onSnookerDecision = null;        // Snooker foul decision callback
         this.onColorNomination = null;         // Snooker color nomination callback
         this.onFreeBallNomination = null;      // Snooker free ball nomination callback
@@ -444,6 +450,24 @@ export class UI {
             this.closeGameMenu();
             if (this.onConcedeFrame) {
                 this.onConcedeFrame();
+            }
+        });
+
+        this.btnFrameStats.addEventListener('click', () => {
+            this.closeGameMenu();
+            if (this.onFrameStats) {
+                this.onFrameStats();
+            }
+        });
+
+        this.btnCloseFrameStats.addEventListener('click', () => {
+            this.hideFrameStats();
+        });
+
+        // Close frame stats on overlay click (outside panel)
+        this.frameStatsOverlay.addEventListener('click', (e) => {
+            if (e.target === this.frameStatsOverlay) {
+                this.hideFrameStats();
             }
         });
 
@@ -2530,6 +2554,10 @@ export class UI {
 
         // Show Concede Frame for snooker mode
         this.btnConcedeFrame.classList.toggle('hidden', !isSnooker);
+
+        // Show Frame Stats for all non-freeplay modes
+        const isFreeplay = this.currentMode === GameMode.FREE_PLAY;
+        this.btnFrameStats.classList.toggle('hidden', isFreeplay);
     }
 
     // Show game over screen
@@ -3296,12 +3324,14 @@ export class UI {
         let rows = '';
 
         if (isSnooker) {
-            // Snooker: show break in points
+            const p1Best = this.getBestBreakRecord(gameInfo, 1);
+            const p2Best = this.getBestBreakRecord(gameInfo, 2);
+            // Snooker: show break in points with ball sequence
             rows += `
                 <tr>
                     <td>High Break</td>
-                    <td>${p1.highBreak}</td>
-                    <td>${p2.highBreak}</td>
+                    <td>${p1.highBreak}${p1Best ? '<div class="break-balls">' + this.renderBreakBalls(p1Best) + '</div>' : ''}</td>
+                    <td>${p2.highBreak}${p2Best ? '<div class="break-balls">' + this.renderBreakBalls(p2Best) + '</div>' : ''}</td>
                 </tr>`;
         } else {
             // Pool: show longest break as consecutive balls potted
@@ -3351,6 +3381,134 @@ export class UI {
                 <tbody>${rows}</tbody>
             </table>
         `;
+    }
+
+    showFrameStats(gameInfo) {
+        if (!gameInfo || !gameInfo.matchStats) return;
+
+        const stats = gameInfo.matchStats;
+        const isSnooker = gameInfo.mode === 'snooker';
+
+        // Show scores for snooker
+        if (isSnooker) {
+            const p1Name = this.getPlayerName(1);
+            const p2Name = this.getPlayerName(2);
+            this.frameStatsScores.innerHTML = `${p1Name} <span style="color:#ffd700">${gameInfo.player1Score || 0}</span><span class="score-sep">-</span><span style="color:#ffd700">${gameInfo.player2Score || 0}</span> ${p2Name}`;
+        } else {
+            this.frameStatsScores.innerHTML = '';
+        }
+
+        // Reuse showMatchStats rendering logic but target the overlay content
+        const p1 = stats.player1;
+        const p2 = stats.player2;
+        const p1Name = this.getPlayerName(1);
+        const p2Name = this.getPlayerName(2);
+        const potPct1 = p1.totalShots > 0 ? Math.round((p1.potShots / p1.totalShots) * 100) : 0;
+        const potPct2 = p2.totalShots > 0 ? Math.round((p2.potShots / p2.totalShots) * 100) : 0;
+
+        let rows = '';
+
+        if (isSnooker) {
+            const p1Best = this.getBestBreakRecord(gameInfo, 1);
+            const p2Best = this.getBestBreakRecord(gameInfo, 2);
+            rows += `
+                <tr>
+                    <td>High Break</td>
+                    <td>${p1.highBreak}${p1Best ? '<div class="break-balls">' + this.renderBreakBalls(p1Best) + '</div>' : ''}</td>
+                    <td>${p2.highBreak}${p2Best ? '<div class="break-balls">' + this.renderBreakBalls(p2Best) + '</div>' : ''}</td>
+                </tr>`;
+
+            // Show current break if active
+            if (gameInfo.currentBreak > 0) {
+                const currentBreakBalls = gameInfo.currentBreakPots ? '<div class="break-balls">' + this.renderBreakBalls({ pots: gameInfo.currentBreakPots }) + '</div>' : '';
+                const isP1 = gameInfo.currentPlayer === 1;
+                rows += `
+                    <tr>
+                        <td>Current Break</td>
+                        <td>${isP1 ? gameInfo.currentBreak + currentBreakBalls : '-'}</td>
+                        <td>${!isP1 ? gameInfo.currentBreak + currentBreakBalls : '-'}</td>
+                    </tr>`;
+            }
+        } else {
+            rows += `
+                <tr>
+                    <td>Longest Break</td>
+                    <td>${p1.highBreak || '-'}</td>
+                    <td>${p2.highBreak || '-'}</td>
+                </tr>`;
+        }
+
+        rows += `
+            <tr>
+                <td>Pot Success</td>
+                <td>${potPct1}%</td>
+                <td>${potPct2}%</td>
+            </tr>`;
+
+        if (isSnooker) {
+            const longPotPct1 = p1.longPotAttempts > 0 ? Math.round((p1.longPots / p1.longPotAttempts) * 100) : 0;
+            const longPotPct2 = p2.longPotAttempts > 0 ? Math.round((p2.longPots / p2.longPotAttempts) * 100) : 0;
+            rows += `
+                <tr>
+                    <td>Long Pots</td>
+                    <td>${p1.longPotAttempts > 0 ? p1.longPots + '/' + p1.longPotAttempts + ' (' + longPotPct1 + '%)' : '-'}</td>
+                    <td>${p2.longPotAttempts > 0 ? p2.longPots + '/' + p2.longPotAttempts + ' (' + longPotPct2 + '%)' : '-'}</td>
+                </tr>`;
+        }
+
+        rows += `
+            <tr>
+                <td>Fouls</td>
+                <td>${p1.fouls}</td>
+                <td>${p2.fouls}</td>
+            </tr>`;
+
+        this.frameStatsContent.innerHTML = `
+            <table class="snooker-stats-table">
+                <thead>
+                    <tr>
+                        <th></th>
+                        <th>${p1Name}</th>
+                        <th>${p2Name}</th>
+                    </tr>
+                </thead>
+                <tbody>${rows}</tbody>
+            </table>
+        `;
+
+        this.frameStatsOverlay.classList.remove('hidden');
+    }
+
+    hideFrameStats() {
+        this.frameStatsOverlay.classList.add('hidden');
+    }
+
+    getBestBreakRecord(gameInfo, player) {
+        if (!gameInfo.breakHistory) return null;
+        const playerBreaks = gameInfo.breakHistory.filter(b => b.player === player && b.total > 0);
+        if (playerBreaks.length === 0) return null;
+        return playerBreaks.reduce((best, b) => b.total > best.total ? b : best);
+    }
+
+    renderBreakBalls(breakRecord) {
+        const colorMap = {
+            'red': '#d32f2f', 'yellow': '#fdd835', 'green': '#388e3c',
+            'brown': '#795548', 'blue': '#1565c0', 'pink': '#e91e8a', 'black': '#222'
+        };
+        const order = ['red', 'yellow', 'green', 'brown', 'blue', 'pink', 'black'];
+        // Count each ball colour
+        const counts = {};
+        for (const p of breakRecord.pots) {
+            counts[p.ball] = (counts[p.ball] || 0) + 1;
+        }
+        return order.filter(b => counts[b]).map(b => {
+            const color = colorMap[b];
+            const border = b === 'black' ? 'border:1px solid #666;' : '';
+            const count = counts[b];
+            const textColor = (b === 'yellow' || b === 'green') ? '#000' : '#fff';
+            const label = count > 1 ? `<span class="break-ball-count" style="color:${textColor}">${count}</span>` : '';
+            return `<span class="break-ball-dot" style="background:${color};${border}" title="${b} x${count}">${label}</span>`;
+        }).join('');
     }
 
     // Hide match stats display

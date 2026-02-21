@@ -1387,11 +1387,20 @@ export class AI {
             const topSpinSpread = 0.04 + breakImprecision * 0.3;
             const topSpinVar = (Math.random() - 0.5) * topSpinSpread;
             const spin = { x: sideSpinBase, y: topSpinVar };
-            aiLog('Break shot params:', { power: power.toFixed(1), spin, aimError: (aimError * 180 / Math.PI).toFixed(2) + '°' });
+
+            // Compensate aim for swerve caused by sidespin.
+            // Right english swerves the ball right, so aim further left to compensate.
+            // Scale by distance — full-size snooker needs more compensation than mini.
+            const distToTarget = Vec2.distance(cueBall.position, targetBall.position);
+            const swerveCompDeg = sideSpinBase * 0.2 * (distToTarget / 400);
+            const swerveCompRad = swerveCompDeg * (Math.PI / 180);
+            const compensatedDir = Vec2.rotate(adjustedDir, -swerveCompRad);
+
+            aiLog('Break shot params:', { power: power.toFixed(1), spin, aimError: (aimError * 180 / Math.PI).toFixed(2) + '°', swerveComp: swerveCompDeg.toFixed(2) + '°' });
             aiLogGroupEnd();
 
             if (this.onShot) {
-                this.onShot(Vec2.normalize(adjustedDir), power, spin);
+                this.onShot(Vec2.normalize(compensatedDir), power, spin);
             }
             return; // Early return for snooker break
         } else {

@@ -1392,7 +1392,7 @@ export class AI {
             // Right english swerves the ball right, so aim further left to compensate.
             // Scale by distance — full-size snooker needs more compensation than mini.
             const distToTarget = Vec2.distance(cueBall.position, targetBall.position);
-            const swerveCompDeg = sideSpinBase * 0.2 * (distToTarget / 400);
+            const swerveCompDeg = sideSpinBase * 0.25 * (distToTarget / 400);
             const swerveCompRad = swerveCompDeg * (Math.PI / 180);
             const compensatedDir = Vec2.rotate(adjustedDir, -swerveCompRad);
 

@@ -595,8 +595,17 @@ class PoolGame {
         const cueBall = this.game.cueBall;
 
         // 1. Calculate Linear Velocity (Shot Power)
-        // power is roughly 0-20. 
-        const velocity = Vec2.multiply(direction, power);
+        // power is roughly 0-20.
+        // Apply squirt (deflection): sidespin causes the cue ball to deflect
+        // slightly opposite to the spin direction at the moment of impact.
+        // Max squirt ~2 degrees at full sidespin, scaled by power (less squirt at high power).
+        const maxSquirtDeg = 2;
+        const squirtRad = spin.x * maxSquirtDeg * (Math.PI / 180) * (1 - power / 40);
+        const squirtedDir = {
+            x: direction.x * Math.cos(squirtRad) - direction.y * Math.sin(squirtRad),
+            y: direction.x * Math.sin(squirtRad) + direction.y * Math.cos(squirtRad)
+        };
+        const velocity = Vec2.multiply(squirtedDir, power);
         cueBall.velocity.x = velocity.x;
         cueBall.velocity.y = velocity.y;
         

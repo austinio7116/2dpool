@@ -537,23 +537,41 @@ export class PlanckPhysics {
         const radius = ball.radius / SCALE;
         const omega = ball.spin; 
 
-        // 1. Calculate Contact Point Velocity
-        const v_cp_x = v.x + omega.y * radius;
-        const v_cp_y = v.y - omega.x * radius;
+        // 1. Calculate Contact Point Velocity (base: topspin/backspin only)
+        const base_cp_x = v.x + omega.y * radius;
+        const base_cp_y = v.y - omega.x * radius;
+        const baseSlipSpeed = Math.sqrt(base_cp_x * base_cp_x + base_cp_y * base_cp_y);
+
+        // Swerve: For the cue ball, fold sidespin (spinZ) into the slip direction.
+        // SpinZ creates a lateral slip component perpendicular to travel direction.
+        // We use the modified direction for the friction force, but the original
+        // baseSlipSpeed for friction magnitude/thresholds so sidespin doesn't
+        // artificially increase deceleration.
+        let v_cp_x = base_cp_x;
+        let v_cp_y = base_cp_y;
+        if (ball.number === 0 && speed > 0.05) {
+            const spinZ = body.getAngularVelocity();
+            const swerveScale = 0.025;
+            const lateralSlip = spinZ * radius * swerveScale;
+            v_cp_x += lateralSlip * (-v.y / speed);
+            v_cp_y += lateralSlip * (v.x / speed);
+        }
+
         const slipSpeed = Math.sqrt(v_cp_x * v_cp_x + v_cp_y * v_cp_y);
 
         // 2. Determine Friction Impulse
         // TWEAK: Increased threshold from 0.05 to 0.15
         // This forces more "slightly imperfect" rolls to be treated as pure rolling (drag only)
-        const isSlipping = slipSpeed > 0.15;
-        
+        // Use baseSlipSpeed for threshold/magnitude so sidespin doesn't add extra drag
+        const isSlipping = baseSlipSpeed > 0.15;
+
         if (isSlipping) {
             // Dynamic Friction (Safe Zone Logic from previous step)
-            const slipThreshold = 2.5; 
-            let dynamicMu = 0.025;     
+            const slipThreshold = 2.5;
+            let dynamicMu = 0.025;
 
-            if (slipSpeed > slipThreshold) {
-                dynamicMu += (slipSpeed - slipThreshold) * 0.12;
+            if (baseSlipSpeed > slipThreshold) {
+                dynamicMu += (baseSlipSpeed - slipThreshold) * 0.12;
             }
             dynamicMu = Math.min(dynamicMu, 0.35);
 

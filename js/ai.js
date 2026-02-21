@@ -185,12 +185,26 @@ export class AI {
                     const cueBall = this.game.cueBall;
                     preShotCueBallPos = cueBall ? Vec2.clone(cueBall.position) : null;
                 }
+
+                // Record the ball that was actually hit (the cause of the foul)
+                // This lets us avoid that specific ball on the next attempt
+                const hitBall = this.game.firstBallHit;
+                let hitBallInfo = null;
+                if (hitBall) {
+                    hitBallInfo = {
+                        number: hitBall.number,
+                        position: Vec2.clone(hitBall.position),
+                        radius: hitBall.radius || 12
+                    };
+                }
+
                 this.foulHistory.push({
                     direction: Vec2.clone(foulShot.direction),
                     targetId: foulShot.target.id || foulShot.target.number,
                     targetPos: foulShot.target.position ? Vec2.clone(foulShot.target.position) : null,
                     cueBallPos: preShotCueBallPos,
-                    isSafetyShot: foulShot.isSafetyShot || false
+                    isSafetyShot: foulShot.isSafetyShot || false,
+                    hitBall: hitBallInfo  // The ball that was illegally contacted
                 });
                 // Keep only last 4 fouls
                 if (this.foulHistory.length > 4) {
@@ -205,6 +219,58 @@ export class AI {
     clearFoulTracking() {
         this.lastFoulShot = null;
         this.foulHistory = [];
+    }
+
+    // Calculate angular adjustment to avoid balls that caused previous fouls.
+    // Instead of random jitter, this checks if any foul-causing ball is near the
+    // intended shot path and steers away from it by the minimum angle needed.
+    getFoulAvoidanceAngle(cueBallPos, shotDirection) {
+        if (this.foulHistory.length === 0) return 0;
+
+        const cueBallRadius = this.game.cueBall?.radius || 12;
+        let totalAvoidance = 0;
+
+        for (const foul of this.foulHistory) {
+            if (!foul.hitBall) continue;
+
+            // Find the current position of the ball that caused the foul
+            const foulBall = this.game.balls.find(b =>
+                !b.pocketed && b.number === foul.hitBall.number
+            );
+            if (!foulBall) continue;
+
+            // Check if this ball is near our intended shot path
+            const toBall = Vec2.subtract(foulBall.position, cueBallPos);
+            const projection = Vec2.dot(toBall, shotDirection);
+
+            // Only care about balls ahead of us along the shot path
+            if (projection < 0) continue;
+
+            // Perpendicular distance from ball center to shot path
+            const closestPoint = Vec2.add(cueBallPos, Vec2.multiply(shotDirection, projection));
+            const perpDist = Vec2.distance(foulBall.position, closestPoint);
+            const ballRadius = foulBall.radius || 12;
+            const clearance = ballRadius + cueBallRadius + 2; // 2px safety margin
+
+            if (perpDist < clearance * 1.5) {
+                // Ball is near our path — calculate which side to avoid
+                // Cross product determines which side the ball is on
+                const cross = shotDirection.x * toBall.y - shotDirection.y * toBall.x;
+                // Angle needed to clear the ball (with margin)
+                const avoidAngle = Math.asin(Math.min(1, clearance / Math.max(projection, clearance)));
+                // Steer away from the ball (opposite side of cross product)
+                const correction = cross > 0 ? -avoidAngle : avoidAngle;
+
+                aiLog(`Foul avoidance: ball ${foulBall.number || foulBall.colorName} is ${perpDist.toFixed(0)}px from path, steering ${(correction * 180 / Math.PI).toFixed(1)}°`);
+
+                // Use the largest avoidance needed
+                if (Math.abs(correction) > Math.abs(totalAvoidance)) {
+                    totalAvoidance = correction;
+                }
+            }
+        }
+
+        return totalAvoidance;
     }
 
     // Get current visualization for rendering
@@ -3158,24 +3224,11 @@ export class AI {
         // Apply aim error based on difficulty (still as angle, but this is intentional variance)
         let aimError = (Math.random() - 0.5) * 2 * settings.lineAccuracy * (Math.PI / 180);
 
-        // UPDATED FOUL HANDLING
-        // Instead of random large shifts, use a deterministic shift if we are repeating
-        if (this.isSameShotAsFoul(shot)) {
-            // If we are here, it means the Planner chose the same shot again despite the filter 
-            // (or it's the only option). We must force a shift.
-            
-            // Check if we shifted positive or negative last time (heuristic) or just toggle
-            // For now, simply add a deterministic offset that is larger than the previous error
-            const avoidanceShift = 1.5 * (Math.PI / 180); 
-            
-            // Use a consistent offset based on turn number to toggle direction if needed, 
-            // or just alternate based on a property we add to 'this'
-            this._foulRetryToggle = !this._foulRetryToggle;
-            const sign = this._foulRetryToggle ? 1 : -1;
-            
-            aimError += (avoidanceShift * sign);
-            
-            aiLog(`Repeating foul shot detected. Forcing deterministic shift: ${(sign * 1.5).toFixed(1)}°`);
+        // Targeted foul avoidance: if a ball that caused a previous foul is near
+        // this shot's path, steer away from it by the minimum angle needed to clear
+        const foulAvoidance = this.getFoulAvoidanceAngle(cueBallPos, Vec2.normalize(direction));
+        if (foulAvoidance !== 0) {
+            aimError += foulAvoidance;
         }
 
         direction = Vec2.rotate(direction, aimError);
@@ -3247,12 +3300,11 @@ export class AI {
         // Apply aim error
         let aimError = (Math.random() - 0.5) * 2 * settings.lineAccuracy * (Math.PI / 180);
 
-        // Check foul avoidance
-        const targetId = shot.target.id || shot.target.number;
-        if (this.lastFoulShot && this.lastFoulShot.targetId === targetId && this.lastFoulShot.isFreeingShot) {
-            const foulAvoidanceAngle = (Math.random() > 0.5 ? 1 : -1) * (5 + Math.random() * 10) * (Math.PI / 180);
-            aimError += foulAvoidanceAngle;
-            aiLog('Foul avoidance: adding', (foulAvoidanceAngle * 180 / Math.PI).toFixed(1) + '° to freeing shot');
+        // Targeted foul avoidance: steer away from balls that caused previous fouls
+        const cueBallPos = this.game.cueBall.position;
+        const foulAvoidance = this.getFoulAvoidanceAngle(cueBallPos, Vec2.normalize(shot.direction));
+        if (foulAvoidance !== 0) {
+            aimError += foulAvoidance;
         }
 
         const direction = Vec2.rotate(shot.direction, aimError);
@@ -3743,12 +3795,50 @@ export class AI {
             return;
         }
 
-        aiLog('No high-confidence pot — playing safe to ensure legal contact');
-        aiLogGroupEnd();
+        aiLog('No high-confidence pot — aiming for safe center-ball contact');
 
-        // Fall back to safety play — the existing safety logic will handle
-        // making legal contact with reduced aim error (the urgency multiplier
-        // at consecutiveMisses >= 1 will apply in the safety execution path)
+        // Instead of falling back to thin-cut safeties (which risk missing),
+        // aim directly at the center of the nearest reachable target ball
+        // to ensure legal contact and reset the miss counter
+        const validTargets = this.getValidTargets();
+        let bestTarget = null;
+        let bestDist = Infinity;
+        for (const target of validTargets) {
+            const dist = Vec2.distance(cueBall.position, target.position);
+            if (this.canLegallyReachBall(cueBall.position, target) && dist < bestDist) {
+                bestDist = dist;
+                bestTarget = target;
+            }
+        }
+        // Fallback: closest target even if partially blocked
+        if (!bestTarget) {
+            for (const target of validTargets) {
+                const dist = Vec2.distance(cueBall.position, target.position);
+                if (dist < bestDist) {
+                    bestDist = dist;
+                    bestTarget = target;
+                }
+            }
+        }
+
+        if (bestTarget) {
+            const targetName = bestTarget.colorName || bestTarget.number || 'ball';
+            aiLog('Aiming at center of', targetName, 'for safe contact');
+            const direction = Vec2.normalize(Vec2.subtract(bestTarget.position, cueBall.position));
+            const settings = this.getCurrentPersona();
+            const aimError = (Math.random() - 0.5) * 2 * settings.lineAccuracy * 0.3 * (Math.PI / 180);
+            const adjustedDir = Vec2.rotate(direction, aimError);
+            // Use moderate power to keep cue ball safe
+            const power = 0.25 + Math.random() * 0.15;
+            aiLogGroupEnd();
+            if (this.onShot) {
+                this.onShot(Vec2.normalize(adjustedDir), power, { x: 0, y: 0 });
+            }
+            return;
+        }
+
+        // Last resort: generic safety
+        aiLogGroupEnd();
         this.playSafety();
     }
 
@@ -3914,13 +4004,12 @@ export class AI {
             const urgency = this.game.consecutiveMisses >= 2 ? 0.3 : this.game.consecutiveMisses === 1 ? 0.6 : 1.0;
             let aimError = (Math.random() - 0.5) * 2 * settings.lineAccuracy * urgency * (Math.PI / 180);
 
-            // Mild foul avoidance on safety shots
-            if (this.foulHistory.length > 0) {
-                const foulCount = this.foulHistory.length;
-                const baseAvoid = 3 + foulCount * 2;
-                const foulAvoidanceAngle = (Math.random() > 0.5 ? 1 : -1) * (baseAvoid + Math.random() * 4) * (Math.PI / 180);
-                aimError += foulAvoidanceAngle;
-                aiLog(`Foul avoidance (${foulCount} fouls): adding ${(foulAvoidanceAngle * 180 / Math.PI).toFixed(1)}° to safety shot`);
+            // Targeted foul avoidance: if a ball that caused a previous foul is near
+            // this shot's path, steer away from it by the minimum angle needed to clear
+            const cueBallPos = this.game.cueBall.position;
+            const foulAvoidance = this.getFoulAvoidanceAngle(cueBallPos, Vec2.normalize(safetyShot.direction));
+            if (foulAvoidance !== 0) {
+                aimError += foulAvoidance;
             }
 
             const adjustedDir = Vec2.rotate(safetyShot.direction, aimError);

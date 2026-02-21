@@ -521,7 +521,7 @@ export class Input {
             // Touch: delta-based movement for precision (thumb doesn't obscure)
             const dx = p.x - this.spinTouchStart.x;
             const dy = p.y - this.spinTouchStart.y;
-            const sensitivity = this.spinIndicator.radius * 0.7;
+            const sensitivity = this.spinIndicator.radius * 2.0;
 
             this.spin.x = clamp(this.spinAtTouchStart.x + dx / sensitivity, -1, 1);
             this.spin.y = clamp(this.spinAtTouchStart.y + dy / sensitivity, -1, 1);

@@ -975,56 +975,124 @@ export class AI {
     }
 
     // Make decision after opponent commits a foul (WPBSA rules)
+    // Called from perspective of the NON-fouling player (us) deciding what to do
     makeSnookerFoulDecision(foulInfo) {
         aiLog('Making snooker foul decision:', foulInfo);
 
-        // Simple AI decision logic:
-        // 1. If we have good shots available, play on
-        // 2. If position is bad and restore is available, restore
-        // 3. Otherwise play on
-
-        const validTargets = this.getValidTargets();
         const cueBallPos = this.game.cueBall?.position;
 
-        if (!cueBallPos || validTargets.length === 0) {
-            // No valid targets, prefer restore if available
-            if (foulInfo.canRestore) {
-                aiLog('Decision: restore (no good shots)');
-                return 'restore';
-            }
-            aiLog('Decision: play (no restore available)');
-            return 'play';
-        }
-
-        // Evaluate current position
+        // Evaluate our best shot from the current cue ball position
         let bestShotScore = 0;
-        const pockets = this.table.pockets;
-
-        for (const target of validTargets) {
-            for (const pocket of pockets) {
-                const shot = this.evaluatePotentialShot(cueBallPos, target, pocket);
-                if (shot && shot.score > bestShotScore) {
-                    bestShotScore = shot.score;
+        if (cueBallPos) {
+            const validTargets = this.getValidTargets();
+            const pockets = this.table.pockets;
+            for (const target of validTargets) {
+                for (const pocket of pockets) {
+                    const shot = this.evaluatePotentialShot(cueBallPos, target, pocket);
+                    if (shot && shot.score > bestShotScore) {
+                        bestShotScore = shot.score;
+                    }
                 }
             }
         }
-
         aiLog('Best shot score from current position:', bestShotScore);
 
-        // If we have a reasonable shot (score > 50), play on
-        if (bestShotScore > 50) {
-            aiLog('Decision: play (good shot available)');
-            return 'play';
+        // Evaluate free ball opportunities if available
+        let freeBallScore = 0;
+        if (foulInfo.isFreeBall && cueBallPos) {
+            const allBalls = this.game.balls.filter(b => !b.pocketed && !b.isCueBall);
+            const pockets = this.table.pockets;
+            for (const target of allBalls) {
+                for (const pocket of pockets) {
+                    const shot = this.evaluatePotentialShot(cueBallPos, target, pocket);
+                    if (shot && shot.score > freeBallScore) {
+                        freeBallScore = shot.score;
+                    }
+                }
+            }
+            aiLog('Free ball best shot score:', freeBallScore.toFixed(1));
         }
 
-        // Position is bad - consider restore if available
-        if (foulInfo.canRestore) {
-            aiLog('Decision: restore (bad position)');
+        // Assess the scoring situation from OUR perspective
+        // getSnookersNeeded checks from currentPlayer's view (the fouler),
+        // so we need to check the deficit the other way round
+        const ourPlayer = foulInfo.offendingPlayer === 1 ? 2 : 1;
+        const ourScore = ourPlayer === 1 ? this.game.player1Score : this.game.player2Score;
+        const theirScore = ourPlayer === 1 ? this.game.player2Score : this.game.player1Score;
+        const remaining = this.game.getSnookerRemainingPoints();
+        const ourDeficit = Math.max(0, theirScore - ourScore);
+        const needSnookers = ourDeficit > remaining;
+        aiLog(`Score situation: us=${ourScore} them=${theirScore} deficit=${ourDeficit} remaining=${remaining} needSnookers=${needSnookers}`);
+
+        // --- Decision logic ---
+
+        // 1. If we need snookers to win, foul penalties are our lifeline.
+        //    Keep restoring to accumulate penalty points unless we have a great pot.
+        if (needSnookers) {
+            // Restore is the priority — every foul gives us penalty points we need
+            if (foulInfo.canRestore) {
+                // Only pass up a restore for an excellent free ball
+                if (foulInfo.isFreeBall && freeBallScore > 60) {
+                    aiLog('Decision: free_ball (need snookers but excellent free ball opportunity)');
+                    return 'free_ball';
+                }
+                aiLog('Decision: restore (need snookers — keep accumulating penalties)');
+                return 'restore';
+            }
+            // No restore available — fall through to normal decision logic below
+            // (play if we have a shot, free ball if available, etc.)
+            aiLog('Need snookers but no restore available — evaluating position normally');
+        }
+
+        // 2. Foul and miss — restore to keep pressure and collect penalties
+        //    Only give this up for a really strong shot or free ball opportunity
+        if (foulInfo.isMiss && foulInfo.canRestore) {
+            // Check if free ball or a pot is good enough to pass up the restore
+            if (foulInfo.isFreeBall && freeBallScore > 60) {
+                aiLog('Decision: free_ball (foul & miss but excellent free ball, score:', freeBallScore.toFixed(1) + ')');
+                return 'free_ball';
+            }
+            if (bestShotScore > 75) {
+                aiLog('Decision: play (foul & miss but excellent pot available, score:', bestShotScore.toFixed(1) + ')');
+                return 'play';
+            }
+            aiLog('Decision: restore (foul & miss — keep collecting penalties, shot score:', bestShotScore.toFixed(1) + ')');
             return 'restore';
         }
 
-        // No restore available, must play on
-        aiLog('Decision: play (no restore available)');
+        // 3. Free ball with a good scoring opportunity — take it
+        if (foulInfo.isFreeBall && freeBallScore > 50) {
+            aiLog('Decision: free_ball (good scoring opportunity, score:', freeBallScore.toFixed(1) + ')');
+            return 'free_ball';
+        }
+
+        // 4. Really good shot available — play on
+        if (bestShotScore > 70) {
+            aiLog('Decision: play (strong shot available, score:', bestShotScore.toFixed(1) + ')');
+            return 'play';
+        }
+
+        // 5. Free ball is decent and current position is mediocre
+        if (foulInfo.isFreeBall && freeBallScore > 35) {
+            aiLog('Decision: free_ball (mediocre position but free ball helps, score:', freeBallScore.toFixed(1) + ')');
+            return 'free_ball';
+        }
+
+        // 6. Only hand the table back (replay) if we're truly snookered
+        //    with no decent shot — replay gives the opponent another turn
+        if (bestShotScore < 15) {
+            const validTargets = this.getValidTargets();
+            const isSnookered = cueBallPos && validTargets.length > 0
+                ? this.checkIfSnookered(validTargets)
+                : false;
+            if (isSnookered) {
+                aiLog('Decision: replay (snookered with no shot, score:', bestShotScore.toFixed(1) + ')');
+                return 'replay';
+            }
+        }
+
+        // 7. Play on — even a mediocre shot is better than giving the table back
+        aiLog('Decision: play (score:', bestShotScore.toFixed(1) + ')');
         return 'play';
     }
 
@@ -4351,6 +4419,24 @@ export class AI {
         // If no confirmed hits, use best near-miss — far better than deliberate foul
         if (candidates.length === 0) {
             if (bestNearMiss) {
+                // Check if this near-miss direction matches previous fouls
+                // If so, add random angular offset to break out of the loop
+                let foulMatches = 0;
+                for (const foul of this.foulHistory) {
+                    if (!foul.direction) continue;
+                    const dot = Vec2.dot(bestNearMiss.direction, foul.direction);
+                    if (dot > 0.95) foulMatches++;
+                }
+                if (foulMatches >= 2) {
+                    // We've tried this angle multiple times — add significant random offset
+                    const offsetDeg = (10 + Math.random() * 20) * (Math.random() < 0.5 ? -1 : 1);
+                    const offsetRad = offsetDeg * Math.PI / 180;
+                    bestNearMiss.direction = Vec2.rotate(bestNearMiss.direction, offsetRad);
+                    bestNearMiss.angle += offsetDeg;
+                    // Also vary power to change the outcome
+                    bestNearMiss.power = Math.max(10, Math.min(45, bestNearMiss.power * (0.7 + Math.random() * 0.6)));
+                    aiLog(`Near-miss matches ${foulMatches} previous fouls — adding ${offsetDeg.toFixed(1)}° random offset to break loop`);
+                }
                 aiLog(`No confirmed hits — using best near-miss: ${bestNearMiss.angle.toFixed(1)}° (${bestNearMiss.rail}), approach: ${bestNearMissApproach.toFixed(1)}px`);
                 return bestNearMiss;
             }

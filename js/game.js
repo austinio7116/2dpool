@@ -1259,7 +1259,7 @@ export class Game {
         // Record final pots into currentVisitPots (pool modes end before updatePoolStats)
         if (this.mode !== GameMode.SNOOKER && this.mode !== GameMode.FREE_PLAY) {
             for (const b of this.ballsPocketed) {
-                if (!b.isCueBall) this.currentVisitPots.push(b.number);
+                if (!b.isCueBall && this.isBallInOwnGroup(b)) this.currentVisitPots.push(b.number);
             }
             this.finalizePoolBreak();
         }
@@ -1595,7 +1595,7 @@ export class Game {
                     this.gameOverReason = `Player ${this.currentPlayer} forfeits frame (3 consecutive misses)`;
 
                     if (this.onFoul) {
-                        this.onFoul(this.foulReason + ` (${foulValue} points)`, isMiss);
+                        this.onFoul(this.foulReason + ` (${foulValue} points)`, missCalled);
                     }
 
                     this.endGame();
@@ -1613,7 +1613,9 @@ export class Game {
             // Note: If player was snookered, miss count is not affected
 
             if (this.onFoul) {
-                this.onFoul(this.foulReason + ` (${foulValue} points)`, isMiss);
+                // Use missCalled for display: miss is only announced when player
+                // failed to hit ball-on AND doesn't need snookers
+                this.onFoul(this.foulReason + ` (${foulValue} points)`, missCalled);
             }
 
             // Set state to await decision from opponent
@@ -2469,6 +2471,10 @@ export class Game {
         // Count non-cue balls legally potted
         const legalPots = this.ballsPocketed.filter(b => !b.isCueBall).length;
 
+        // Count only the player's OWN group balls for break counting
+        // (opponent's balls potted in the same shot shouldn't count toward break)
+        const ownGroupPots = this.countOwnGroupPots();
+
         if (this.foul) {
             this.matchStats[playerKey].fouls++;
             // Foul ends the break
@@ -2478,10 +2484,10 @@ export class Game {
         } else if (legalPots > 0 && this.turnContinues) {
             // Legal pot - increment break and pot stats
             this.matchStats[playerKey].potShots++;
-            this.poolCurrentBreak += legalPots;
-            // Track which balls were potted in this visit
+            this.poolCurrentBreak += ownGroupPots;
+            // Track only own group balls potted in this visit
             for (const b of this.ballsPocketed) {
-                if (!b.isCueBall) this.currentVisitPots.push(b.number);
+                if (!b.isCueBall && this.isBallInOwnGroup(b)) this.currentVisitPots.push(b.number);
             }
             // Update high break immediately
             this.matchStats[playerKey].highBreak = Math.max(
@@ -2512,6 +2518,38 @@ export class Game {
                 this.poolCurrentBreak
             );
         }
+    }
+
+    // Check if a ball belongs to the current player's group (for break counting)
+    isBallInOwnGroup(ball) {
+        if (ball.isCueBall || ball.isEightBall) return false;
+
+        // 9-ball: all balls count (no groups)
+        if (this.mode === GameMode.NINE_BALL) return true;
+
+        // Groups not assigned yet (open table): all balls count
+        if (!this.player1Group) return true;
+
+        const currentGroup = this.currentPlayer === 1 ? this.player1Group : this.player2Group;
+
+        // 8-ball: solid (1-7) vs stripe (9-15)
+        if (this.mode === GameMode.EIGHT_BALL) {
+            if (currentGroup === 'solid') return ball.number >= 1 && ball.number <= 7;
+            if (currentGroup === 'stripe') return ball.number >= 9 && ball.number <= 15;
+        }
+
+        // UK 8-ball: group1 vs group2
+        if (this.mode === GameMode.UK_EIGHT_BALL) {
+            if (currentGroup === 'group1') return !!ball.isGroup1;
+            if (currentGroup === 'group2') return !!ball.isGroup2;
+        }
+
+        return true;
+    }
+
+    // Count only the current player's own group balls potted this shot
+    countOwnGroupPots() {
+        return this.ballsPocketed.filter(b => !b.isCueBall && this.isBallInOwnGroup(b)).length;
     }
 
     // Serialize game state for saving

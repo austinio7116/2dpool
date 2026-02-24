@@ -1554,6 +1554,12 @@ export class Game {
                 ? this.isSnookeredFromAllDPositions()  // On scratch, check all D positions
                 : this.isPlayerSnookered();
 
+            // Award penalty points to opponent BEFORE checking snookers needed,
+            // so the deficit reflects the actual post-foul scores. Without this,
+            // a foul that pushes the fouling player into needing snookers would
+            // still have miss called because the check saw pre-penalty scores.
+            this.awardSnookerPoints(this.currentPlayer === 1 ? 2 : 1, foulValue);
+
             // Determine if restore is available:
             // - Available on a miss (standard foul and a miss rule)
             // - Also available when player was snookered and scratched (opponent's choice)
@@ -1579,9 +1585,6 @@ export class Game {
                 canRestore: canRestore,
                 isFreeBall: isSnookeredAfterFoul  // Free ball if snookered (including from D on scratch)
             };
-
-            // Award penalty points to opponent
-            this.awardSnookerPoints(this.currentPlayer === 1 ? 2 : 1, foulValue);
 
             // Track consecutive misses (3 miss rule)
             // Only count misses when player was NOT snookered (had a clear shot available)

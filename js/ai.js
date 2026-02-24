@@ -1206,6 +1206,22 @@ export class AI {
         return bestColor || 'black';
     }
 
+    // Nominate the color that the AI actually intends to hit for a safety/escape shot.
+    // Must be called when snookerTarget === 'color' before executing any shot.
+    nominateSafetyTarget(targetBall) {
+        if (this.game.mode !== GameMode.SNOOKER || this.game.snookerTarget !== 'color') return;
+        if (!this.game.setNominatedColor) return;
+
+        if (targetBall && targetBall.isColor && targetBall.colorName) {
+            aiLog('Nominating color for safety:', targetBall.colorName);
+            this.game.setNominatedColor(targetBall.colorName);
+        } else {
+            // Fallback: nominate highest available color
+            const nomination = this.chooseColorNomination(this.game.balls);
+            this.game.setNominatedColor(nomination);
+        }
+    }
+
     // Main shot planning and execution
     planAndExecuteShot() {
         if (!this.game || this.game.state !== GameState.PLAYING) return;
@@ -1274,15 +1290,7 @@ export class AI {
                     this.executeShot(shot);
                 } else {
                     aiLog('Shot type: SAFETY (no good pots)');
-
-                    // For snooker safety, still need to nominate if on colors
-                    if (this.game.mode === GameMode.SNOOKER && this.game.snookerTarget === 'color') {
-                        const nomination = this.chooseColorNomination(this.game.balls);
-                        if (this.game.setNominatedColor) {
-                            this.game.setNominatedColor(nomination);
-                        }
-                    }
-
+                    // Color nomination is handled inside playSafety() based on actual target
                     this.playSafety();
                 }
             }
@@ -3849,13 +3857,8 @@ export class AI {
             return;
         }
 
-        // Handle snooker color nomination
-        if (this.game.snookerTarget === 'color') {
-            const nomination = this.chooseColorNomination(this.game.balls);
-            if (this.game.setNominatedColor) {
-                this.game.setNominatedColor(nomination);
-            }
-        }
+        // Color nomination is handled per-path: pot path nominates the pot target,
+        // safety fallback nominates via playSafety() based on actual target
 
         // Try to find a good pot first — but only accept very high confidence shots
         const shot = this.findBestShot();
@@ -3899,6 +3902,7 @@ export class AI {
         }
 
         if (bestTarget) {
+            this.nominateSafetyTarget(bestTarget);
             const targetName = bestTarget.colorName || bestTarget.number || 'ball';
             aiLog('Aiming at center of', targetName, 'for safe contact');
             const direction = Vec2.normalize(Vec2.subtract(bestTarget.position, cueBall.position));
@@ -3952,6 +3956,7 @@ export class AI {
             const escapeShot = this.findSnookerEscape(validTargets);
 
             if (escapeShot) {
+                this.nominateSafetyTarget(escapeShot.target);
                 const targetName = escapeShot.target.colorName || escapeShot.target.number || 'ball';
                 aiLog('Escape shot: bank off', escapeShot.rail, 'to hit', targetName,
                       '| Power:', escapeShot.power.toFixed(1));
@@ -4014,6 +4019,7 @@ export class AI {
             aiLog('No escape found - trying desperate escape');
             const desperateEscape = this.findSnookerEscape(validTargets, true);
             if (desperateEscape) {
+                this.nominateSafetyTarget(desperateEscape.target);
                 const targetName = desperateEscape.target.colorName || desperateEscape.target.number || 'ball';
                 aiLog('Desperate escape: bank off', desperateEscape.rail, 'to hit', targetName,
                       '| Power:', desperateEscape.power.toFixed(1));
@@ -4065,6 +4071,7 @@ export class AI {
         const safetyShot = this.findBestSafetyShot(validTargets, opponentBalls);
 
         if (safetyShot) {
+            this.nominateSafetyTarget(safetyShot.target);
             const targetName = safetyShot.target.colorName || safetyShot.target.number || 'ball';
             aiLog('Best safety: hit', targetName,
                   '| Angle:', safetyShot.contactAngle.toFixed(1) + '°',
@@ -4136,6 +4143,7 @@ export class AI {
             aiLog('No legal target found - attempting escape before fallback');
             const lastResortEscape = this.findSnookerEscape(validTargets, true);
             if (lastResortEscape) {
+                this.nominateSafetyTarget(lastResortEscape.target);
                 const targetName = lastResortEscape.target.colorName || lastResortEscape.target.number || 'ball';
                 aiLog('Last-resort escape:', targetName, 'at', lastResortEscape.angle.toFixed(1) + '°',
                       '| bounces:', lastResortEscape.bounces, '| nearMiss:', !!lastResortEscape.isNearMiss);
@@ -4193,6 +4201,7 @@ export class AI {
             return;
         }
 
+        this.nominateSafetyTarget(bestTarget);
         const targetName = bestTarget.colorName || bestTarget.number || 'ball';
         aiLog('Fallback target:', targetName);
 

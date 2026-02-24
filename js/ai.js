@@ -3875,11 +3875,11 @@ export class AI {
             return;
         }
 
-        aiLog('No high-confidence pot — aiming for safe center-ball contact');
+        aiLog('No high-confidence pot — aiming for safe center-ball contact to reset miss counter');
 
-        // Instead of falling back to thin-cut safeties (which risk missing),
-        // aim directly at the center of the nearest reachable target ball
-        // to ensure legal contact and reset the miss counter
+        // The AI is NOT snookered (that's a precondition for entering this method),
+        // so there's a reachable ball on. Aim directly at its center to guarantee
+        // legal contact and avoid escalating toward 3 consecutive misses.
         const validTargets = this.getValidTargets();
         let bestTarget = null;
         let bestDist = Infinity;
@@ -3909,8 +3909,8 @@ export class AI {
             const settings = this.getCurrentPersona();
             const aimError = (Math.random() - 0.5) * 2 * settings.lineAccuracy * 0.3 * (Math.PI / 180);
             const adjustedDir = Vec2.rotate(direction, aimError);
-            // Use moderate power to keep cue ball safe
-            const power = 0.25 + Math.random() * 0.15;
+            // Moderate power — enough to comfortably reach the ball, not so hard the cue ball flies around
+            const power = Math.max(10, Math.min(25, 8 + bestDist / 50));
             aiLogGroupEnd();
             if (this.onShot) {
                 this.onShot(Vec2.normalize(adjustedDir), power, { x: 0, y: 0 });

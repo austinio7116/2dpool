@@ -1158,6 +1158,9 @@ export class AI {
         // Clear per-turn caches
         this._unpottableCache = null;
 
+        // Clear previous turn's visualization so stale overlays don't persist
+        this.clearVisualization();
+
         const settings = this.getCurrentPersona();
 
         this.isThinking = true;

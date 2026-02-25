@@ -554,6 +554,7 @@ class PoolGame {
         }
 
         this.game.state = GameState.MENU;
+        this.ai.clearVisualization(); // Clear AI overlay when leaving game
         this.ui.showMainMenu();
         this.input.setCanShoot(false);
 
@@ -864,6 +865,7 @@ class PoolGame {
     }
 
     handleGameOver(winner, reason, match) {
+        this.ai.clearVisualization(); // Clear AI overlay on game over
         const gameInfo = this.game.getGameInfo();
         this.ui.showGameOverWithMatch(winner, reason, match, gameInfo);
         this.input.setCanShoot(false);

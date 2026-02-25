@@ -8,7 +8,7 @@ import { ShotSimulator } from './shot-simulator.js';
 import { CushionCalibrator } from './cushion-calibrator.js';
 
 // Debug logging - set to true to see AI decision making
-const AI_DEBUG = true;
+const AI_DEBUG = false;
 
 // Trained angle error prediction model (loaded dynamically if available)
 let angleModel = null;

@@ -1174,8 +1174,8 @@ class PoolGame {
         const isAITurn = this.isCurrentPlayerAI();
 
         if (isAITurn) {
-            // AI nominates the best free ball
-            this.ai.nominateFreeBall();
+            // AI nominates during planAndExecuteShot based on actual shot target
+            // selected by findBestShot — no separate nomination needed here.
         } else {
             // Human player selects via modal
             this.ui.showFreeBallNominationModal(this.game.balls);

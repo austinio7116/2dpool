@@ -653,12 +653,10 @@ export class AI {
             if (this.onThinkingEnd) this.onThinkingEnd();
 
             // If we chose to play or free_ball, schedule the shot after state updates
+            // Free ball nomination happens inside planAndExecuteShot based on the
+            // actual shot target selected by findBestShot, not separately.
             if (decision === 'play' || decision === 'free_ball') {
                 setTimeout(() => {
-                    if (decision === 'free_ball' && this.game.isFreeBall) {
-                        this.nominateFreeBall();
-                    }
-
                     if (this.game.state === GameState.PLAYING) {
                         this.planAndExecuteShot();
                     } else if (this.game.state === GameState.BALL_IN_HAND) {
@@ -904,45 +902,32 @@ export class AI {
     // Make decision after opponent commits a foul (WPBSA rules)
     // Called from perspective of the NON-fouling player (us) deciding what to do
     makeSnookerFoulDecision(foulInfo) {
-        aiLog('Making snooker foul decision:', foulInfo);
+        aiLogGroup('Snooker Foul Decision');
+        aiLog('Foul Info:', foulInfo);
 
         const cueBallPos = this.game.cueBall?.position;
 
-        // Evaluate our best shot from the current cue ball position
-        let bestShotScore = 0;
-        if (cueBallPos) {
-            const validTargets = this.getValidTargets();
-            const pockets = this.table.pockets;
-            for (const target of validTargets) {
-                for (const pocket of pockets) {
-                    const shot = this.evaluatePotentialShot(cueBallPos, target, pocket);
-                    if (shot && shot.score > bestShotScore) {
-                        bestShotScore = shot.score;
-                    }
-                }
-            }
-        }
-        aiLog('Best shot score from current position:', bestShotScore);
+        // Run the full shot-planning pipeline (same as planAndExecuteShot uses)
+        // to determine what the AI would actually do if it played on.
+        // findBestShot returns null when the AI would play safety.
+        const plannedShot = this.findBestShot();
+        const hasPot = plannedShot !== null;
+        const shotScore = hasPot ? (plannedShot.compositeScore || plannedShot.potScore) : 0;
+        aiLog('Full plan result:', hasPot ? `pot available (composite: ${shotScore.toFixed(0)}, pot: ${plannedShot.potScore.toFixed(0)}, pos: ${plannedShot.positionScore.toFixed(0)})` : 'no pot — would play safety');
 
-        // Evaluate free ball opportunities if available
+        // Evaluate free ball with the full planner too — temporarily enable
+        // free ball state so getValidTargets returns all balls
+        let freeBallShot = null;
         let freeBallScore = 0;
-        if (foulInfo.isFreeBall && cueBallPos) {
-            const allBalls = this.game.balls.filter(b => !b.pocketed && !b.isCueBall);
-            const pockets = this.table.pockets;
-            for (const target of allBalls) {
-                for (const pocket of pockets) {
-                    const shot = this.evaluatePotentialShot(cueBallPos, target, pocket);
-                    if (shot && shot.score > freeBallScore) {
-                        freeBallScore = shot.score;
-                    }
-                }
-            }
-            aiLog('Free ball best shot score:', freeBallScore.toFixed(1));
+        if (foulInfo.isFreeBall) {
+            this.game.isFreeBall = true;
+            freeBallShot = this.findBestShot();
+            this.game.isFreeBall = false;
+            freeBallScore = freeBallShot ? (freeBallShot.compositeScore || freeBallShot.potScore) : 0;
+            aiLog('Free ball plan result:', freeBallShot ? `pot available (composite: ${freeBallScore.toFixed(0)}, pot: ${freeBallShot.potScore.toFixed(0)}, pos: ${freeBallShot.positionScore.toFixed(0)})` : 'no pot');
         }
 
         // Assess the scoring situation from OUR perspective
-        // getSnookersNeeded checks from currentPlayer's view (the fouler),
-        // so we need to check the deficit the other way round
         const ourPlayer = foulInfo.offendingPlayer === 1 ? 2 : 1;
         const ourScore = ourPlayer === 1 ? this.game.player1Score : this.game.player2Score;
         const theirScore = ourPlayer === 1 ? this.game.player2Score : this.game.player1Score;
@@ -960,69 +945,71 @@ export class AI {
         //    Keep restoring to accumulate penalty points unless we have a great pot.
         if (needSnookers) {
             if (foulInfo.canRestore) {
-                // Only pass up a restore for an excellent free ball
-                if (foulInfo.isFreeBall && freeBallScore > 70) {
-                    aiLog('Decision: free_ball (need snookers but excellent free ball opportunity)');
+                // Only pass up a restore for an excellent free ball pot confirmed by planner
+                if (freeBallShot && freeBallScore > 70) {
+                    aiLog('Decision: free_ball (need snookers but excellent free ball, score:', freeBallScore.toFixed(0) + ')');
+                    aiLogGroupEnd();
                     return 'free_ball';
                 }
                 aiLog('Decision: restore (need snookers — keep accumulating penalties)');
+                aiLogGroupEnd();
                 return 'restore';
             }
-            // No restore available — fall through to normal decision logic below
             aiLog('Need snookers but no restore available — evaluating position normally');
         }
 
-        // 2. Restore available (foul and miss) — strongly prefer restore.
-        //    Only pass up for an exceptional pot or free ball opportunity.
+        // 2. Restore available — strongly prefer restore.
+        //    Only pass up if findBestShot found a genuine high-confidence shot.
         if (foulInfo.canRestore) {
-            if (foulInfo.isFreeBall && freeBallScore > 70) {
-                aiLog('Decision: free_ball (restore available but exceptional free ball, score:', freeBallScore.toFixed(1) + ')');
+            // Free ball pot confirmed by planner with high confidence
+            if (freeBallShot && freeBallScore > 75) {
+                aiLog('Decision: free_ball (restore available but strong free ball, score:', freeBallScore.toFixed(0) + ')');
+                aiLogGroupEnd();
                 return 'free_ball';
             }
-            // Only play on for a very high confidence pot — the kind that would
-            // reliably convert in planAndExecuteShot, not just score well geometrically
-            if (bestShotScore > 85) {
-                aiLog('Decision: play (restore available but exceptional pot, score:', bestShotScore.toFixed(1) + ')');
+            // Normal pot confirmed by planner with high confidence
+            if (hasPot && shotScore > 85) {
+                aiLog('Decision: play (restore available but strong shot confirmed by planner, score:', shotScore.toFixed(0) + ')');
+                aiLogGroupEnd();
                 return 'play';
             }
-            aiLog('Decision: restore (putting opponent back in, shot score:', bestShotScore.toFixed(1) + ')');
+            aiLog('Decision: restore (putting opponent back in, score:', hasPot ? shotScore.toFixed(0) : 'none', ')');
+            aiLogGroupEnd();
             return 'restore';
         }
 
         // --- No restore available: choose between play, free ball, or replay ---
 
-        // 3. Free ball with a good scoring opportunity — take it
-        if (foulInfo.isFreeBall && freeBallScore > 50) {
-            aiLog('Decision: free_ball (good scoring opportunity, score:', freeBallScore.toFixed(1) + ')');
+        // 3. Free ball pot confirmed by planner — take it
+        if (freeBallShot) {
+            aiLog('Decision: free_ball (planner confirmed free ball, score:', freeBallScore.toFixed(0) + ')');
+            aiLogGroupEnd();
             return 'free_ball';
         }
 
-        // 4. Really good shot available — play on
-        if (bestShotScore > 70) {
-            aiLog('Decision: play (strong shot available, score:', bestShotScore.toFixed(1) + ')');
+        // 4. Planner found a real pot — play on
+        if (hasPot) {
+            aiLog('Decision: play (planner confirmed pot, score:', shotScore.toFixed(0) + ')');
+            aiLogGroupEnd();
             return 'play';
         }
 
-        // 5. Free ball is decent and current position is mediocre
-        if (foulInfo.isFreeBall && freeBallScore > 35) {
-            aiLog('Decision: free_ball (mediocre position but free ball helps, score:', freeBallScore.toFixed(1) + ')');
-            return 'free_ball';
+        // 6. Snookered with no pot — replay rather than struggle with an escape
+        const validTargets = this.getValidTargets();
+        const isSnookered = cueBallPos && validTargets.length > 0
+            ? this.checkIfSnookered(validTargets)
+            : false;
+        if (isSnookered) {
+            aiLog('Decision: replay (snookered with no pot)');
+            aiLogGroupEnd();
+            return 'replay';
         }
 
-        // 6. Snookered with no decent shot — replay rather than struggle
-        if (bestShotScore < 15) {
-            const validTargets = this.getValidTargets();
-            const isSnookered = cueBallPos && validTargets.length > 0
-                ? this.checkIfSnookered(validTargets)
-                : false;
-            if (isSnookered) {
-                aiLog('Decision: replay (snookered with no shot, score:', bestShotScore.toFixed(1) + ')');
-                return 'replay';
-            }
-        }
-
-        // 7. Play on — even a mediocre shot is better than giving the table back
-        aiLog('Decision: play (score:', bestShotScore.toFixed(1) + ')');
+        // 7. No pot but not snookered — stay at the table and play safety
+        //    Better to control the table with our own safety than hand
+        //    the opponent a turn.
+        aiLog('Decision: play (no pot but will play safety)');
+        aiLogGroupEnd();
         return 'play';
     }
 
@@ -1137,9 +1124,18 @@ export class AI {
     }
 
     // Nominate the color that the AI actually intends to hit for a safety/escape shot.
-    // Must be called when snookerTarget === 'color' before executing any shot.
+    // Also handles free ball nomination so it matches the actual safety target.
     nominateSafetyTarget(targetBall) {
-        if (this.game.mode !== GameMode.SNOOKER || this.game.snookerTarget !== 'color') return;
+        if (this.game.mode !== GameMode.SNOOKER) return;
+
+        // Free ball nomination: nominate the ball we're actually going to hit
+        if (this.game.isFreeBall && this.game.setFreeBallNomination && targetBall) {
+            aiLog('Free ball safety: nominating', targetBall.colorName || targetBall.number || 'ball');
+            this.game.setFreeBallNomination(targetBall);
+        }
+
+        // Color nomination (when target is 'color')
+        if (this.game.snookerTarget !== 'color') return;
         if (!this.game.setNominatedColor) return;
 
         if (targetBall && targetBall.isColor && targetBall.colorName) {
@@ -1217,10 +1213,18 @@ export class AI {
                         }
                     }
 
+                    // Handle free ball nomination — nominate the actual target
+                    // chosen by findBestShot so nomination matches the shot
+                    if (this.game.isFreeBall && this.game.setFreeBallNomination) {
+                        aiLog('Free ball: nominating', shot.target.colorName || shot.target.number || 'ball');
+                        this.game.setFreeBallNomination(shot.target);
+                    }
+
                     this.executeShot(shot);
                 } else {
                     aiLog('Shot type: SAFETY (no good pots)');
-                    // Color nomination is handled inside playSafety() based on actual target
+                    // Color and free ball nominations are handled inside playSafety()
+                    // via nominateSafetyTarget() based on the actual target ball.
                     this.playSafety();
                 }
             }
@@ -2395,6 +2399,11 @@ export class AI {
 
     // Snooker: Red or specific color based on target
     getValidTargetsSnooker(balls) {
+        // Free ball: any ball is a valid target
+        if (this.game.isFreeBall) {
+            return balls;
+        }
+
         const target = this.game.snookerTarget;
 
         if (target === 'red') {

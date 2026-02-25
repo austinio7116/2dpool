@@ -8,7 +8,7 @@ import { ShotSimulator } from './shot-simulator.js';
 import { CushionCalibrator } from './cushion-calibrator.js';
 
 // Debug logging - set to true to see AI decision making
-const AI_DEBUG = false;
+const AI_DEBUG = true;
 
 // Trained angle error prediction model (loaded dynamically if available)
 let angleModel = null;
@@ -2201,20 +2201,66 @@ export class AI {
     evaluatePositionQuality(predictedCuePos, ballJustHit) {
         // 1. Determine valid targets for the NEXT shot
         let nextTargets = [];
-        const remainingBalls = this.game.balls.filter(b => 
+        const remainingBalls = this.game.balls.filter(b =>
             !b.pocketed && !b.isCueBall && b !== ballJustHit
         );
 
         if (this.game.mode === GameMode.SNOOKER) {
-            if (ballJustHit.isRed) {
+            // Free ball: the ball potted acts as the current snookerTarget,
+            // so derive the NEXT target from snookerTarget, not from ballJustHit's properties.
+            // e.g. if snookerTarget='red' and we pot brown as free ball, next = colours.
+            // e.g. if snookerTarget='green' and we pot black as free ball, next = green (the actual ball on).
+            const effectiveTarget = this.game.isFreeBall ? this.game.snookerTarget : null;
+
+            const isEffectivelyRed = effectiveTarget === 'red' || (!effectiveTarget && ballJustHit.isRed);
+            const isEffectivelyColor = effectiveTarget === 'color' || (!effectiveTarget && ballJustHit.isColor);
+            // Specific colour in sequence (e.g. 'green', 'brown', etc.)
+            const isEffectivelySequenceColor = effectiveTarget && effectiveTarget !== 'red' && effectiveTarget !== 'color';
+
+            if (isEffectivelyRed) {
                 nextTargets = remainingBalls.filter(b => b.isColor);
-            } else if (ballJustHit.isColor) {
+            } else if (isEffectivelySequenceColor) {
+                // In the final colours stage with free ball: after potting the free ball
+                // (which substitutes for the sequence colour), the next target is
+                // the ACTUAL sequence colour itself (it's still on the table)
+                const actualBallOn = remainingBalls.find(b => b.colorName === effectiveTarget);
+                if (actualBallOn) {
+                    nextTargets = [actualBallOn];
+                } else {
+                    // The actual ball on was the one we hit (potting the real ball), find next in sequence
+                    const sequence = ['yellow', 'green', 'brown', 'blue', 'pink', 'black'];
+                    const idx = sequence.indexOf(effectiveTarget);
+                    for (let i = idx + 1; i < sequence.length; i++) {
+                        const ball = remainingBalls.find(b => b.colorName === sequence[i]);
+                        if (ball) {
+                            nextTargets = [ball];
+                            break;
+                        }
+                    }
+                }
+            } else if (isEffectivelyColor) {
                 const reds = remainingBalls.filter(b => b.isRed);
                 if (reds.length > 0) {
                     nextTargets = reds;
                 } else {
                     // Colors phase: must pot in sequence yellow→green→brown→blue→pink→black
                     // Find the lowest remaining color in sequence (excluding the one we just potted)
+                    const sequence = ['yellow', 'green', 'brown', 'blue', 'pink', 'black'];
+                    for (const colorName of sequence) {
+                        const ball = remainingBalls.find(b => b.colorName === colorName);
+                        if (ball) {
+                            nextTargets = [ball];
+                            break;
+                        }
+                    }
+                }
+            } else if (ballJustHit.isRed) {
+                nextTargets = remainingBalls.filter(b => b.isColor);
+            } else if (ballJustHit.isColor) {
+                const reds = remainingBalls.filter(b => b.isRed);
+                if (reds.length > 0) {
+                    nextTargets = reds;
+                } else {
                     const sequence = ['yellow', 'green', 'brown', 'blue', 'pink', 'black'];
                     for (const colorName of sequence) {
                         const ball = remainingBalls.find(b => b.colorName === colorName);
